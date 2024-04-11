@@ -11,6 +11,7 @@ mod reform;
 mod rms_norm;
 mod rotary_embedding;
 mod swiglu;
+mod paged_attention;
 
 pub use common::utok;
 pub use tensor::{slice, udim, DataType, LocalSplitable, Tensor};
