@@ -266,59 +266,125 @@ impl Transformer {
         let k = unsafe { k.map_physical(|u| &**u) };
         let v = unsafe { v.map_physical(|u| &**u) };
 
+        // paged attention
+        // 先不支持 batch 进行测试
         let mut req = 0;
-        for r in requests.iter_mut() {
-            let pos = r.pos();
-            let seq_len = r.seq_len();
-            let att_len = r.att_len();
+        let r = &mut requests[0];
+        let pos = r.pos();
+        let seq_len = r.seq_len();
+        let att_len = r.att_len();
 
-            let req_slice = &[slice![all], slice![from req, take seq_len], slice![all]];
-            let cat_slice = &[slice![all], slice![from pos, take seq_len], slice![all]];
-            let att_slice = &[slice![all], slice![from   0, take att_len], slice![all]];
-            req += seq_len;
+        let req_slice = &[slice![all], slice![from req, take seq_len], slice![all]];
+        let cat_slice = &[slice![all], slice![from pos, take seq_len], slice![all]];
+        let att_slice = &[slice![all], slice![from   0, take att_len], slice![all]];
+        req += seq_len;
 
-            let q = q.clone().slice(req_slice);
-            let k = k.clone().slice(req_slice);
-            let v = v.clone().slice(req_slice);
-            let o = o.as_mut().slice(req_slice);
-            let mut o = unsafe { o.map_physical(|u| &mut ***u) };
+        let q = q.clone().slice(req_slice);        
+        let k = k.clone().slice(req_slice);
+        let v = v.clone().slice(req_slice);
+        let o = o.as_mut().slice(req_slice);
+        let mut o = unsafe { o.map_physical(|u| &mut ***u) };
 
-            let mut q_att = Tensor::new(dt, &[nh, seq_len, dh], &mut **q_buf);
-            let (k_cache, v_cache) = r.cache(layer);
-            let mut k_cache = unsafe { k_cache.as_mut().map_physical(|s| s.mem.sprout(ctx)) };
-            let mut v_cache = unsafe { v_cache.as_mut().map_physical(|s| s.mem.sprout(ctx)) };
+        let mut q_att = Tensor::new(dt, &[nh, seq_len, dh], &mut **q_buf);
+        let (k_cache, v_cache) = r.cache(layer);
+        let mut k_cache = unsafe { k_cache.as_mut().map_physical(|s| s.mem.sprout(ctx)) };
+        let mut v_cache = unsafe { v_cache.as_mut().map_physical(|s| s.mem.sprout(ctx)) };
 
-            let k_cat = k_cache.as_mut().slice(cat_slice);
-            let v_cat = v_cache.as_mut().slice(cat_slice);
-            let mut k_cat = unsafe { k_cat.map_physical(|u| &mut **u) };
-            let mut v_cat = unsafe { v_cat.map_physical(|u| &mut **u) };
-            kernels.reform(&mut q_att, &q);
-            kernels.reform(&mut k_cat, &k);
-            kernels.reform(&mut v_cat, &v);
+        let k_cat = k_cache.as_mut().slice(cat_slice);
+        let v_cat = v_cache.as_mut().slice(cat_slice);
+        let mut k_cat = unsafe { k_cat.map_physical(|u| &mut **u) };
+        let mut v_cat = unsafe { v_cat.map_physical(|u| &mut **u) };
+        kernels.reform(&mut q_att, &q);
+        kernels.reform(&mut k_cat, &k);
+        kernels.reform(&mut v_cat, &v);
 
-            let q_att = q_att.reshape(&[nkvh, head_group * seq_len, dh]);
-            let k_att = k_cache.slice(att_slice).transpose(&[0, 2, 1]);
-            let v_att = v_cache.slice(att_slice);
-            // compute.synchronize();
-            // println!("layer {layer} q attention:\n{}", map_tensor(&q_att));
-            // println!("layer {layer} k attention:\n{}", map_tensor(&k_att));
-            // println!("layer {layer} v attention:\n{}", map_tensor(&v_att));
+        let q_att = q_att.reshape(&[nkvh, head_group * seq_len, dh]);
+        // [nkvh, att_len, head_size]
+        let k_att = k_cache.slice(att_slice).transpose(&[0, 2, 1]);
+        // [nkvh, att_len, head_size]
+        let v_att = v_cache.slice(att_slice);   
+        // [att_len, nkvh, head_size]
+        let k_att = k_att.transpose(&[2, 0, 1]);
+        // [att_len, nkvh, head_size]
+        let v_att = v_att.transpose(&[1, 0, 2]);
+        let num_requests = requests.len();
+        let mut max_seq_len = requests.iter().map(|req| req.tokens().len()).max().unwrap_or(0);
+        let mut block_tables = vec![vec![0; max_seq_len]; num_requests];
+        let mut block_count = 0;
 
-            let shape_att0 = &[nkvh, head_group * seq_len, att_len];
-            let shape_att1 = &[nkvh * head_group, seq_len, att_len];
+        let mut seq_lens: Vec<usize> = Vec::new();
+        
+        for (idx, request) in requests.iter_mut().enumerate() {
+            let seq_len = request.tokens().len();
+            seq_lens.push(seq_len);
+            for i in 0..seq_len {
+                block_tables[idx][i] = i + block_count;
+            }
+            block_count += seq_len;
+            if seq_len > max_seq_len {
+                max_seq_len = seq_len;
+            }
+        }        
+        let block_tables =  block_tables.into_iter().flat_map(|v|v).collect::<Vec<_>>();
+        let block_tables = Tensor::new(DataType::U32, &[num_requests as u32, max_seq_len as u32], compute.from_host(&block_tables));
+        let seq_lens = Tensor::new(DataType::U32, &[num_requests as u32], compute.from_host(&seq_lens));
+        // let mut o = unsafe { o.map_physical(|u| &mut **u) };
+        kernels.paged_attention(&mut o, &q, &k_att, &v_att, nkvh, 1.0, &block_tables, &seq_lens, max_seq_len as u32);
 
-            let mut att = Tensor::new(dt, shape_att0, &mut **att_buf);
-            kernels.mat_mul(&mut att, 0., &q_att, &k_att, head_div);
-            let mut att = att.reshape(shape_att1);
-            kernels.softmax(&mut att);
-            let mut x2 = q_att;
-            let att = att.reshape(shape_att0);
-            kernels.mat_mul(&mut x2, 0., &att, &v_att, 1.);
+        // let mut req = 0;
+        // for r in requests.iter_mut() {
+        //     let pos = r.pos();
+        //     let seq_len = r.seq_len();
+        //     let att_len = r.att_len();
 
-            kernels.reform(&mut o, &x2.reshape(&[nh, seq_len, dh]));
-            // compute.synchronize();
-            // println!("layer {layer} after attention:\n{}", map_tensor(&o));
-        }
+        //     let req_slice = &[slice![all], slice![from req, take seq_len], slice![all]];
+        //     let cat_slice = &[slice![all], slice![from pos, take seq_len], slice![all]];
+        //     let att_slice = &[slice![all], slice![from   0, take att_len], slice![all]];
+        //     req += seq_len;
+
+        //     println!("q.shape: {:?}, k.shape: {:?}, v.shape: {:?}, o.shape: {:?}", q.shape(), k.shape(), v.shape(), o.shape());
+        //     let q = q.clone().slice(req_slice);
+        //     let k = k.clone().slice(req_slice);
+        //     let v = v.clone().slice(req_slice);
+        //     let o = o.as_mut().slice(req_slice);
+        //     let mut o = unsafe { o.map_physical(|u| &mut ***u) };
+
+        //     let mut q_att = Tensor::new(dt, &[nh, seq_len, dh], &mut **q_buf);
+        //     let (k_cache, v_cache) = r.cache(layer);
+        //     let mut k_cache = unsafe { k_cache.as_mut().map_physical(|s| s.mem.sprout(ctx)) };
+        //     let mut v_cache = unsafe { v_cache.as_mut().map_physical(|s| s.mem.sprout(ctx)) };
+
+        //     let k_cat = k_cache.as_mut().slice(cat_slice);
+        //     let v_cat = v_cache.as_mut().slice(cat_slice);
+        //     let mut k_cat = unsafe { k_cat.map_physical(|u| &mut **u) };
+        //     let mut v_cat = unsafe { v_cat.map_physical(|u| &mut **u) };
+        //     kernels.reform(&mut q_att, &q);
+            // kernels.reform(&mut k_cat, &k);
+        //     kernels.reform(&mut v_cat, &v);
+
+        //     let q_att = q_att.reshape(&[nkvh, head_group * seq_len, dh]);
+        //     let k_att = k_cache.slice(att_slice).transpose(&[0, 2, 1]);
+        //     let v_att = v_cache.slice(att_slice);
+        //     // compute.synchronize();
+        //     // println!("layer {layer} q attention:\n{}", map_tensor(&q_att));
+        //     // println!("layer {layer} k attention:\n{}", map_tensor(&k_att));
+        //     // println!("layer {layer} v attention:\n{}", map_tensor(&v_att));
+
+        //     let shape_att0 = &[nkvh, head_group * seq_len, att_len];
+        //     let shape_att1 = &[nkvh * head_group, seq_len, att_len];
+
+        //     let mut att = Tensor::new(dt, shape_att0, &mut **att_buf);
+        //     kernels.mat_mul(&mut att, 0., &q_att, &k_att, head_div);
+        //     let mut att = att.reshape(shape_att1);
+        //     kernels.softmax(&mut att);
+        //     let mut x2 = q_att;
+        //     let att = att.reshape(shape_att0);
+        //     kernels.mat_mul(&mut x2, 0., &att, &v_att, 1.);
+
+        //     kernels.reform(&mut o, &x2.reshape(&[nh, seq_len, dh]));
+        //     // compute.synchronize();
+        //     // println!("layer {layer} after attention:\n{}", map_tensor(&o));
+        // }
     }
 
     fn after_att(
