@@ -3,54 +3,30 @@ use causal_lm::CausalLM;
 use lru::LruCache;
 use service::{Service, Session};
 use std::{
-    collections::BTreeMap, num::NonZeroUsize, sync::{atomic::AtomicU64, Arc, Mutex}
+    num::NonZeroUsize,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
 };
 use tokio::sync::mpsc::{self, UnboundedReceiver};
-use lazy_static::lazy_static;
 
 pub(crate) struct ServiceManager<M: CausalLM> {
     service: Service<M>,
     pending: Mutex<LruCache<SessionId, Option<Session<M>>>>,
 }
 
+static OCCUPIED_UNAMED_SESSION_ID: AtomicUsize = AtomicUsize::new(0);
 
-lazy_static! {
-    static ref OCCUPIED_UNAMED_SESSION_ID: Mutex<BTreeMap<usize,()>> = Mutex::new(BTreeMap::new());
-}
-
-// static OCCUPIED_UNAMED_SESSION_ID:AtomicU64=AtomicU64::new(0);
-
-#[derive(Eq,PartialEq,PartialOrd,Ord,Hash)]
+#[derive(Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub(crate) struct UnamedSessionId {
-    id:usize,
+    id: usize,
 }
 
 impl UnamedSessionId {
-    
-    fn new()-> Self {
-        let mut locked_id=OCCUPIED_UNAMED_SESSION_ID.try_lock().unwrap();
-        
-        if let Some((entry,_)) = locked_id.first_key_value() {
-            let mut number=*entry;
-            while let Some(_) = locked_id.get(&number) {
-                number=number.overflowing_add(1).0;
-            }
-            locked_id.insert(number, ());
-            UnamedSessionId {id:number}
-        }
-        else {
-            locked_id.insert(0, {});
-            UnamedSessionId {id:0}
-        }
-    }
-}
-
-impl std::ops::Drop for UnamedSessionId {
-    fn drop(&mut self) {
-        let mut locked_id=OCCUPIED_UNAMED_SESSION_ID.try_lock().unwrap();
-        match locked_id.entry(self.id) {
-            std::collections::btree_map::Entry::Vacant(_) => panic!("should not be Vacant"),
-            std::collections::btree_map::Entry::Occupied(entry) => entry.remove(),
+    fn new() -> Self {
+        UnamedSessionId {
+            id: OCCUPIED_UNAMED_SESSION_ID.fetch_add(1, Ordering::Relaxed),
         }
     }
 }
@@ -61,11 +37,11 @@ impl std::fmt::Display for SessionId {
     }
 }
 
-#[derive(PartialEq,Eq,Hash)]
+#[derive(PartialEq, Eq, Hash)]
 enum SessionId {
     Named(String),
-    Unamed(UnamedSessionId)
-}  
+    Unamed(UnamedSessionId),
+}
 
 impl<M: CausalLM> ServiceManager<M> {
     #[inline]
@@ -230,7 +206,12 @@ where
 
     #[inline]
     fn restore(&self, session_id: String, session: Session<M>) {
-        if let Some(option) = self.pending.lock().unwrap().get_mut(&SessionId::Named(session_id)) {
+        if let Some(option) = self
+            .pending
+            .lock()
+            .unwrap()
+            .get_mut(&SessionId::Named(session_id))
+        {
             assert!(option.replace(session).is_none());
         }
     }
@@ -243,10 +224,10 @@ where
         }: Fork,
     ) -> Result<ForkSuccess, Error> {
         let mut sessions = self.pending.lock().unwrap();
-        let new_session_id_warped=SessionId::Named(new_session_id.clone())
+        let new_session_id_warped = SessionId::Named(new_session_id.clone());
         if !sessions.contains(&new_session_id_warped) {
             let new = sessions
-                .get_mut(&SessionId::Named(session_id))
+                .get_mut(&SessionId::Named(session_id.clone()))
                 .ok_or(Error::SessionNotFound)?
                 .as_ref()
                 .ok_or(Error::SessionBusy)?
@@ -264,7 +245,13 @@ where
     }
 
     pub fn drop_(&self, Drop { session_id }: Drop) -> Result<DropSuccess, Error> {
-        if self.pending.lock().unwrap().pop(&SessionId::Named(session_id)).is_some() {
+        if self
+            .pending
+            .lock()
+            .unwrap()
+            .pop(&SessionId::Named(session_id.clone()))
+            .is_some()
+        {
             info!("{session_id} dropped");
             Ok(DropSuccess)
         } else {
