@@ -4,13 +4,52 @@ use lru::LruCache;
 use service::{Service, Session};
 use std::{
     num::NonZeroUsize,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
 };
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 
 pub(crate) struct ServiceManager<M: CausalLM> {
     service: Service<M>,
-    pending: Mutex<LruCache<String, Option<Session<M>>>>,
+    pending: Mutex<LruCache<SessionId, Option<Session<M>>>>,
+}
+
+static OCCUPIED_UNAMED_SESSION_ID: AtomicUsize = AtomicUsize::new(0);
+
+#[derive(Eq, PartialEq, PartialOrd, Ord, Hash)]
+pub(crate) struct UnamedSessionId {
+    id: usize,
+}
+
+impl UnamedSessionId {
+    fn new() -> Self {
+        UnamedSessionId {
+            id: OCCUPIED_UNAMED_SESSION_ID.fetch_add(1, Ordering::Relaxed),
+        }
+    }
+}
+
+impl std::fmt::Display for UnamedSessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+         write!(f,"{}",s)
+    }
+}
+
+impl std::fmt::Display for SessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+         match self {
+            Named(s) => write!(f,"Named({})",s),
+            Unamed(s) => write!(f,"Unamed({})",s)
+         }
+    }
+}
+
+#[derive(PartialEq, Eq, Hash)]
+enum SessionId {
+    Named(String),
+    Unamed(UnamedSessionId),
 }
 
 impl<M: CausalLM> ServiceManager<M> {
@@ -82,7 +121,7 @@ where
                     .pending
                     .lock()
                     .unwrap()
-                    .get_or_insert_mut(session_id.clone(), || {
+                    .get_or_insert_mut(SessionId::Named(session_id.clone()), || {
                         info!("{session_id} created");
                         Some(self.service.launch())
                     })
@@ -115,7 +154,7 @@ where
                     .pending
                     .lock()
                     .unwrap()
-                    .get_mut(&session_id)
+                    .get_mut(&SessionId::Named(session_id.clone()))
                     .ok_or(Error::SessionNotFound)?
                     .take()
                     .ok_or(Error::SessionBusy)?;
@@ -176,7 +215,12 @@ where
 
     #[inline]
     fn restore(&self, session_id: String, session: Session<M>) {
-        if let Some(option) = self.pending.lock().unwrap().get_mut(&session_id) {
+        if let Some(option) = self
+            .pending
+            .lock()
+            .unwrap()
+            .get_mut(&SessionId::Named(session_id))
+        {
             assert!(option.replace(session).is_none());
         }
     }
@@ -189,16 +233,17 @@ where
         }: Fork,
     ) -> Result<ForkSuccess, Error> {
         let mut sessions = self.pending.lock().unwrap();
-        if !sessions.contains(&new_session_id) {
+        let new_session_id_warped = SessionId::Named(new_session_id.clone());
+        if !sessions.contains(&new_session_id_warped) {
             let new = sessions
-                .get_mut(&session_id)
+                .get_mut(&SessionId::Named(session_id.clone()))
                 .ok_or(Error::SessionNotFound)?
                 .as_ref()
                 .ok_or(Error::SessionBusy)?
                 .fork();
 
             info!("{new_session_id} is forked from {session_id}");
-            if let Some((out, _)) = sessions.push(new_session_id, Some(new)) {
+            if let Some((out, _)) = sessions.push(new_session_id_warped, Some(new)) {
                 warn!("{out} dropped because LRU cache is full");
             }
             Ok(ForkSuccess)
@@ -209,7 +254,13 @@ where
     }
 
     pub fn drop_(&self, Drop { session_id }: Drop) -> Result<DropSuccess, Error> {
-        if self.pending.lock().unwrap().pop(&session_id).is_some() {
+        if self
+            .pending
+            .lock()
+            .unwrap()
+            .pop(&SessionId::Named(session_id.clone()))
+            .is_some()
+        {
             info!("{session_id} dropped");
             Ok(DropSuccess)
         } else {
