@@ -13,7 +13,7 @@ use tokio::sync::mpsc::{self, UnboundedReceiver};
 
 pub(crate) struct ServiceManager<M: CausalLM> {
     service: Service<M>,
-    pending: Mutex<LruCache<SessionId, Option<Session<M>>>>,
+    pending: Mutex<LruCache<Arc<SessionId>, Option<Session<M>>>>,
 }
 
 static OCCUPIED_UNAMED_SESSION_ID: AtomicUsize = AtomicUsize::new(0);
@@ -33,16 +33,16 @@ impl UnamedSessionId {
 
 impl std::fmt::Display for UnamedSessionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-         write!(f,"{}",s)
+        write!(f, "{}", self)
     }
 }
 
 impl std::fmt::Display for SessionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-         match self {
-            Named(s) => write!(f,"Named({})",s),
-            Unamed(s) => write!(f,"Unamed({})",s)
-         }
+        match self {
+            SessionId::Named(s) => write!(f, "Named({})", s),
+            SessionId::Unamed(s) => write!(f, "Unamed({})", s),
+        }
     }
 }
 
@@ -81,7 +81,7 @@ where
         }: Infer,
     ) -> Result<UnboundedReceiver<String>, Error> {
         async fn infer<M: CausalLM>(
-            session_id: &str,
+            session_id: &SessionId,
             session: &mut Session<M>,
             messages: Vec<Sentence>,
             temperature: Option<f32>,
@@ -116,13 +116,15 @@ where
         }
 
         match (session_id, dialog_pos.unwrap_or(0)) {
-            (Some(session_id), 0) => {
+            (Some(session_id_str), 0) => {
+                let session_id = Arc::new(SessionId::Named(session_id_str));
+                let session_id_log_str = session_id.to_string();
                 let mut session = self
                     .pending
                     .lock()
                     .unwrap()
-                    .get_or_insert_mut(SessionId::Named(session_id.clone()), || {
-                        info!("{session_id} created");
+                    .get_or_insert_mut(session_id, || {
+                        info!("{} created", &session_id_log_str);
                         Some(self.service.launch())
                     })
                     .take()
@@ -144,35 +146,37 @@ where
                     )
                     .await;
 
-                    self_.restore(session_id, session);
+                    self_.restore(session_id_log_str, session);
                 });
 
                 Ok(receiver)
             }
-            (Some(session_id), p) => {
+            (Some(session_id_str), p) => {
                 let mut session = self
                     .pending
                     .lock()
                     .unwrap()
-                    .get_mut(&SessionId::Named(session_id.clone()))
+                    .get_mut(&SessionId::Named(session_id_str.clone()))
                     .ok_or(Error::SessionNotFound)?
                     .take()
                     .ok_or(Error::SessionBusy)?;
 
                 if session.revert(p).is_err() {
                     let current = session.dialog_pos();
-                    warn!("Failed to revert {session_id} from {current} to {p}, session restored");
-                    self.restore(session_id, session);
+                    warn!(
+                        "Failed to revert {session_id_str} from {current} to {p}, session restored"
+                    );
+                    self.restore(session_id_str, session);
                     return Err(Error::InvalidDialogPos(current));
                 }
 
                 let (sender, receiver) = mpsc::unbounded_channel();
                 let self_ = self.clone();
                 tokio::spawn(async move {
-                    info!("{session_id} reverted to {p}");
+                    info!("{session_id_str} reverted to {p}");
 
                     infer(
-                        &session_id,
+                        &session_id_str,
                         &mut session,
                         messages,
                         temperature,
@@ -182,7 +186,7 @@ where
                     )
                     .await;
 
-                    self_.restore(session_id, session);
+                    self_.restore(session_id_str, session);
                 });
 
                 Ok(receiver)
@@ -214,13 +218,8 @@ where
     }
 
     #[inline]
-    fn restore(&self, session_id: String, session: Session<M>) {
-        if let Some(option) = self
-            .pending
-            .lock()
-            .unwrap()
-            .get_mut(&SessionId::Named(session_id))
-        {
+    fn restore(&self, session_id: Arc<SessionId>, session: Session<M>) {
+        if let Some(option) = self.pending.lock().unwrap().get_mut(&session_id) {
             assert!(option.replace(session).is_none());
         }
     }
