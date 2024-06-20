@@ -279,13 +279,14 @@ checksum = "4b82cf0babdbd58558212896d1a4272303a57bdb245c2bf1147185fb45640e70"
 
 [[package]]
 name = "cndrv"
-version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cndrv?rev=4fe3e85#4fe3e85d9042efbe8ad017d5a892c4e99c739f9d"
+version = "0.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e82673524b5133624ef7ee2a78146220629e4f5ca3977bf37699b9f63823cee0"
 dependencies = [
  "bindgen",
  "build-script-cfg",
  "log",
- "search-neuware-tools 0.1.0 (git+https://github.com/YdrMaster/cndrv?rev=4fe3e85)",
+ "search-neuware-tools 0.0.0",
 ]
 
 [[package]]
@@ -328,7 +329,7 @@ dependencies = [
  "cndrv",
  "common 0.0.0",
  "common-devices",
- "search-neuware-tools 0.1.0 (git+https://github.com/YdrMaster/cndrv?rev=d94e170)",
+ "search-neuware-tools 0.0.0",
  "tensor",
 ]
 
@@ -889,7 +890,7 @@ dependencies = [
  "common 0.0.0",
  "common-cn",
  "llama",
- "search-neuware-tools 0.1.0 (git+https://github.com/YdrMaster/cndrv?rev=d94e170)",
+ "search-neuware-tools 0.0.0",
 ]
 
 [[package]]
@@ -1172,7 +1173,7 @@ dependencies = [
  "log",
  "nvidia-gpu",
  "search-cuda-tools",
- "search-neuware-tools 0.1.0 (git+https://github.com/YdrMaster/cndrv?rev=fb46d04)",
+ "search-neuware-tools 0.1.0",
 ]
 
 [[package]]
@@ -1431,13 +1432,9 @@ dependencies = [
 
 [[package]]
 name = "search-neuware-tools"
-version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cndrv?rev=4fe3e85#4fe3e85d9042efbe8ad017d5a892c4e99c739f9d"
-
-[[package]]
-name = "search-neuware-tools"
-version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cndrv?rev=d94e170#d94e170d227647e98ee84b621f3e4510b04cd5cd"
+version = "0.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c83ae237201de85c7ece8ad034bc749a6f229f42f07f62a30008b30a3f1e2231"
 
 [[package]]
 name = "search-neuware-tools"
@@ -1934,7 +1931,7 @@ dependencies = [
  "mixtral",
  "mixtral-cpu",
  "search-cuda-tools",
- "search-neuware-tools 0.1.0 (git+https://github.com/YdrMaster/cndrv?rev=d94e170)",
+ "search-neuware-tools 0.0.0",
  "service",
  "simple_logger",
  "tensor",

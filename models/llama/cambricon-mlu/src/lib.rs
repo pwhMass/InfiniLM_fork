@@ -2,9 +2,10 @@
 
 mod resource;
 
-use causal_lm::{CausalLM, Model};
-use common::FileLoadError;
+use causal_lm::{CausalLM, DecodingMeta, Model, QueryContext, SampleMeta};
+use common::{upos, utok, FileLoadError};
 use common_cn::Tensor;
+use std::path::Path;
 
 pub use common_cn::{cndrv, synchronize};
 pub use resource::Cache;
@@ -15,10 +16,7 @@ impl Model for Transformer {
     type Meta = ();
     type Error = FileLoadError;
 
-    fn load(
-        _model_dir: impl AsRef<std::path::Path>,
-        _meta: Self::Meta,
-    ) -> Result<Self, Self::Error> {
+    fn load(_model_dir: impl AsRef<Path>, _meta: Self::Meta) -> Result<Self, Self::Error> {
         todo!()
     }
 }
@@ -26,11 +24,11 @@ impl Model for Transformer {
 impl CausalLM for Transformer {
     type Storage = Cache;
 
-    fn max_seq_len(&self) -> common::upos {
+    fn max_seq_len(&self) -> upos {
         todo!()
     }
 
-    fn eos_token(&self) -> common::utok {
+    fn eos_token(&self) -> utok {
         todo!()
     }
 
@@ -38,24 +36,17 @@ impl CausalLM for Transformer {
         todo!()
     }
 
-    fn duplicate_cache(
-        &self,
-        _cache: &Tensor<Self::Storage>,
-        _pos: common::upos,
-    ) -> Tensor<Self::Storage> {
+    fn duplicate_cache(&self, _cache: &Tensor<Self::Storage>, _pos: upos) -> Tensor<Self::Storage> {
         todo!()
     }
 
-    fn token_embed(
-        &self,
-        _queries: impl IntoIterator<Item = common::utok>,
-    ) -> Tensor<Self::Storage> {
+    fn token_embed(&self, _queries: impl IntoIterator<Item = utok>) -> Tensor<Self::Storage> {
         todo!()
     }
 
     fn forward<'a>(
         &self,
-        _queries: impl IntoIterator<Item = causal_lm::QueryContext<'a, Self::Storage>>,
+        _queries: impl IntoIterator<Item = QueryContext<'a, Self::Storage>>,
         _token_embedded: Tensor<Self::Storage>,
     ) -> Tensor<Self::Storage>
     where
@@ -66,7 +57,7 @@ impl CausalLM for Transformer {
 
     fn decode(
         &self,
-        _decoding: impl IntoIterator<Item = causal_lm::DecodingMeta>,
+        _decoding: impl IntoIterator<Item = DecodingMeta>,
         _hidden_state: Tensor<Self::Storage>,
     ) -> Tensor<Self::Storage> {
         todo!()
@@ -74,9 +65,9 @@ impl CausalLM for Transformer {
 
     fn sample(
         &self,
-        _args: impl IntoIterator<Item = causal_lm::SampleMeta>,
+        _args: impl IntoIterator<Item = SampleMeta>,
         _logits: Tensor<Self::Storage>,
-    ) -> Vec<common::utok> {
+    ) -> Vec<utok> {
         todo!()
     }
 }
