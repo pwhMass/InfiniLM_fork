@@ -5,19 +5,15 @@
 
     let cuda = Cfg::new("detected_cuda");
     let nccl = Cfg::new("detected_nccl");
-    if cfg!(feature = "nvidia") {
-        if find_cuda_root().is_some() {
-            cuda.define();
-            if find_nccl_root().is_some() {
-                nccl.define();
-            }
+    if cfg!(feature = "nvidia") && find_cuda_root().is_some() {
+        cuda.define();
+        if find_nccl_root().is_some() {
+            nccl.define();
         }
     }
 
     let neuware = Cfg::new("detected_neuware");
-    if cfg!(feature = "cambricon") {
-        if find_neuware_home().is_some() {
-            neuware.define();
-        }
+    if cfg!(feature = "cambricon") && find_neuware_home().is_some() {
+        neuware.define();
     }
 }

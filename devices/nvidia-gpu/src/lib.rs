@@ -216,17 +216,21 @@ impl<T> From<T> for DropOption<T> {
     }
 }
 
-impl<T: ContextSpore> DropOption<T> {
+impl<T> AsRef<T> for DropOption<T> {
     #[inline]
-    pub fn as_ref(&self) -> &T {
+    fn as_ref(&self) -> &T {
         self.0.as_ref().unwrap()
     }
+}
 
+impl<T> AsMut<T> for DropOption<T> {
     #[inline]
-    pub fn as_mut(&mut self) -> &mut T {
+    fn as_mut(&mut self) -> &mut T {
         self.0.as_mut().unwrap()
     }
+}
 
+impl<T: ContextSpore> DropOption<T> {
     #[inline]
     pub fn sprout<'ctx>(&mut self, ctx: &'ctx ContextGuard) -> <T as ContextSpore>::Resource<'ctx> {
         self.0.take().unwrap().sprout(ctx)

@@ -286,7 +286,7 @@ dependencies = [
  "bindgen",
  "build-script-cfg",
  "log",
- "search-neuware-tools 0.0.0",
+ "search-neuware-tools",
 ]
 
 [[package]]
@@ -319,7 +319,7 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=cac4307#cac4307555531a8903330b99ca12b218a2a34259"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=015f283#015f2833036050a30f2eef04c0909a8df884ff6f"
 
 [[package]]
 name = "common-cn"
@@ -329,7 +329,7 @@ dependencies = [
  "cndrv",
  "common 0.0.0",
  "common-devices",
- "search-neuware-tools 0.0.0",
+ "search-neuware-tools",
  "tensor",
 ]
 
@@ -346,7 +346,7 @@ dependencies = [
 [[package]]
 name = "common-cpu"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=cac4307#cac4307555531a8903330b99ca12b218a2a34259"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=015f283#015f2833036050a30f2eef04c0909a8df884ff6f"
 dependencies = [
  "common 0.1.0",
 ]
@@ -410,18 +410,19 @@ checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 [[package]]
 name = "cublas"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=a4b3cf5#a4b3cf53de9c59ab18aff752720dff4ff50e9ccf"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=62a7864#62a7864959b53c7511b0131ae15773a2da068eb1"
 dependencies = [
  "bindgen",
  "build-script-cfg",
  "cuda",
+ "half",
  "search-cuda-tools",
 ]
 
 [[package]]
 name = "cuda"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=a4b3cf5#a4b3cf53de9c59ab18aff752720dff4ff50e9ccf"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=62a7864#62a7864959b53c7511b0131ae15773a2da068eb1"
 dependencies = [
  "bindgen",
  "build-script-cfg",
@@ -890,7 +891,7 @@ dependencies = [
  "common 0.0.0",
  "common-cn",
  "llama",
- "search-neuware-tools 0.0.0",
+ "search-neuware-tools",
 ]
 
 [[package]]
@@ -1051,7 +1052,7 @@ dependencies = [
 [[package]]
 name = "nccl"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=a4b3cf5#a4b3cf53de9c59ab18aff752720dff4ff50e9ccf"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=62a7864#62a7864959b53c7511b0131ae15773a2da068eb1"
 dependencies = [
  "bindgen",
  "build-script-cfg",
@@ -1136,7 +1137,7 @@ dependencies = [
 [[package]]
 name = "nvidia-gpu"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=cac4307#cac4307555531a8903330b99ca12b218a2a34259"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=015f283#015f2833036050a30f2eef04c0909a8df884ff6f"
 dependencies = [
  "build-script-cfg",
  "common 0.1.0",
@@ -1163,7 +1164,7 @@ checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 [[package]]
 name = "operators"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=cac4307#cac4307555531a8903330b99ca12b218a2a34259"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=015f283#015f2833036050a30f2eef04c0909a8df884ff6f"
 dependencies = [
  "build-script-cfg",
  "common 0.1.0",
@@ -1173,7 +1174,7 @@ dependencies = [
  "log",
  "nvidia-gpu",
  "search-cuda-tools",
- "search-neuware-tools 0.1.0",
+ "search-neuware-tools",
 ]
 
 [[package]]
@@ -1425,7 +1426,7 @@ dependencies = [
 [[package]]
 name = "search-cuda-tools"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=a4b3cf5#a4b3cf53de9c59ab18aff752720dff4ff50e9ccf"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=62a7864#62a7864959b53c7511b0131ae15773a2da068eb1"
 dependencies = [
  "find_cuda_helper",
 ]
@@ -1435,11 +1436,6 @@ name = "search-neuware-tools"
 version = "0.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c83ae237201de85c7ece8ad034bc749a6f229f42f07f62a30008b30a3f1e2231"
-
-[[package]]
-name = "search-neuware-tools"
-version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cndrv?rev=fb46d04#fb46d04e82db57fca437123b008fdf7e43bc5003"
 
 [[package]]
 name = "seq-macro"
@@ -1931,7 +1927,7 @@ dependencies = [
  "mixtral",
  "mixtral-cpu",
  "search-cuda-tools",
- "search-neuware-tools 0.0.0",
+ "search-neuware-tools",
  "service",
  "simple_logger",
  "tensor",
