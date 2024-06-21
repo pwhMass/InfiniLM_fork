@@ -6,26 +6,22 @@ use operators::{
     rms_norm::{self, RmsNorm},
     rope::{self, Rope},
     swiglu::{self, Swiglu},
-    Device, QueueOf, TensorLayout, F16, U32,
+    Device, QueueOf, TensorLayout,
 };
 use std::{
     fmt,
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
-use tensor::{DataType, Tensor};
+use tensor::Tensor;
 
 fn layout<T>(t: &Tensor<T>) -> TensorLayout {
-    let dt = match t.data_type() {
-        DataType::F16 => F16,
-        DataType::U32 => U32,
-        _ => todo!(),
-    };
+    let dt = t.data_layout();
     let shape = t.shape().iter().map(|&x| x as usize).collect::<Vec<_>>();
     let strides = t
         .strides()
         .iter()
-        .map(|&x| x as isize * t.data_type().size() as isize)
+        .map(|&x| x as isize * dt.nbytes() as isize)
         .collect::<Vec<_>>();
     TensorLayout::new(dt, shape, strides, t.bytes_offset() as _)
 }

@@ -1,6 +1,9 @@
 use common::{utok, FileLoadError};
+use digit_layout::{
+    types::{BF16, F16, F32},
+    DigitLayout,
+};
 use std::{fs, path::Path};
-use tensor::DataType;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct ConfigJson {
@@ -17,7 +20,7 @@ pub struct ConfigJson {
     pub rms_norm_eps: f32,
     #[serde(default = "default_rope_theta")]
     pub rope_theta: f32,
-    pub torch_dtype: DataType,
+    pub torch_dtype: String,
     pub num_local_experts: usize,
     pub num_experts_per_tok: usize,
 }
@@ -27,6 +30,15 @@ impl ConfigJson {
         let path = model_dir.as_ref().join("config.json");
         let content = fs::read_to_string(path).map_err(FileLoadError::Io)?;
         serde_json::from_str(&content).map_err(FileLoadError::Json)
+    }
+
+    pub fn data_layout(&self) -> DigitLayout {
+        match self.torch_dtype.as_str() {
+            "float16" => F16,
+            "float32" => F32,
+            "bfloat16" => BF16,
+            _ => todo!(),
+        }
     }
 }
 

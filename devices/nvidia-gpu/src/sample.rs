@@ -1,5 +1,5 @@
 ﻿use common::{f16, utok, Blob};
-use cuda::{bindings::CUstream, memcpy_d2h, AsRaw, DevByte, DevMem, Stream};
+use operators::nvidia_gpu::cuda::{bindings::CUstream, memcpy_d2h, AsRaw, DevByte, DevMem, Stream};
 use sample::SampleArgs;
 use std::{
     collections::HashMap,

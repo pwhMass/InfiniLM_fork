@@ -58,7 +58,7 @@ pub trait ComputeStream {
             epsilon,
             theta,
         } = self.constant();
-        let dt = token_embedded.data_type();
+        let dt = token_embedded.data_layout();
         let d = token_embedded.shape()[1];
         let dh = d / nh;
         let dkv = nkvh * dh;
@@ -72,8 +72,8 @@ pub trait ComputeStream {
         let reusing = (d + dkv + dkv).max(di + di);
         let mut state_buf = Tensor::alloc(dt, &[nt, d + reusing], |len| self.malloc(len));
 
-        let mut q_buf = self.malloc((nh * max_seq_len * dh) as usize * dt.size());
-        let mut att_buf = self.malloc((nh * max_seq_len * max_att_len) as usize * dt.size());
+        let mut q_buf = self.malloc((nh * max_seq_len * dh) as usize * dt.nbytes());
+        let mut att_buf = self.malloc((nh * max_seq_len * max_att_len) as usize * dt.nbytes());
         let pos = causal_lm::pos(&queries, nt);
         let pos = pos.as_ref().map_physical(|u| self.map_pos(u));
 

@@ -1,6 +1,5 @@
-﻿use crate::{
-    expand_indices, idim, idx_strides, pattern::Pattern, udim, Compatibility, DataType, Shape,
-};
+﻿use crate::{expand_indices, idim, idx_strides, pattern::Pattern, udim, Compatibility, Shape};
+use digit_layout::DigitLayout;
 use nalgebra::{DVector, DVectorView};
 use rayon::iter::*;
 use std::{
@@ -10,7 +9,7 @@ use std::{
 
 #[derive(Clone, Debug)]
 pub struct Tensor<Physical> {
-    pub(crate) data_type: DataType,
+    pub(crate) layout: DigitLayout,
     pub(crate) shape: Shape,
     pub(crate) pattern: Pattern,
     pub(crate) physical: Physical,
@@ -18,9 +17,9 @@ pub struct Tensor<Physical> {
 
 impl<Physical> Tensor<Physical> {
     #[inline]
-    pub fn new(data_type: DataType, shape: &[udim], physical: Physical) -> Self {
+    pub fn new(layout: DigitLayout, shape: &[udim], physical: Physical) -> Self {
         Self {
-            data_type,
+            layout,
             pattern: Pattern::from_shape(shape, 0),
             shape: Shape::from_slice(shape),
             physical,
@@ -28,12 +27,16 @@ impl<Physical> Tensor<Physical> {
     }
 
     #[inline]
-    pub fn alloc(data_type: DataType, shape: &[udim], f: impl FnOnce(usize) -> Physical) -> Self {
+    pub fn alloc(
+        data_type: DigitLayout,
+        shape: &[udim],
+        f: impl FnOnce(usize) -> Physical,
+    ) -> Self {
         Self {
-            data_type,
+            layout: data_type,
             pattern: Pattern::from_shape(shape, 0),
             shape: Shape::from_slice(shape),
-            physical: f(shape.iter().product::<udim>() as usize * data_type.size()),
+            physical: f(shape.iter().product::<udim>() as usize * data_type.nbytes()),
         }
     }
 
@@ -42,13 +45,13 @@ impl<Physical> Tensor<Physical> {
     /// The caller must ensure that the parts are valid.
     #[inline]
     pub unsafe fn from_raw_parts(
-        data_type: DataType,
+        data_type: DigitLayout,
         shape: &[udim],
         pattern: &[idim],
         physical: Physical,
     ) -> Self {
         Self {
-            data_type,
+            layout: data_type,
             shape: shape.iter().copied().collect(),
             pattern: Pattern(DVector::from_vec(pattern.to_vec())),
             physical,
@@ -56,8 +59,8 @@ impl<Physical> Tensor<Physical> {
     }
 
     #[inline]
-    pub const fn data_type(&self) -> DataType {
-        self.data_type
+    pub const fn data_layout(&self) -> DigitLayout {
+        self.layout
     }
 
     #[inline]
@@ -77,7 +80,7 @@ impl<Physical> Tensor<Physical> {
 
     #[inline]
     pub fn bytes_offset(&self) -> isize {
-        self.pattern.offset() as isize * self.data_type.size() as isize
+        self.pattern.offset() as isize * self.layout.nbytes() as isize
     }
 
     #[inline]
@@ -97,7 +100,7 @@ impl<Physical> Tensor<Physical> {
 
     #[inline]
     pub fn bytes_size(&self) -> usize {
-        self.size() * self.data_type.size()
+        self.size() * self.layout.nbytes()
     }
 
     #[inline]
@@ -126,7 +129,7 @@ impl<Physical> Tensor<Physical> {
     #[inline]
     pub fn as_ref(&self) -> Tensor<&Physical> {
         Tensor {
-            data_type: self.data_type,
+            layout: self.layout,
             shape: self.shape.clone(),
             pattern: self.pattern.clone(),
             physical: &self.physical,
@@ -136,7 +139,7 @@ impl<Physical> Tensor<Physical> {
     #[inline]
     pub fn as_mut(&mut self) -> Tensor<&mut Physical> {
         Tensor {
-            data_type: self.data_type,
+            layout: self.layout,
             shape: self.shape.clone(),
             pattern: self.pattern.clone(),
             physical: &mut self.physical,
@@ -151,7 +154,7 @@ impl<Physical> Tensor<Physical> {
     #[inline]
     pub fn map_physical<U>(self, f: impl FnOnce(Physical) -> U) -> Tensor<U> {
         Tensor {
-            data_type: self.data_type,
+            layout: self.layout,
             shape: self.shape,
             pattern: self.pattern,
             physical: f(self.physical),
@@ -174,7 +177,7 @@ impl<Physical: Deref<Target = [u8]>> Tensor<Physical> {
     }
 
     pub fn locate(&self, indices: &DVectorView<idim>) -> Option<*const u8> {
-        let i = self.pattern.0.dot(indices) as usize * self.data_type.size();
+        let i = self.pattern.0.dot(indices) as usize * self.layout.nbytes();
         self.physical.get(i).map(|r| r as _)
     }
 
@@ -189,7 +192,7 @@ impl<Physical: Deref<Target = [u8]>> Tensor<Physical> {
             // 所有维度都连续，直接拷贝所有数据
             dst.copy_from_slice(&src[..dst.len()]);
         } else {
-            let dt = self.data_type.size();
+            let dt = self.layout.nbytes();
             // 一部分维度连续，迭代不连续的部分
             let (iter, contiguous) = self.shape.split_at(self.shape.len() - contiguous);
             let (n, idx_strides) = idx_strides(iter);
@@ -212,7 +215,7 @@ impl<Physical: Deref<Target = [u8]>> Tensor<Physical> {
             Compatibility::None => panic!("Incompatible tensors"),
             _ => {
                 let contiguous = self.contiguous_len().min(dst.contiguous_len());
-                let dt = self.data_type.size();
+                let dt = self.layout.nbytes();
                 // 一部分维度连续，迭代不连续的部分
                 let (iter, contiguous) = self.shape.split_at(self.shape.len() - contiguous);
                 let (n, idx_strides) = idx_strides(iter);
@@ -247,14 +250,16 @@ impl<Physical: DerefMut<Target = [u8]>> Tensor<Physical> {
     }
 
     pub fn locate_mut(&mut self, indices: &DVectorView<idim>) -> Option<*mut u8> {
-        let i = self.pattern.0.dot(indices) as usize * self.data_type.size();
+        let i = self.pattern.0.dot(indices) as usize * self.layout.nbytes();
         self.physical.get_mut(i).map(|r| r as _)
     }
 }
 
 #[test]
 fn test() {
-    let t = Tensor::new(DataType::F32, &[2, 3, 4, 5], ());
+    use digit_layout::types::F32;
+
+    let t = Tensor::new(F32, &[2, 3, 4, 5], ());
     assert_eq!(t.shape(), &[2, 3, 4, 5]);
     assert_eq!(t.pattern.0.as_slice(), &[60, 20, 5, 1, 0]);
     assert_eq!(t.contiguous_len(), 4);

@@ -3,8 +3,9 @@ use common::{
     safe_tensors::{Dtype, SafeTensor, SafeTensors},
     Blob,
 };
+use digit_layout::DigitLayout;
 use std::collections::HashMap;
-use tensor::{udim, DataType, Shape, Tensor};
+use tensor::{udim, Shape, Tensor};
 
 pub struct MixtralParams {
     safe_tensors: SafeTensors,
@@ -143,21 +144,22 @@ fn convert(tensors: &SafeTensors, name: impl AsRef<str>) -> Tensor<&[u8]> {
     Tensor::new(data_type, &shape, tensor.data)
 }
 
-pub fn type_convert(dtype: Dtype) -> DataType {
+pub fn type_convert(dtype: Dtype) -> DigitLayout {
+    use digit_layout::types::*;
     match dtype {
-        Dtype::BOOL => DataType::Bool,
-        Dtype::I8 => DataType::I8,
-        Dtype::I16 => DataType::I16,
-        Dtype::I32 => DataType::I32,
-        Dtype::I64 => DataType::I64,
-        Dtype::U8 => DataType::U8,
-        Dtype::U16 => DataType::U16,
-        Dtype::U32 => DataType::U32,
-        Dtype::U64 => DataType::U64,
-        Dtype::F16 => DataType::F16,
-        Dtype::BF16 => DataType::BF16,
-        Dtype::F32 => DataType::F32,
-        Dtype::F64 => DataType::F64,
+        Dtype::BOOL => BOOL,
+        Dtype::I8 => I8,
+        Dtype::I16 => I16,
+        Dtype::I32 => I32,
+        Dtype::I64 => I64,
+        Dtype::U8 => U8,
+        Dtype::U16 => U16,
+        Dtype::U32 => U32,
+        Dtype::U64 => U64,
+        Dtype::F16 => F16,
+        Dtype::BF16 => BF16,
+        Dtype::F32 => F32,
+        Dtype::F64 => F64,
         _ => unreachable!(),
     }
 }
@@ -165,10 +167,10 @@ pub fn type_convert(dtype: Dtype) -> DataType {
 fn concat0(tensors: &[Tensor<&[u8]>]) -> Tensor<Blob> {
     assert!(tensors
         .windows(2)
-        .all(|t| t[0].data_type() == t[1].data_type()));
+        .all(|t| t[0].data_layout() == t[1].data_layout()));
     assert!(!tensors.is_empty());
 
-    let data_type = tensors[0].data_type();
+    let data_type = tensors[0].data_layout();
     let mut shape = Shape::from_slice(tensors[0].shape());
     shape[0] = tensors.iter().map(|t| t.shape()[0]).sum();
 

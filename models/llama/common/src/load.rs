@@ -1,14 +1,12 @@
-﻿use crate::{
-    json::{convert, ConfigJson},
-    InferenceConfig, LayerStorage, Storage, Weight,
-};
+﻿use crate::{json::ConfigJson, InferenceConfig, LayerStorage, Storage, Weight};
 use common::{
-    safe_tensors::SafeTensors,
+    safe_tensors::{Dtype, SafeTensors},
     Blob,
     FileLoadError::{self, Io, Json},
 };
+use digit_layout::DigitLayout;
 use std::{fs::File, path::Path, pin::Pin, sync::Arc};
-use tensor::{udim, DataType, Shape, Tensor};
+use tensor::{udim, Shape, Tensor};
 
 impl Storage {
     pub fn load_safetensors(model_dir: impl AsRef<Path>) -> Result<Self, FileLoadError> {
@@ -16,7 +14,7 @@ impl Storage {
         let config: ConfigJson = serde_json::from_reader(&config).map_err(Json)?;
         let model = SafeTensors::load_from_dir(model_dir)?.share();
 
-        let dt = config.torch_dtype;
+        let dt = config.data_layout();
         let voc = config.vocab_size as udim;
         let d = config.hidden_size as udim;
         let nh = config.num_attention_heads as udim;
@@ -98,13 +96,13 @@ impl Storage {
 fn tensor<const N: usize>(
     model: &Pin<Arc<SafeTensors>>,
     name: &str,
-    dt: DataType,
+    dt: DigitLayout,
     shape: [udim; N],
 ) -> Tensor<Weight> {
     let shared = model
         .share_tensor(name)
         .unwrap_or_else(|| panic!("missing tensor: {name}"));
-    assert_eq!(convert!(Dtype: shared.dtype()), dt);
+    assert_eq!(convert(shared.dtype()), dt);
     assert_eq!(
         &*shared.shape().iter().map(|&d| d as udim).collect::<Shape>(),
         shape
@@ -115,10 +113,10 @@ fn tensor<const N: usize>(
 fn concat0(tensors: &[Tensor<Weight>]) -> Tensor<Weight> {
     assert!(tensors
         .windows(2)
-        .all(|t| t[0].data_type() == t[1].data_type()));
+        .all(|t| t[0].data_layout() == t[1].data_layout()));
     assert!(!tensors.is_empty());
 
-    let data_type = tensors[0].data_type();
+    let data_type = tensors[0].data_layout();
     let mut shape = Shape::from_slice(tensors[0].shape());
     shape[0] = tensors.iter().map(|t| t.shape()[0]).sum();
 
@@ -130,6 +128,28 @@ fn concat0(tensors: &[Tensor<Weight>]) -> Tensor<Weight> {
         offset += len;
     }
     ans.map_physical(|b| b.into())
+}
+
+fn convert(dtype: Dtype) -> DigitLayout {
+    use digit_layout::types::*;
+    match dtype {
+        Dtype::BOOL => BOOL,
+        Dtype::U8 => U8,
+        Dtype::I8 => I8,
+        Dtype::F8_E5M2 => DigitLayout::new(1, true, 5, 2),
+        Dtype::F8_E4M3 => DigitLayout::new(1, true, 4, 3),
+        Dtype::I16 => I16,
+        Dtype::U16 => U16,
+        Dtype::F16 => F16,
+        Dtype::BF16 => BF16,
+        Dtype::I32 => I32,
+        Dtype::U32 => U32,
+        Dtype::F32 => F32,
+        Dtype::F64 => F64,
+        Dtype::I64 => I64,
+        Dtype::U64 => U64,
+        _ => todo!(),
+    }
 }
 
 #[test]

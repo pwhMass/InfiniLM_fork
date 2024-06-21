@@ -1,17 +1,16 @@
 ﻿#![cfg(detected_cuda)]
 
-pub extern crate cuda;
-
 mod gather;
 mod sample;
 
 use common::utok;
 use common_devices::{mat_mul, reform, rms_norm, rope, softmax, swiglu, SliceOn};
-use cuda::{ContextGuard, ContextSpore, CudaDataType, Device};
+use cuda::{ContextGuard, ContextSpore, Device};
+use digit_layout::types::F16;
 use operators::{
     fuesd_softmax::nvidia_gpu as softmax, mat_mul::nvidia_gpu as mat_mul,
     reform::nvidia_gpu as reform, rms_norm::nvidia_gpu as rms_norm, rope::nvidia_gpu as rope,
-    swiglu::nvidia_gpu as swiglu, Operator, QueueOf, F16,
+    swiglu::nvidia_gpu as swiglu, Operator, QueueOf,
 };
 use std::{
     marker::PhantomData,
@@ -19,9 +18,9 @@ use std::{
 };
 
 pub use common_devices::Kernels;
-pub use operators::nvidia_gpu::Device as Gpu;
+pub use operators::nvidia_gpu::{cuda, Device as Gpu};
 pub use sample::{sample_cpu, sample_nv};
-pub use tensor::{reslice, reslice_mut, slice, split, udim, DataType, LocalSplitable, Tensor};
+pub use tensor::{reslice, reslice_mut, slice, split, udim, LocalSplitable, Tensor};
 
 pub struct NvidiaKernels {
     mat_mul: mat_mul::Operator,
@@ -185,25 +184,6 @@ impl Kernels for NvidiaKernels {
         U: Deref<Target = SliceOn<Self::Device>>,
     {
         swiglu(PhantomData::<swiglu::Scheme>, &self.swiglu, gate, up, queue);
-    }
-}
-
-#[inline]
-pub fn cast_dt(dt: DataType) -> CudaDataType {
-    match dt {
-        DataType::I8 => CudaDataType::i8,
-        DataType::I16 => CudaDataType::i16,
-        DataType::I32 => CudaDataType::i32,
-        DataType::I64 => CudaDataType::i64,
-        DataType::U8 => CudaDataType::u8,
-        DataType::U16 => CudaDataType::u16,
-        DataType::U32 => CudaDataType::u32,
-        DataType::U64 => CudaDataType::u64,
-        DataType::F16 => CudaDataType::f16,
-        DataType::BF16 => CudaDataType::bf16,
-        DataType::F32 => CudaDataType::f32,
-        DataType::F64 => CudaDataType::f64,
-        _ => unreachable!(),
     }
 }
 

@@ -12,7 +12,7 @@ pub enum Compatibility {
 
 impl Compatibility {
     pub fn between<T, U>(a: &Tensor<T>, b: &Tensor<U>) -> Self {
-        if a.data_type != b.data_type {
+        if a.layout != b.layout {
             return Self::None;
         }
 

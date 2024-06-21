@@ -33,13 +33,12 @@ serde_json = "1.0"
 memmap2 = "0.9"
 rayon = "1.10"
 tokio = { version = "1.38", features = ["rt-multi-thread", "sync"] }
+digit-layout = "0.0"
 build-script-cfg = "0.0"
 
-operators = { git = "https://github.com/YdrMaster/operators-rs", rev = "015f283", default-features = false }
-
-cuda = { git = "https://github.com/YdrMaster/cuda-driver", rev = "62a7864" }
-nccl = { git = "https://github.com/YdrMaster/cuda-driver", rev = "62a7864" }
-search-cuda-tools = { git = "https://github.com/YdrMaster/cuda-driver", rev = "62a7864" }
+operators = { git = "https://github.com/YdrMaster/operators-rs", rev = "7a5f4de", default-features = false }
+nccl = { git = "https://github.com/YdrMaster/cuda-driver", rev = "4915a8f" }
+search-cuda-tools = { git = "https://github.com/YdrMaster/cuda-driver", rev = "4915a8f" }
 
 cndrv = "0.0"
 search-neuware-tools = "0.0"

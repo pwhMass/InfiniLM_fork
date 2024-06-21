@@ -3,13 +3,14 @@ mod infer;
 use causal_lm::Model;
 use common::{safe_tensors::SafeTensors, utok, FileLoadError};
 use common_cpu::CpuKernels;
+use digit_layout::DigitLayout;
 use mixtral::{ConfigJson, MixtralParams};
 use std::path::Path;
-use tensor::{udim, DataType};
+use tensor::udim;
 
 pub struct MixtralCPU {
     eos_token: utok,
-    data_type: DataType,
+    data_type: DigitLayout,
     nlayers: udim,
     nh: udim,
     nkvh: udim,
@@ -33,7 +34,7 @@ impl Model for MixtralCPU {
         let config = ConfigJson::load(&model_dir)?;
         Ok(Self {
             eos_token: config.eos_token_id,
-            data_type: config.torch_dtype,
+            data_type: config.data_layout(),
             nlayers: config.num_hidden_layers as _,
             nh: config.num_attention_heads as _,
             nkvh: config.num_key_value_heads as _,

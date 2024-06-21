@@ -9,14 +9,13 @@ extern crate log;
 use causal_lm::{CausalLM, DecodingMeta, Model, QueryContext, SampleMeta};
 use common::{upos, utok, FileLoadError};
 use common_nv::{
-    cast_dt,
     cuda::{
         AsRaw, Context, ContextResource, ContextSpore, DevByte, DevMem, DevMemSpore, Device,
         HostMemSpore, Stream, StreamSpore,
     },
-    sample_nv, slice, split, udim, DataType, DropOption, Kernels, LocalSplitable, NvidiaKernels,
-    Tensor,
+    sample_nv, slice, split, udim, DropOption, Kernels, LocalSplitable, NvidiaKernels, Tensor,
 };
+use digit_layout::types::F16;
 use itertools::izip;
 use llama::InferenceConfig;
 use nccl::CommunicatorGroup;
@@ -235,7 +234,7 @@ impl CausalLM for Transformer {
                 (
                     q.cache.map(|t| {
                         let ptrs = unsafe { t.physical_mut().split() };
-                        Tensor::new(t.data_type(), t.shape(), ptrs)
+                        Tensor::new(t.data_layout(), t.shape(), ptrs)
                     }),
                     q.range,
                 )
@@ -286,7 +285,7 @@ impl CausalLM for Transformer {
                             let mut state_buf = Tensor::alloc(dt, &[nt, d + reusing / n], |len| {
                                 stream.malloc::<u8>(len)
                             });
-                            let buf_len_common = (nh / n * max_seq_len) as usize * dt.size();
+                            let buf_len_common = (nh / n * max_seq_len) as usize * dt.nbytes();
                             let mut q_buf = stream.malloc::<u8>(buf_len_common * dh as usize);
                             let mut att_buf =
                                 stream.malloc::<u8>(buf_len_common * max_att_len as usize);
@@ -312,7 +311,7 @@ impl CausalLM for Transformer {
                                 comm.all_reduce(
                                     x.physical_mut(),
                                     None,
-                                    cast_dt(self.config.dt),
+                                    self.config.dt,
                                     nccl::ReduceType::ncclSum,
                                     stream,
                                 );
@@ -321,7 +320,7 @@ impl CausalLM for Transformer {
                                 comm.all_reduce(
                                     x.physical_mut(),
                                     None,
-                                    cast_dt(self.config.dt),
+                                    self.config.dt,
                                     nccl::ReduceType::ncclSum,
                                     stream,
                                 );
@@ -413,7 +412,7 @@ impl CausalLM for Transformer {
         args: impl IntoIterator<Item = SampleMeta>,
         logits: Tensor<Self::Storage>,
     ) -> Vec<utok> {
-        assert_eq!(logits.data_type(), DataType::F16);
+        assert_eq!(logits.data_layout(), F16);
         let &[_nt, voc] = logits.shape() else {
             panic!()
         };

@@ -5,6 +5,7 @@ mod decoding;
 mod query_context;
 
 use common::{upos, utok};
+use digit_layout::types::U32;
 use std::path::Path;
 use tensor::{udim, Tensor};
 
@@ -98,7 +99,7 @@ pub fn pos<'a, S: 'a>(
     for query in queries {
         ans.extend(query.range.clone());
     }
-    Tensor::new(tensor::DataType::U32, &[ans.len() as _], ans)
+    Tensor::new(U32, &[ans.len() as _], ans)
 }
 
 /// 测试模型实现。

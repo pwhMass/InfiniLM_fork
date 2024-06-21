@@ -10,4 +10,5 @@ common-cpu = { path = "../../../devices/common-cpu" }
 tensor = { path = "../../../tensor" }
 causal-lm = { path = "../../../causal-lm" }
 mixtral = { path = "../common" }
+digit-layout.workspace = true
 itertools.workspace = true

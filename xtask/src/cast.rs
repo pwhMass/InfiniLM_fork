@@ -1,5 +1,6 @@
 ﻿use std::{fs, path::PathBuf, time::Instant};
-use tensor::DataType;
+
+use digit_layout::types::{BF16, F16, F32};
 
 #[derive(Args, Default)]
 pub(crate) struct CastArgs {
@@ -17,9 +18,9 @@ pub(crate) struct CastArgs {
 impl CastArgs {
     pub fn invode(self) {
         let ty = match self.dt.as_deref() {
-            Some("f32") | Some("float") | Some("float32") | None => DataType::F32,
-            Some("f16") | Some("half") | Some("float16") => DataType::F16,
-            Some("bf16") | Some("bfloat16") => DataType::BF16,
+            Some("f32") | Some("float") | Some("float32") | None => F32,
+            Some("f16") | Some("half") | Some("float16") => F16,
+            Some("bf16") | Some("bfloat16") => BF16,
             Some(ty) => panic!("Unknown data type: \"{ty}\""),
         };
         let model_dir = PathBuf::from(self.model);

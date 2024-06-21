@@ -1,9 +1,13 @@
 ﻿use crate::{InferenceConfig, LayerStorage, Storage, Weight};
 use common::{bf16, f16, Blob};
-use tensor::{DataType, Tensor, Ty};
+use digit_layout::{
+    types::{BF16, F16, F32},
+    AsDigit, DigitLayout,
+};
+use tensor::Tensor;
 
 impl Storage {
-    pub fn cast(self, dt: DataType) -> Self {
+    pub fn cast(self, dt: DigitLayout) -> Self {
         if self.config.dt == dt {
             return self;
         }
@@ -28,27 +32,27 @@ impl Storage {
     }
 }
 
-fn cast(src: Tensor<Weight>, dt: DataType) -> Tensor<Weight> {
-    match (src.data_type(), dt) {
-        (DataType::F16, DataType::BF16) => typed(src, |x: &f16| bf16::from_f32(x.to_f32())),
-        (DataType::F16, DataType::F32) => typed(src, |x: &f16| x.to_f32()),
-        (DataType::BF16, DataType::F16) => typed(src, |x: &bf16| f16::from_f32(x.to_f32())),
-        (DataType::BF16, DataType::F32) => typed(src, |x: &bf16| x.to_f32()),
-        (DataType::F32, DataType::F16) => typed(src, |x: &f32| f16::from_f32(*x)),
-        (DataType::F32, DataType::BF16) => typed(src, |x: &f32| bf16::from_f32(*x)),
+fn cast(src: Tensor<Weight>, dt: DigitLayout) -> Tensor<Weight> {
+    match (src.data_layout(), dt) {
+        (F16, BF16) => typed(src, |x: &f16| bf16::from_f32(x.to_f32())),
+        (F16, F32) => typed(src, |x: &f16| x.to_f32()),
+        (BF16, F16) => typed(src, |x: &bf16| f16::from_f32(x.to_f32())),
+        (BF16, F32) => typed(src, |x: &bf16| x.to_f32()),
+        (F32, F16) => typed(src, |x: &f32| f16::from_f32(*x)),
+        (F32, BF16) => typed(src, |x: &f32| bf16::from_f32(*x)),
         _ => todo!(),
     }
 }
 
-fn typed<T: Ty + Sync, U: Ty + Send>(
+fn typed<T: AsDigit + Sync, U: AsDigit + Send>(
     src: Tensor<Weight>,
     cast: impl Fn(&T) -> U + Sync,
 ) -> Tensor<Weight> {
     use rayon::iter::*;
     use tensor::{reslice, reslice_mut};
 
-    assert_eq!(src.data_type(), T::DATA_TYPE);
-    let mut ans = Tensor::alloc(U::DATA_TYPE, src.shape(), Blob::new);
+    assert_eq!(src.data_layout(), T::LAYOUT);
+    let mut ans = Tensor::alloc(U::LAYOUT, src.shape(), Blob::new);
 
     reslice(src.physical())
         .par_iter()

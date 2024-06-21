@@ -1,5 +1,6 @@
 ﻿use common::Blob;
-use common_nv::{slice, split, udim, DataType, Tensor};
+use common_nv::{slice, split, udim, Tensor};
+use digit_layout::DigitLayout;
 use std::{ops::Deref, sync::Arc};
 
 pub struct DistributedLayer(Blob);
@@ -137,7 +138,7 @@ impl<'a> Distributer<'a> {
 #[derive(Clone, Debug)]
 pub struct DistributeScheme {
     /// data type
-    pub dt: DataType,
+    pub dt: DigitLayout,
     /// num heads
     pub nh: udim,
     /// num kv heads
@@ -173,7 +174,7 @@ impl DistributeScheme {
         let mut size = 0usize;
         let mut align = |addition: usize| -> usize {
             let offset = (size + (align - 1)) & !(align - 1);
-            size = offset + addition * model.config.dt.size();
+            size = offset + addition * model.config.dt.nbytes();
             offset
         };
 

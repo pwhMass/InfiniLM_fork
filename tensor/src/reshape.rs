@@ -12,7 +12,7 @@ impl<Physical> Tensor<Physical> {
                 shape.iter().product::<udim>(),
             );
             return Self {
-                data_type: self.data_type,
+                layout: self.layout,
                 shape: Shape::from_slice(shape),
                 pattern: Pattern::from_shape(shape, self.pattern.offset()),
                 physical: self.physical,
@@ -46,7 +46,7 @@ impl<Physical> Tensor<Physical> {
             }
             pattern.push(self.pattern.offset());
             return Self {
-                data_type: self.data_type,
+                layout: self.layout,
                 shape: Shape::from_slice(shape),
                 pattern: Pattern(DVector::from_vec(pattern)),
                 physical: self.physical,
@@ -137,7 +137,7 @@ impl<Physical> Tensor<Physical> {
 
             pattern.push(self.pattern.offset());
             return Self {
-                data_type: self.data_type,
+                layout: self.layout,
                 shape: Shape::from_slice(shape),
                 pattern: Pattern(DVector::from_vec(pattern)),
                 physical: self.physical,

@@ -9,10 +9,11 @@ mod gather;
 
 use common::utok;
 use common_devices::{mat_mul, rms_norm, rope, softmax, swiglu, SliceOn};
+use digit_layout::types::F16;
 use operators::{
     fuesd_softmax::common_cpu as softmax, mat_mul::common_cpu as mat_mul,
     rms_norm::common_cpu as rms_norm, rope::common_cpu as rope, swiglu::common_cpu as swiglu,
-    Operator, QueueOf, F16,
+    Operator, QueueOf,
 };
 use std::{
     marker::PhantomData,

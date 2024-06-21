@@ -9,6 +9,7 @@ authors = ["YdrMaster <ydrml@hotmail.com>"]
 [dependencies]
 smallvec = "1.13"
 nalgebra = "0.32"
+digit-layout.workspace = true
 half.workspace = true
 rayon.workspace = true
 serde.workspace = true

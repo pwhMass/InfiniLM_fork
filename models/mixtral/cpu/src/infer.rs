@@ -2,9 +2,10 @@ use super::MixtralCPU;
 use causal_lm::{CausalLM, DecodingMeta, QueryContext, SampleMeta};
 use common::{f16, upos, utok, Blob};
 use common_cpu::{Kernels, ThisThread};
+use digit_layout::{types::U32, DigitLayout};
 use itertools::izip;
 use std::{iter::repeat, slice::from_raw_parts};
-use tensor::{reslice, reslice_mut, slice, split, udim, DataType, LocalSplitable, Tensor};
+use tensor::{reslice, reslice_mut, slice, split, udim, LocalSplitable, Tensor};
 
 impl CausalLM for MixtralCPU {
     type Storage = Blob;
@@ -41,7 +42,7 @@ impl CausalLM for MixtralCPU {
             slice![=>],
         ];
 
-        let mut ans = Tensor::alloc(cache.data_type(), cache.shape(), Blob::new);
+        let mut ans = Tensor::alloc(cache.data_layout(), cache.shape(), Blob::new);
         cache
             .as_ref()
             .slice(&slice)
@@ -105,12 +106,12 @@ impl CausalLM for MixtralCPU {
             };
         }
 
-        let mut q_buf = Blob::new((nh * max_seq_len * dh) as usize * dt.size());
-        let mut att_buf = Blob::new((nh * max_seq_len * max_att_len) as usize * dt.size());
+        let mut q_buf = Blob::new((nh * max_seq_len * dh) as usize * dt.nbytes());
+        let mut att_buf = Blob::new((nh * max_seq_len * max_att_len) as usize * dt.nbytes());
         let pos = causal_lm::pos(&queries, nt);
         let pos = pos.as_ref().map_physical(|u| reslice(u));
         let mut moe_w = tensor(dt, &[nt, self.k]);
-        let mut moe_i = tensor(DataType::U32, &[nt, self.k]);
+        let mut moe_i = tensor(U32, &[nt, self.k]);
         let mut routes = tensor(dt, &[nt, self.ne]);
 
         let mut x = token_embedded;
@@ -296,7 +297,7 @@ impl CausalLM for MixtralCPU {
 }
 
 #[inline]
-fn tensor(dt: DataType, shape: &[udim]) -> Tensor<Blob> {
+fn tensor(dt: DigitLayout, shape: &[udim]) -> Tensor<Blob> {
     Tensor::alloc(dt, shape, Blob::new)
 }
 
@@ -343,6 +344,7 @@ fn topk(logits: &Tensor<Blob>, k: usize, weight: &mut Tensor<Blob>, indices: &mu
 
 #[test]
 fn test_topk() {
+    use digit_layout::types::{F16, U32};
     let r = 2;
     let k = 2;
     let n = 8;
@@ -355,9 +357,9 @@ fn test_topk() {
         .map(|x| f16::from_f32(*x as f32))
         .collect::<Vec<_>>();
     blob.copy_from_slice(reslice(&src));
-    let logits = Tensor::new(DataType::F16, &[r as u32, n as u32], blob);
-    let mut weights = Tensor::alloc(DataType::F16, &[r as u32, k as u32], Blob::new);
-    let mut indices = Tensor::alloc(DataType::U32, &[r as u32, k as u32], Blob::new);
+    let logits = Tensor::new(F16, &[r as u32, n as u32], blob);
+    let mut weights = Tensor::alloc(F16, &[r as u32, k as u32], Blob::new);
+    let mut indices = Tensor::alloc(U32, &[r as u32, k as u32], Blob::new);
     topk(&logits, k, &mut weights, &mut indices);
     let weights: &[f16] = reslice(weights.as_slice()); // [2., 1., 4., 3.]
     let indices: &[u32] = reslice(indices.as_slice()); // [1, 6, 4, 0]

@@ -11,9 +11,9 @@ common = { path = "../../common" }
 common-devices = { path = "../common" }
 tensor = { path = "../../tensor" }
 sample = { path = "../../sample" }
-cuda.workspace = true
 rand = "0.8"
 operators = { workspace = true, features = ["nvidia-gpu"] }
+digit-layout.workspace = true
 
 [build-dependencies]
 build-script-cfg.workspace = true

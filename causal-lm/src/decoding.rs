@@ -22,7 +22,7 @@ impl DecodingMeta {
     where
         T: DerefMut<Target = [B]>,
     {
-        let dt = x.data_type();
+        let dt = x.data_layout();
         let &[_nt, d] = x.shape() else {
             panic!("shape error")
         };
@@ -46,7 +46,7 @@ impl DecodingMeta {
                 break;
             }
         }
-        let len = d as usize * dt.size();
+        let len = d as usize * dt.nbytes();
         for DecodingMeta {
             num_query,
             num_decode,

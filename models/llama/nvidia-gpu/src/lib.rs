@@ -7,13 +7,12 @@ extern crate log;
 
 use causal_lm::{CausalLM, DecodingMeta, Model, QueryContext, SampleMeta};
 use common::{upos, utok, FileLoadError};
-use common_nv::{
-    sample_nv, slice, udim, DataType, DropOption, Gpu, Kernels, NvidiaKernels, Tensor,
-};
+use common_nv::{sample_nv, slice, udim, DropOption, Gpu, Kernels, NvidiaKernels, Tensor};
 use cuda::{
     ContextResource, ContextSpore, DevByte, DevMem, DevMemSpore, Device, EventSpore, HostMemSpore,
     Stream, StreamSpore,
 };
+use digit_layout::types::F16;
 use llama::{ComputeConst, InferenceConfig, LayerStorage, SliceOn, Weight};
 use resource::Resource;
 use std::{
@@ -275,7 +274,7 @@ impl CausalLM for Transformer {
         args: impl IntoIterator<Item = SampleMeta>,
         logits: Tensor<Self::Storage>,
     ) -> Vec<utok> {
-        assert_eq!(logits.data_type(), DataType::F16);
+        assert_eq!(logits.data_layout(), F16);
         let &[_nt, voc] = logits.shape() else {
             panic!()
         };

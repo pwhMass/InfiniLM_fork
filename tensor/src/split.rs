@@ -59,7 +59,7 @@ impl<Physical: Splitable> Tensor<Physical> {
         build(axis, segments, &self.shape)
             .into_iter()
             .map(|(shape, affine)| Self {
-                data_type: self.data_type,
+                layout: self.layout,
                 shape,
                 pattern: Pattern(affine * &self.pattern.0),
                 physical: self.physical.split(),
@@ -151,5 +151,6 @@ macro_rules! split {
 
 #[test]
 fn test_macro() {
-    let (_a, _b, _c) = split!(Tensor::new(crate::DataType::U8, &[10], ()); [0]: 2, 3, 4);
+    use digit_layout::types::U8;
+    let (_a, _b, _c) = split!(Tensor::new(U8, &[10], ()); [0]: 2, 3, 4);
 }

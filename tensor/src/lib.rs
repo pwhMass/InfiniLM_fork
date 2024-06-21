@@ -1,6 +1,5 @@
 mod broadcast;
 mod compatibility;
-mod data_type;
 mod fmt;
 mod pattern;
 mod reshape;
@@ -16,7 +15,6 @@ pub type udim = u32;
 pub type idim = i32;
 
 pub use compatibility::Compatibility;
-pub use data_type::{DataType, Ty};
 pub use nalgebra::DVector;
 pub use pattern::{expand_indices, idx_strides, Affine, Shape};
 pub use slice::SliceDim;

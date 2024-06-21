@@ -5,8 +5,9 @@ mod load;
 mod save;
 
 use common::{safe_tensors::SharedTensor, upos, utok, Blob};
+use digit_layout::DigitLayout;
 use std::{ops::Deref, sync::Arc};
-use tensor::{slice, udim, DataType, Tensor};
+use tensor::{slice, udim, Tensor};
 
 pub use common_devices::SliceOn;
 pub use compute::{ComputeConst, ComputeStream, LLamaLayer};
@@ -52,7 +53,7 @@ impl<T> LayerStorage<T> {
 
 #[derive(Clone, Debug)]
 pub struct InferenceConfig {
-    pub dt: DataType,
+    pub dt: DigitLayout,
     pub voc: udim,
     pub nlayers: udim,
     pub nh: udim,
@@ -89,7 +90,7 @@ impl InferenceConfig {
         malloc: impl FnOnce(usize) -> S,
         reform: impl FnOnce(Tensor<&mut S>, Tensor<&S>),
     ) -> Tensor<S> {
-        let mut ans = Tensor::alloc(cache.data_type(), cache.shape(), malloc);
+        let mut ans = Tensor::alloc(cache.data_layout(), cache.shape(), malloc);
         if pos > 0 {
             let &[_nlayers, 2, _nkvh, max_seq_len, _dh] = cache.shape() else {
                 panic!()

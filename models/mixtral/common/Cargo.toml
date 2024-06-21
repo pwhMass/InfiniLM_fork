@@ -9,5 +9,6 @@ authors = ["Zezhong Pan <panzezhong@qiyuanlab.com>"]
 [dependencies]
 common = { path = "../../../common" }
 tensor = { path = "../../../tensor" }
+digit-layout.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true

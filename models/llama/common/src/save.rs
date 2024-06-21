@@ -1,8 +1,9 @@
 ﻿use crate::{
-    json::{convert, ConfigJson},
+    json::{data_layout_name, ConfigJson},
     Storage, Weight,
 };
-use common::safe_tensors::{SafeTensorsHeader, SafeTensorsHeaderMetadata, TensorInfo};
+use common::safe_tensors::{Dtype, SafeTensorsHeader, SafeTensorsHeaderMetadata, TensorInfo};
+use digit_layout::DigitLayout;
 use std::{
     collections::HashMap,
     fs,
@@ -27,7 +28,7 @@ impl Storage {
             vocab_size: self.config.voc as _,
             rms_norm_eps: self.config.epsilon,
             rope_theta: self.config.theta,
-            torch_dtype: self.config.dt,
+            torch_dtype: data_layout_name(self.config.dt).to_string(),
         })?;
         fs::write(dir.join("config.json"), config)?;
 
@@ -40,7 +41,7 @@ impl Storage {
         };
 
         let mut t = |tensor: &Tensor<Weight>| TensorInfo {
-            dtype: convert!(DataType: tensor.data_type()),
+            dtype: convert(tensor.data_layout()),
             shape: tensor.shape().iter().map(|&d| d as _).collect(),
             data_offsets: {
                 let start = offset;
@@ -105,5 +106,25 @@ impl Storage {
         file.write_all(self.lm_layernorm.physical())?;
         file.write_all(self.lm_head.physical())?;
         Ok(())
+    }
+}
+
+fn convert(dtype: DigitLayout) -> Dtype {
+    use digit_layout::types::*;
+    match dtype {
+        BOOL => Dtype::BOOL,
+        U8 => Dtype::U8,
+        I8 => Dtype::I8,
+        I16 => Dtype::I16,
+        U16 => Dtype::U16,
+        F16 => Dtype::F16,
+        BF16 => Dtype::BF16,
+        I32 => Dtype::I32,
+        U32 => Dtype::U32,
+        F32 => Dtype::F32,
+        F64 => Dtype::F64,
+        I64 => Dtype::I64,
+        U64 => Dtype::U64,
+        _ => todo!(),
     }
 }

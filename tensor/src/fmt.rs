@@ -1,4 +1,4 @@
-﻿use crate::{expand_indices, idim, idx_strides, udim, DataType, Tensor};
+﻿use crate::{expand_indices, idim, idx_strides, udim, Tensor};
 use half::{bf16, f16};
 use std::{fmt, ops::Deref};
 
@@ -58,11 +58,12 @@ impl<Physical: Deref<Target = [u8]>> fmt::Display for Tensor<Physical> {
                 )
             };
         }
-        match self.data_type() {
-            DataType::F16 => write_tensor!(f16),
-            DataType::BF16 => write_tensor!(bf16),
-            DataType::F32 => write_tensor!(f32),
-            DataType::F64 => write_tensor!(f64),
+        use digit_layout::types as ty;
+        match self.data_layout() {
+            ty::F16 => write_tensor!(f16),
+            ty::BF16 => write_tensor!(bf16),
+            ty::F32 => write_tensor!(f32),
+            ty::F64 => write_tensor!(f64),
             _ => todo!(),
         }
     }
@@ -142,13 +143,14 @@ fn write_matrix<T: DataFmt>(
 
 #[test]
 fn test_fmt() {
-    use crate::{reslice, slice, DataType, Tensor};
+    use crate::{reslice, slice, Tensor};
+    use digit_layout::types::F32;
 
     let shape = [2, 3, 4];
     let data = Vec::from_iter((0..24).map(|x| x as f32));
     let data = reslice(&data);
 
-    let t = Tensor::new(DataType::F32, &shape, data);
+    let t = Tensor::new(F32, &shape, data);
     println!("{t}");
 
     let t = t.reshape(&[2, 3, 2, 2]);
@@ -172,7 +174,7 @@ fn test_fmt() {
     let t = t.broadcast(&[3, 3, 2]);
     println!("{t}");
 
-    let mut t_ = Tensor::new(t.data_type(), t.shape(), vec![0u8; t.bytes_size()]);
+    let mut t_ = Tensor::new(t.data_layout(), t.shape(), vec![0u8; t.bytes_size()]);
     t.reform_to(&mut t_);
     println!("{t_}");
 }
