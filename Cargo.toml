@@ -36,9 +36,9 @@ tokio = { version = "1.38", features = ["rt-multi-thread", "sync"] }
 digit-layout = "0.0"
 build-script-cfg = "0.0"
 
-operators = { git = "https://github.com/YdrMaster/operators-rs", rev = "2b4f3ea", default-features = false }
-nccl = { git = "https://github.com/YdrMaster/cuda-driver", rev = "4523bad" }
-search-cuda-tools = { git = "https://github.com/YdrMaster/cuda-driver", rev = "4523bad" }
+operators = { git = "https://github.com/YdrMaster/operators-rs", rev = "55d33d3", default-features = false }
+nccl = { git = "https://github.com/YdrMaster/cuda-driver", rev = "877df52" }
+search-cuda-tools = { git = "https://github.com/YdrMaster/cuda-driver", rev = "877df52" }
 
-cndrv = "0.0"
+cndrv = "0.1"
 search-neuware-tools = "0.0"

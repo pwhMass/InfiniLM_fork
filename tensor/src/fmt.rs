@@ -50,12 +50,7 @@ impl<Physical: Deref<Target = [u8]>> fmt::Display for Tensor<Physical> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         macro_rules! write_tensor {
             ($ty:ty) => {
-                write_tensor(
-                    f,
-                    self.locate_start().cast::<$ty>(),
-                    self.shape(),
-                    self.strides(),
-                )
+                write_tensor(f, self.base().cast::<$ty>(), self.shape(), self.strides())
             };
         }
         use digit_layout::types as ty;

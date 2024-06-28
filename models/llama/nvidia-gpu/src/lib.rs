@@ -6,8 +6,10 @@ mod resource;
 extern crate log;
 
 use causal_lm::{CausalLM, DecodingMeta, Model, QueryContext, SampleMeta};
-use common::{upos, utok, FileLoadError};
-use common_nv::{sample_nv, slice, udim, DropOption, Gpu, Kernels, NvidiaKernels, Tensor};
+use common::{upos, utok, Blob, FileLoadError};
+use common_nv::{
+    cuda::memcpy_d2h, sample_nv, slice, udim, DropOption, Gpu, Kernels, NvidiaKernels, Tensor,
+};
 use cuda::{
     ContextResource, ContextSpore, DevByte, DevMem, DevMemSpore, Device, EventSpore, HostMemSpore,
     Stream, StreamSpore,
@@ -19,6 +21,7 @@ use std::{
     cell::RefCell,
     collections::VecDeque,
     iter::repeat,
+    ops::Deref,
     path::Path,
     rc::Rc,
     slice::from_raw_parts,
@@ -101,11 +104,7 @@ impl Model for Transformer {
                 .collect();
 
             Ok(Self {
-                kernels: NvidiaKernels::new(
-                    &[device],
-                    host.config.d as _,
-                    host.config.max_seq_len as _,
-                ),
+                kernels: NvidiaKernels::new(&[device], host.config.d as _),
                 embed_tokens: host
                     .embed_tokens
                     .as_ref()
@@ -345,7 +344,7 @@ type DevMemPool<'a> =
     Rc<RefCell<MutexGuard<'a, VecDeque<(LayerStorage<DevMemSpore>, EventSpore)>>>>;
 
 impl<'a> llama::ComputeStream for ComputeStream<'a> {
-    type Device = Gpu;
+    type Handle = Gpu;
     type Storage = Cache;
     type Buf<'m> = DevMem<'m>;
     type Pos<'m> = DevMem<'m>;
@@ -370,15 +369,15 @@ impl<'a> llama::ComputeStream for ComputeStream<'a> {
         mem.drop_on(self.compute);
     }
     #[inline]
-    fn map_storage<'b>(&'b self, storage: &'b mut Self::Storage) -> &'b mut SliceOn<Self::Device> {
+    fn map_storage<'b>(&'b self, storage: &'b mut Self::Storage) -> &'b mut SliceOn<Self::Handle> {
         storage.mem.as_mut().sprout_mut(self.compute.ctx())
     }
     #[inline]
-    fn kernels(&self) -> &impl Kernels<Device = Self::Device> {
+    fn kernels(&self) -> &impl Kernels<Handle = Self::Handle> {
         self.kernels
     }
     #[inline]
-    fn queue(&self) -> &llama::QueueOf<Self::Device> {
+    fn queue(&self) -> &llama::QueueOf<Self::Handle> {
         self.compute
     }
     #[inline]
@@ -392,9 +391,23 @@ impl<'a> llama::ComputeStream for ComputeStream<'a> {
         }
     }
 
+    fn debug<T>(tensor: &Tensor<T>)
+    where
+        T: Deref<Target = SliceOn<Self::Handle>>,
+    {
+        println!(
+            "{}",
+            tensor.as_ref().map_physical(|s| {
+                let mut host = Blob::new(s.len());
+                memcpy_d2h(&mut host, s);
+                host
+            })
+        );
+    }
+
     fn layers(
         &self,
-    ) -> impl Iterator<Item = impl llama::LLamaLayer<Byte = <Self::Device as llama::Device>::Byte>>
+    ) -> impl Iterator<Item = impl llama::LLamaLayer<Byte = <Self::Handle as llama::Handle>::Byte>>
     {
         Iter::new(self.host, self.dev.clone(), self.compute, self.transfer)
     }

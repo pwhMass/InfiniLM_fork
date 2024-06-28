@@ -4,8 +4,8 @@ use common_cpu::{
     tensor::{reslice, slice, udim, Tensor},
     CpuKernels, Kernels, ThisThread,
 };
-use llama::{ComputeConst, ComputeStream, Device, LayerStorage, QueueOf, SliceOn, Storage, Weight};
-use std::{iter::repeat, path::Path, slice::from_raw_parts};
+use llama::{ComputeConst, ComputeStream, Handle, LayerStorage, QueueOf, SliceOn, Storage, Weight};
+use std::{iter::repeat, ops::Deref, path::Path, slice::from_raw_parts};
 
 pub struct Transformer {
     s: Storage,
@@ -26,7 +26,7 @@ impl Model for Transformer {
 }
 
 impl ComputeStream for Transformer {
-    type Device = common_cpu::Cpu;
+    type Handle = common_cpu::Cpu;
     type Storage = Blob;
     type Buf<'m> = Blob;
     type Pos<'m> = &'m [u8];
@@ -43,15 +43,15 @@ impl ComputeStream for Transformer {
         reslice(pos)
     }
     #[inline]
-    fn map_storage<'a>(&'a self, storage: &'a mut Self::Storage) -> &'a mut SliceOn<Self::Device> {
+    fn map_storage<'a>(&'a self, storage: &'a mut Self::Storage) -> &'a mut SliceOn<Self::Handle> {
         storage
     }
     #[inline]
-    fn kernels(&self) -> &impl Kernels<Device = Self::Device> {
+    fn kernels(&self) -> &impl Kernels<Handle = Self::Handle> {
         &self.kernels
     }
     #[inline]
-    fn queue(&self) -> &QueueOf<Self::Device> {
+    fn queue(&self) -> &QueueOf<Self::Handle> {
         &ThisThread
     }
     #[inline]
@@ -65,10 +65,17 @@ impl ComputeStream for Transformer {
         }
     }
 
+    fn debug<T>(tensor: &Tensor<T>)
+    where
+        T: Deref<Target = SliceOn<Self::Handle>>,
+    {
+        println!("{tensor}");
+    }
+
     #[inline]
     fn layers(
         &self,
-    ) -> impl Iterator<Item = impl llama::LLamaLayer<Byte = <Self::Device as Device>::Byte>> {
+    ) -> impl Iterator<Item = impl llama::LLamaLayer<Byte = <Self::Handle as Handle>::Byte>> {
         self.s.layers.iter().map(LlamaLayer)
     }
 }

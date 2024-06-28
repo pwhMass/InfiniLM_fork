@@ -1,5 +1,5 @@
 ﻿use common::utok;
-use operators::nvidia_gpu::cuda::{DevByte, Stream};
+use operators::cuda::{DevByte, Stream};
 use std::ops::{Deref, DerefMut};
 use tensor::Tensor;
 

@@ -1,8 +1,9 @@
 ﻿use crate::{expand_indices, idim, idx_strides, pattern::Pattern, udim, Compatibility, Shape};
 use digit_layout::DigitLayout;
-use nalgebra::{DVector, DVectorView};
+use nalgebra::DVector;
 use rayon::iter::*;
 use std::{
+    mem::{align_of, size_of},
     ops::{Deref, DerefMut},
     panic,
 };
@@ -162,6 +163,32 @@ impl<Physical> Tensor<Physical> {
     }
 }
 
+impl<B: Sized, P: Deref<Target = [B]>> Tensor<P> {
+    pub fn base(&self) -> *const B {
+        const { assert!(size_of::<B>() == 1) }
+        const { assert!(align_of::<B>() == 1) }
+
+        let off = self.bytes_offset();
+        unsafe { self.physical.as_ptr().cast::<u8>().offset(off).cast() }
+    }
+}
+
+impl<B: Sized, P: DerefMut<Target = [B]>> Tensor<P> {
+    pub fn base_mut(&mut self) -> *mut B {
+        const { assert!(size_of::<B>() == 1) }
+        const { assert!(align_of::<B>() == 1) }
+
+        let off = self.bytes_offset();
+        unsafe {
+            self.physical_mut()
+                .as_mut_ptr()
+                .cast::<u8>()
+                .offset(off)
+                .cast()
+        }
+    }
+}
+
 impl<Physical: Deref<Target = [u8]>> Tensor<Physical> {
     #[inline]
     pub fn as_slice(&self) -> &[u8] {
@@ -169,16 +196,6 @@ impl<Physical: Deref<Target = [u8]>> Tensor<Physical> {
         let off = self.bytes_offset();
         let len = self.bytes_size();
         &self.physical[off as usize..][..len]
-    }
-
-    pub fn locate_start(&self) -> *const u8 {
-        let off = self.bytes_offset();
-        (&self.physical[off as usize]) as _
-    }
-
-    pub fn locate(&self, indices: &DVectorView<idim>) -> Option<*const u8> {
-        let i = self.pattern.0.dot(indices) as usize * self.layout.nbytes();
-        self.physical.get(i).map(|r| r as _)
     }
 
     /// # Safety
@@ -221,8 +238,8 @@ impl<Physical: Deref<Target = [u8]>> Tensor<Physical> {
                 let (n, idx_strides) = idx_strides(iter);
                 let src_pattern = self.pattern.0.view_range(..iter.len(), ..);
                 let dst_pattern = dst.pattern.0.view_range(..iter.len(), ..);
-                let src = self.locate_start() as usize;
-                let dst = dst.locate_start() as usize;
+                let src = self.base() as usize;
+                let dst = dst.base() as usize;
                 let count = contiguous.iter().product::<udim>() as usize * dt;
                 (0..n).into_par_iter().for_each(|i| {
                     let indices = expand_indices(i, &idx_strides, &[]);
@@ -242,16 +259,6 @@ impl<Physical: DerefMut<Target = [u8]>> Tensor<Physical> {
         let off = self.bytes_offset();
         let len = self.bytes_size();
         &mut self.physical[off as usize..][..len]
-    }
-
-    pub fn locate_start_mut(&mut self) -> *mut u8 {
-        let off = self.bytes_offset();
-        (&mut self.physical[off as usize]) as _
-    }
-
-    pub fn locate_mut(&mut self, indices: &DVectorView<idim>) -> Option<*mut u8> {
-        let i = self.pattern.0.dot(indices) as usize * self.layout.nbytes();
-        self.physical.get_mut(i).map(|r| r as _)
     }
 }
 

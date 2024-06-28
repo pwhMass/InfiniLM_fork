@@ -11,7 +11,7 @@ use tensor::{slice, udim, Tensor};
 
 pub use common_devices::SliceOn;
 pub use compute::{ComputeConst, ComputeStream, LLamaLayer};
-pub use operators::{Device, QueueOf};
+pub use operators::{Handle, QueueOf};
 
 pub struct Storage {
     pub config: InferenceConfig,

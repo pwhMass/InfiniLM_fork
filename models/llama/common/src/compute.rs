@@ -1,15 +1,15 @@
 ﻿use causal_lm::QueryContext;
 use common_devices::{Kernels, SliceOn};
 use itertools::izip;
-use operators::{Device, QueueOf};
+use operators::{Handle, QueueOf};
 use std::ops::{Deref, DerefMut};
 use tensor::{slice, split, udim, LocalSplitable, Tensor};
 
 pub trait ComputeStream {
-    type Device: Device;
+    type Handle: Handle;
     type Storage;
-    type Buf<'m>: DerefMut<Target = SliceOn<Self::Device>>;
-    type Pos<'m>: Deref<Target = SliceOn<Self::Device>>;
+    type Buf<'m>: DerefMut<Target = SliceOn<Self::Handle>>;
+    type Pos<'m>: Deref<Target = SliceOn<Self::Handle>>;
 
     fn malloc(&self, len: usize) -> Self::Buf<'_>;
     fn free(&self, _mem: Self::Buf<'_>) {}
@@ -17,15 +17,19 @@ pub trait ComputeStream {
     where
         Self: 'p;
     fn free_pos(&self, _mem: Self::Pos<'_>) {}
-    fn map_storage<'a>(&'a self, storage: &'a mut Self::Storage) -> &'a mut SliceOn<Self::Device>;
+    fn map_storage<'a>(&'a self, storage: &'a mut Self::Storage) -> &'a mut SliceOn<Self::Handle>;
 
-    fn kernels(&self) -> &impl Kernels<Device = Self::Device>;
-    fn queue(&self) -> &QueueOf<Self::Device>;
+    fn kernels(&self) -> &impl Kernels<Handle = Self::Handle>;
+    fn queue(&self) -> &QueueOf<Self::Handle>;
     fn constant(&self) -> ComputeConst;
+
+    fn debug<T>(tensor: &Tensor<T>)
+    where
+        T: Deref<Target = SliceOn<Self::Handle>>;
 
     fn layers(
         &self,
-    ) -> impl Iterator<Item = impl LLamaLayer<Byte = <Self::Device as Device>::Byte>>;
+    ) -> impl Iterator<Item = impl LLamaLayer<Byte = <Self::Handle as Handle>::Byte>>;
 
     fn forward<'q>(
         &self,

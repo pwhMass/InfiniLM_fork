@@ -208,9 +208,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.100"
+version = "1.0.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c891175c3fb232128f48de6590095e59198bbeb8620c310be349bfc3afd12c7b"
+checksum = "ac367972e516d45567c7eafc73d24e1c193dcf200a8d94e9db7b3d38b349572d"
 
 [[package]]
 name = "cexpr"
@@ -280,9 +280,9 @@ checksum = "4b82cf0babdbd58558212896d1a4272303a57bdb245c2bf1147185fb45640e70"
 
 [[package]]
 name = "cndrv"
-version = "0.0.0"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e82673524b5133624ef7ee2a78146220629e4f5ca3977bf37699b9f63823cee0"
+checksum = "a21723573400a39e79668317feefb29f0d86ce2fefba6aeee9ed781c5c0ece03"
 dependencies = [
  "bindgen",
  "build-script-cfg",
@@ -320,7 +320,7 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=2b4f3ea#2b4f3eaa1023dcbb64cfee0c28335a3dc6959dd4"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=55d33d3#55d33d33ae2de80f381724c9ef7846f72f3a1e37"
 dependencies = [
  "digit-layout",
 ]
@@ -346,14 +346,6 @@ dependencies = [
  "digit-layout",
  "operators",
  "tensor",
-]
-
-[[package]]
-name = "common-cpu"
-version = "0.1.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=2b4f3ea#2b4f3eaa1023dcbb64cfee0c28335a3dc6959dd4"
-dependencies = [
- "common 0.1.0",
 ]
 
 [[package]]
@@ -416,7 +408,7 @@ checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 [[package]]
 name = "cublas"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=4523bad#4523bad61bce9a55bfc54111b198f41491f67679"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=877df52#877df5295ee9ab0a24737346349e55fe08940b7f"
 dependencies = [
  "bindgen",
  "build-script-cfg",
@@ -428,10 +420,11 @@ dependencies = [
 [[package]]
 name = "cuda"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=4523bad#4523bad61bce9a55bfc54111b198f41491f67679"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=877df52#877df5295ee9ab0a24737346349e55fe08940b7f"
 dependencies = [
  "bindgen",
  "build-script-cfg",
+ "half",
  "log",
  "search-cuda-tools",
 ]
@@ -466,9 +459,9 @@ dependencies = [
 
 [[package]]
 name = "either"
-version = "1.12.0"
+version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3dca9240753cf90908d7e4aac30f630662b02aebaa1b58a3cadabdb23385b58b"
+checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
 
 [[package]]
 name = "enum-as-inner"
@@ -914,7 +907,7 @@ version = "0.0.1"
 dependencies = [
  "causal-lm",
  "common 0.0.0",
- "common-cpu 0.0.0",
+ "common-cpu",
  "llama",
 ]
 
@@ -952,9 +945,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.21"
+version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
+checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
 
 [[package]]
 name = "lru"
@@ -1033,7 +1026,7 @@ version = "0.0.0"
 dependencies = [
  "causal-lm",
  "common 0.0.0",
- "common-cpu 0.0.0",
+ "common-cpu",
  "digit-layout",
  "itertools 0.13.0",
  "mixtral",
@@ -1070,7 +1063,7 @@ dependencies = [
 [[package]]
 name = "nccl"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=4523bad#4523bad61bce9a55bfc54111b198f41491f67679"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=877df52#877df5295ee9ab0a24737346349e55fe08940b7f"
 dependencies = [
  "bindgen",
  "build-script-cfg",
@@ -1154,18 +1147,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nvidia-gpu"
-version = "0.1.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=2b4f3ea#2b4f3eaa1023dcbb64cfee0c28335a3dc6959dd4"
-dependencies = [
- "build-script-cfg",
- "common 0.1.0",
- "cublas",
- "cuda",
- "search-cuda-tools",
-]
-
-[[package]]
 name = "object"
 version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1183,16 +1164,16 @@ checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 [[package]]
 name = "operators"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=2b4f3ea#2b4f3eaa1023dcbb64cfee0c28335a3dc6959dd4"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=55d33d3#55d33d33ae2de80f381724c9ef7846f72f3a1e37"
 dependencies = [
  "build-script-cfg",
  "common 0.1.0",
- "common-cpu 0.1.0",
+ "cublas",
+ "cuda",
  "digit-layout",
  "gemm",
  "half",
  "log",
- "nvidia-gpu",
  "search-cuda-tools",
  "search-neuware-tools",
 ]
@@ -1446,7 +1427,7 @@ dependencies = [
 [[package]]
 name = "search-cuda-tools"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=4523bad#4523bad61bce9a55bfc54111b198f41491f67679"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=877df52#877df5295ee9ab0a24737346349e55fe08940b7f"
 dependencies = [
  "find_cuda_helper",
 ]
@@ -1485,9 +1466,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.117"
+version = "1.0.118"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "455182ea6142b14f93f4bc5320a2b31c1f266b66a4a5c858b013302a5d8cbfc3"
+checksum = "d947f6b3163d8857ea16c4fa0dd4840d52f3041039a85decd46867eb1abef2e4"
 dependencies = [
  "itoa",
  "ryu",

@@ -4,25 +4,28 @@ mod gather;
 mod sample;
 
 use common::utok;
-use common_devices::{mat_mul, reform, rms_norm, rope, softmax, swiglu, SliceOn};
-use cuda::{ContextGuard, ContextSpore, Device};
-use digit_layout::types::F16;
+use common_devices::{layout, SliceOn};
+use cuda::{AsRaw, ContextSpore, Device};
+use digit_layout::types::{F16, U32};
 use operators::{
-    fuesd_softmax::nvidia_gpu as softmax, mat_mul::nvidia_gpu as mat_mul,
+    cuda::CurrentCtx, dyn_, fuesd_softmax::nvidia_gpu as softmax, mat_mul::nvidia_gpu as mat_mul,
     reform::nvidia_gpu as reform, rms_norm::nvidia_gpu as rms_norm, rope::nvidia_gpu as rope,
-    swiglu::nvidia_gpu as swiglu, Operator, QueueOf,
+    swiglu::nvidia_gpu as swiglu, Operator, QueueOf, TensorLayout,
 };
 use std::{
-    marker::PhantomData,
+    collections::HashMap,
     ops::{Deref, DerefMut},
+    ptr::{null, null_mut},
 };
 
 pub use common_devices::Kernels;
-pub use operators::nvidia_gpu::{cuda, Device as Gpu};
+pub use operators::{cuda, nvidia_gpu::Handle as Gpu};
 pub use sample::{sample_cpu, sample_nv};
 pub use tensor::{reslice, reslice_mut, slice, split, udim, LocalSplitable, Tensor};
 
-pub struct NvidiaKernels {
+pub struct NvidiaKernels(HashMap<i32, Internal>);
+
+struct Internal {
     mat_mul: mat_mul::Operator,
     rms_norm: rms_norm::Operator,
     rope: rope::Operator,
@@ -31,64 +34,105 @@ pub struct NvidiaKernels {
     swiglu: swiglu::Operator,
 }
 
-impl NvidiaKernels {
-    pub fn new(devices: &[Device], rms_norm_max_size: usize, softmax_max_size: usize) -> Self {
-        let max_num_threads_block = devices.iter().map(|d| d.max_block_dims().0).min().unwrap();
-        let compute_capability = devices
-            .iter()
-            .map(Device::compute_capability)
-            .min()
+impl Internal {
+    pub fn new(handle: &Gpu, d: usize) -> Self {
+        let mat_mul = mat_mul::Operator::new(handle);
+
+        let mut rms_norm = rms_norm::Operator::new(handle);
+        rms_norm
+            .scheme(&operators::rms_norm::Args {
+                y_layout: TensorLayout::new(F16, [dyn_(), d.into()], [dyn_(); 2]),
+                y_base: null_mut(),
+                x_layout: TensorLayout::new(F16, [dyn_(), d.into()], [dyn_(); 2]),
+                x_base: null(),
+                w_layout: TensorLayout::new(F16, [d.into()], [dyn_()]),
+                w_base: null(),
+                epsilon: 0.,
+            })
             .unwrap();
+
+        let mut rope = rope::Operator::new(handle);
+        rope.scheme(&operators::rope::Args {
+            t_layout: TensorLayout::new(F16, [dyn_(); 3], [dyn_(); 3]),
+            t_base: null_mut(),
+            p_layout: TensorLayout::new(U32, [dyn_()], [dyn_()]),
+            p_base: null(),
+            theta: 0.,
+        })
+        .unwrap();
+
+        let mut reform = reform::Operator::new(handle);
+        reform
+            .scheme(&operators::reform::Args {
+                dst_layout: TensorLayout::new(F16, [dyn_(); 2], [dyn_(); 2]),
+                dst_base: null_mut(),
+                src_layout: TensorLayout::new(F16, [dyn_(); 2], [dyn_(); 2]),
+                src_base: null(),
+            })
+            .unwrap();
+
+        let mut softmax = softmax::Operator::new(handle);
+        softmax
+            .scheme(&operators::fuesd_softmax::Args {
+                att_layout: TensorLayout::new(F16, [dyn_(); 3], [dyn_(); 3]),
+                att_base: null_mut(),
+            })
+            .unwrap();
+
+        let mut swiglu = swiglu::Operator::new(handle);
+        swiglu
+            .scheme(&operators::swiglu::Args {
+                gate_layout: TensorLayout::new(F16, [dyn_(); 2], [dyn_(); 2]),
+                gate_base: null_mut(),
+                up_layout: TensorLayout::new(F16, [dyn_(); 2], [dyn_(); 2]),
+                up_base: null(),
+            })
+            .unwrap();
+
         Self {
-            mat_mul: mat_mul::Operator::new(&F16).unwrap(),
-            rms_norm: rms_norm::Operator::new(&rms_norm::Config {
-                data_layout: F16,
-                num_items_reduce: rms_norm_max_size,
-                num_threads_warp: 32,
-                max_num_threads_block,
-                compute_capability,
-            })
-            .unwrap(),
-            rope: rope::Operator::new(&rope::Config {
-                data_layout: F16,
-                max_num_threads_block,
-                compute_capability,
-            })
-            .unwrap(),
-            reform: reform::Operator::new(&reform::Config {
-                num_threads_warp: 32,
-                max_num_threads_block,
-                compute_capability,
-            })
-            .unwrap(),
-            softmax: softmax::Operator::new(&softmax::Config {
-                data_layout: F16,
-                max_seq_len: softmax_max_size,
-                max_num_threads_block,
-                compute_capability,
-            })
-            .unwrap(),
-            swiglu: swiglu::Operator::new(&swiglu::Config {
-                data_layout: F16,
-                max_num_threads_block,
-                compute_capability,
-            })
-            .unwrap(),
+            mat_mul,
+            rms_norm,
+            rope,
+            reform,
+            softmax,
+            swiglu,
         }
     }
 }
 
+impl NvidiaKernels {
+    pub fn new(devices: &[Device], rms_norm_size: usize) -> Self {
+        Self(
+            devices
+                .iter()
+                .map(|d| {
+                    (
+                        unsafe { d.as_raw() },
+                        Internal::new(&Gpu::new(d.retain_primary()), rms_norm_size),
+                    )
+                })
+                .collect(),
+        )
+    }
+}
+
+impl NvidiaKernels {
+    fn get(&self, queue: &QueueOf<Gpu>) -> &Internal {
+        self.0.get(&unsafe { queue.ctx().dev().as_raw() }).unwrap()
+    }
+}
+
 impl Kernels for NvidiaKernels {
-    type Device = Gpu;
+    type Handle = Gpu;
 
     fn gather<T, U, I>(
         &self,
         x: &mut Tensor<T>,
         table: &Tensor<U>,
         tokens: I,
-        queue: &QueueOf<Self::Device>,
+        queue: &QueueOf<Self::Handle>,
     ) where
-        T: DerefMut<Target = SliceOn<Self::Device>>,
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
         U: Deref<Target = [u8]>,
         I: IntoIterator<Item = utok>,
     {
@@ -101,21 +145,27 @@ impl Kernels for NvidiaKernels {
         x: &Tensor<U>,
         w: &Tensor<V>,
         epsilon: f32,
-        queue: &QueueOf<Self::Device>,
+        queue: &QueueOf<Self::Handle>,
     ) where
-        T: DerefMut<Target = SliceOn<Self::Device>>,
-        U: Deref<Target = SliceOn<Self::Device>>,
-        V: Deref<Target = SliceOn<Self::Device>>,
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
+        U: Deref<Target = SliceOn<Self::Handle>>,
+        V: Deref<Target = SliceOn<Self::Handle>>,
     {
-        rms_norm(
-            PhantomData::<rms_norm::Scheme>,
-            &self.rms_norm,
-            y,
-            x,
-            w,
-            epsilon,
-            queue,
-        );
+        self.get(queue)
+            .rms_norm
+            .launch(
+                &operators::rms_norm::Args {
+                    y_layout: layout(y),
+                    y_base: y.base_mut(),
+                    x_layout: layout(x),
+                    x_base: x.base(),
+                    w_layout: layout(w),
+                    w_base: w.base(),
+                    epsilon,
+                },
+                queue,
+            )
+            .unwrap();
     }
 
     fn rope<T, U>(
@@ -123,19 +173,24 @@ impl Kernels for NvidiaKernels {
         t: &mut Tensor<T>,
         pos: &Tensor<U>,
         theta: f32,
-        queue: &QueueOf<Self::Device>,
+        queue: &QueueOf<Self::Handle>,
     ) where
-        T: DerefMut<Target = SliceOn<Self::Device>>,
-        U: Deref<Target = SliceOn<Self::Device>>,
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
+        U: Deref<Target = SliceOn<Self::Handle>>,
     {
-        rope(
-            PhantomData::<rope::Scheme>,
-            &self.rope,
-            t,
-            pos,
-            theta,
-            queue,
-        );
+        self.get(queue)
+            .rope
+            .launch(
+                &operators::rope::Args {
+                    t_layout: layout(t),
+                    t_base: t.base_mut(),
+                    p_layout: layout(pos),
+                    p_base: pos.base(),
+                    theta,
+                },
+                queue,
+            )
+            .unwrap();
     }
 
     fn mat_mul<T, U, V>(
@@ -145,45 +200,82 @@ impl Kernels for NvidiaKernels {
         a: &Tensor<U>,
         b: &Tensor<V>,
         alpha: f32,
-        queue: &QueueOf<Self::Device>,
+        queue: &QueueOf<Self::Handle>,
     ) where
-        T: DerefMut<Target = SliceOn<Self::Device>>,
-        U: Deref<Target = SliceOn<Self::Device>>,
-        V: Deref<Target = SliceOn<Self::Device>>,
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
+        U: Deref<Target = SliceOn<Self::Handle>>,
+        V: Deref<Target = SliceOn<Self::Handle>>,
     {
-        mat_mul(
-            PhantomData::<mat_mul::Scheme>,
-            &self.mat_mul,
-            c,
-            beta,
-            a,
-            b,
-            alpha,
-            queue,
-        );
+        self.get(queue)
+            .mat_mul
+            .launch(
+                &operators::mat_mul::Args {
+                    c_layout: layout(c),
+                    c_base: c.base_mut(),
+                    beta,
+                    a_layout: layout(a),
+                    a_base: a.base(),
+                    b_layout: layout(b),
+                    b_base: b.base(),
+                    alpha,
+                },
+                queue,
+            )
+            .unwrap();
     }
 
-    fn reform<T, U>(&self, dst: &mut Tensor<T>, src: &Tensor<U>, queue: &QueueOf<Self::Device>)
+    fn reform<T, U>(&self, dst: &mut Tensor<T>, src: &Tensor<U>, queue: &QueueOf<Self::Handle>)
     where
-        T: DerefMut<Target = SliceOn<Self::Device>>,
-        U: Deref<Target = SliceOn<Self::Device>>,
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
+        U: Deref<Target = SliceOn<Self::Handle>>,
     {
-        reform(PhantomData::<reform::Scheme>, &self.reform, dst, src, queue);
+        self.get(queue)
+            .reform
+            .launch(
+                &operators::reform::Args {
+                    dst_layout: layout(dst),
+                    dst_base: dst.base_mut(),
+                    src_layout: layout(src),
+                    src_base: src.base(),
+                },
+                queue,
+            )
+            .unwrap();
     }
 
-    fn softmax<T>(&self, att: &mut Tensor<T>, queue: &QueueOf<Self::Device>)
+    fn softmax<T>(&self, att: &mut Tensor<T>, queue: &QueueOf<Self::Handle>)
     where
-        T: DerefMut<Target = SliceOn<Self::Device>>,
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
     {
-        softmax(PhantomData::<softmax::Scheme>, &self.softmax, att, queue);
+        self.get(queue)
+            .softmax
+            .launch(
+                &operators::fuesd_softmax::Args {
+                    att_layout: layout(att),
+                    att_base: att.base_mut(),
+                },
+                queue,
+            )
+            .unwrap();
     }
 
-    fn swiglu<T, U>(&self, gate: &mut Tensor<T>, up: &Tensor<U>, queue: &QueueOf<Self::Device>)
+    fn swiglu<T, U>(&self, gate: &mut Tensor<T>, up: &Tensor<U>, queue: &QueueOf<Self::Handle>)
     where
-        T: DerefMut<Target = SliceOn<Self::Device>>,
-        U: Deref<Target = SliceOn<Self::Device>>,
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
+        U: Deref<Target = SliceOn<Self::Handle>>,
     {
-        swiglu(PhantomData::<swiglu::Scheme>, &self.swiglu, gate, up, queue);
+        self.get(queue)
+            .swiglu
+            .launch(
+                &operators::swiglu::Args {
+                    gate_layout: layout(gate),
+                    gate_base: gate.base_mut(),
+                    up_layout: layout(up),
+                    up_base: up.base(),
+                },
+                queue,
+            )
+            .unwrap();
     }
 }
 
@@ -212,7 +304,7 @@ impl<T> AsMut<T> for DropOption<T> {
 
 impl<T: ContextSpore> DropOption<T> {
     #[inline]
-    pub fn sprout<'ctx>(&mut self, ctx: &'ctx ContextGuard) -> <T as ContextSpore>::Resource<'ctx> {
+    pub fn sprout<'ctx>(&mut self, ctx: &'ctx CurrentCtx) -> <T as ContextSpore>::Resource<'ctx> {
         self.0.take().unwrap().sprout(ctx)
     }
 }
