@@ -4,7 +4,7 @@ mod gather;
 mod sample;
 
 use common::utok;
-use common_devices::{layout, SliceOn};
+use common_devices::{layout, Operators, SliceOn};
 use cuda::{AsRaw, ContextSpore, Device};
 use digit_layout::types::{F16, U32};
 use operators::{
@@ -18,7 +18,7 @@ use std::{
     ptr::{null, null_mut},
 };
 
-pub use common_devices::Kernels;
+pub use common_devices::{Kernels, KernelsA, KernelsB};
 pub use operators::{cuda, nvidia_gpu::Handle as Gpu};
 pub use sample::{sample_cpu, sample_nv};
 pub use tensor::{reslice, reslice_mut, slice, split, udim, LocalSplitable, Tensor};
@@ -122,7 +122,45 @@ impl NvidiaKernels {
     }
 }
 
-impl Kernels for NvidiaKernels {
+impl Kernels<Gpu> for NvidiaKernels {}
+
+impl Operators for NvidiaKernels {
+    type Handle = Gpu;
+
+    fn rms_norm_op(
+        &self,
+        queue: &QueueOf<Self::Handle>,
+    ) -> &impl operators::rms_norm::RmsNorm<Self::Handle> {
+        &self.get(queue).rms_norm
+    }
+
+    fn mat_mul_op(
+        &self,
+        queue: &QueueOf<Self::Handle>,
+    ) -> &impl operators::mat_mul::MatMul<Self::Handle> {
+        &self.get(queue).mat_mul
+    }
+
+    fn rope_op(&self, queue: &QueueOf<Self::Handle>) -> &impl operators::rope::Rope<Self::Handle> {
+        &self.get(queue).rope
+    }
+
+    fn softmax_op(
+        &self,
+        queue: &QueueOf<Self::Handle>,
+    ) -> &impl operators::fuesd_softmax::FusedSoftmax<Self::Handle> {
+        &self.get(queue).softmax
+    }
+
+    fn swiglu_op(
+        &self,
+        queue: &QueueOf<Self::Handle>,
+    ) -> &impl operators::swiglu::Swiglu<Self::Handle> {
+        &self.get(queue).swiglu
+    }
+}
+
+impl KernelsB for NvidiaKernels {
     type Handle = Gpu;
 
     fn gather<T, U, I>(
@@ -139,91 +177,6 @@ impl Kernels for NvidiaKernels {
         gather::gather(x, table, tokens, queue);
     }
 
-    fn rms_norm<T, U, V>(
-        &self,
-        y: &mut Tensor<T>,
-        x: &Tensor<U>,
-        w: &Tensor<V>,
-        epsilon: f32,
-        queue: &QueueOf<Self::Handle>,
-    ) where
-        T: DerefMut<Target = SliceOn<Self::Handle>>,
-        U: Deref<Target = SliceOn<Self::Handle>>,
-        V: Deref<Target = SliceOn<Self::Handle>>,
-    {
-        self.get(queue)
-            .rms_norm
-            .launch(
-                &operators::rms_norm::Args {
-                    y_layout: layout(y),
-                    y_base: y.base_mut(),
-                    x_layout: layout(x),
-                    x_base: x.base(),
-                    w_layout: layout(w),
-                    w_base: w.base(),
-                    epsilon,
-                },
-                queue,
-            )
-            .unwrap();
-    }
-
-    fn rope<T, U>(
-        &self,
-        t: &mut Tensor<T>,
-        pos: &Tensor<U>,
-        theta: f32,
-        queue: &QueueOf<Self::Handle>,
-    ) where
-        T: DerefMut<Target = SliceOn<Self::Handle>>,
-        U: Deref<Target = SliceOn<Self::Handle>>,
-    {
-        self.get(queue)
-            .rope
-            .launch(
-                &operators::rope::Args {
-                    t_layout: layout(t),
-                    t_base: t.base_mut(),
-                    p_layout: layout(pos),
-                    p_base: pos.base(),
-                    theta,
-                },
-                queue,
-            )
-            .unwrap();
-    }
-
-    fn mat_mul<T, U, V>(
-        &self,
-        c: &mut Tensor<T>,
-        beta: f32,
-        a: &Tensor<U>,
-        b: &Tensor<V>,
-        alpha: f32,
-        queue: &QueueOf<Self::Handle>,
-    ) where
-        T: DerefMut<Target = SliceOn<Self::Handle>>,
-        U: Deref<Target = SliceOn<Self::Handle>>,
-        V: Deref<Target = SliceOn<Self::Handle>>,
-    {
-        self.get(queue)
-            .mat_mul
-            .launch(
-                &operators::mat_mul::Args {
-                    c_layout: layout(c),
-                    c_base: c.base_mut(),
-                    beta,
-                    a_layout: layout(a),
-                    a_base: a.base(),
-                    b_layout: layout(b),
-                    b_base: b.base(),
-                    alpha,
-                },
-                queue,
-            )
-            .unwrap();
-    }
-
     fn reform<T, U>(&self, dst: &mut Tensor<T>, src: &Tensor<U>, queue: &QueueOf<Self::Handle>)
     where
         T: DerefMut<Target = SliceOn<Self::Handle>>,
@@ -237,41 +190,6 @@ impl Kernels for NvidiaKernels {
                     dst_base: dst.base_mut(),
                     src_layout: layout(src),
                     src_base: src.base(),
-                },
-                queue,
-            )
-            .unwrap();
-    }
-
-    fn softmax<T>(&self, att: &mut Tensor<T>, queue: &QueueOf<Self::Handle>)
-    where
-        T: DerefMut<Target = SliceOn<Self::Handle>>,
-    {
-        self.get(queue)
-            .softmax
-            .launch(
-                &operators::fuesd_softmax::Args {
-                    att_layout: layout(att),
-                    att_base: att.base_mut(),
-                },
-                queue,
-            )
-            .unwrap();
-    }
-
-    fn swiglu<T, U>(&self, gate: &mut Tensor<T>, up: &Tensor<U>, queue: &QueueOf<Self::Handle>)
-    where
-        T: DerefMut<Target = SliceOn<Self::Handle>>,
-        U: Deref<Target = SliceOn<Self::Handle>>,
-    {
-        self.get(queue)
-            .swiglu
-            .launch(
-                &operators::swiglu::Args {
-                    gate_layout: layout(gate),
-                    gate_base: gate.base_mut(),
-                    up_layout: layout(up),
-                    up_base: up.base(),
                 },
                 queue,
             )

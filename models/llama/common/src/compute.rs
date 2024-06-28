@@ -1,5 +1,5 @@
 ﻿use causal_lm::QueryContext;
-use common_devices::{Kernels, SliceOn};
+use common_devices::{Kernels, KernelsA, KernelsB, SliceOn};
 use itertools::izip;
 use operators::{Handle, QueueOf};
 use std::ops::{Deref, DerefMut};
@@ -19,7 +19,7 @@ pub trait ComputeStream {
     fn free_pos(&self, _mem: Self::Pos<'_>) {}
     fn map_storage<'a>(&'a self, storage: &'a mut Self::Storage) -> &'a mut SliceOn<Self::Handle>;
 
-    fn kernels(&self) -> &impl Kernels<Handle = Self::Handle>;
+    fn kernels(&self) -> &impl Kernels<Self::Handle>;
     fn queue(&self) -> &QueueOf<Self::Handle>;
     fn constant(&self) -> ComputeConst;
 

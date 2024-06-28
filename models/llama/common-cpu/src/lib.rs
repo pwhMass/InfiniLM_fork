@@ -2,7 +2,7 @@ use causal_lm::{CausalLM, DecodingMeta, Model, QueryContext, SampleMeta};
 use common::{f16, upos, utok, Blob, FileLoadError};
 use common_cpu::{
     tensor::{reslice, slice, udim, Tensor},
-    CpuKernels, Kernels, ThisThread,
+    CpuKernels, Kernels, KernelsA, KernelsB, ThisThread,
 };
 use llama::{ComputeConst, ComputeStream, Handle, LayerStorage, QueueOf, SliceOn, Storage, Weight};
 use std::{iter::repeat, ops::Deref, path::Path, slice::from_raw_parts};
@@ -47,7 +47,7 @@ impl ComputeStream for Transformer {
         storage
     }
     #[inline]
-    fn kernels(&self) -> &impl Kernels<Handle = Self::Handle> {
+    fn kernels(&self) -> &impl Kernels<Self::Handle> {
         &self.kernels
     }
     #[inline]

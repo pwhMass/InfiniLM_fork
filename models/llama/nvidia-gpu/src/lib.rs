@@ -8,7 +8,8 @@ extern crate log;
 use causal_lm::{CausalLM, DecodingMeta, Model, QueryContext, SampleMeta};
 use common::{upos, utok, Blob, FileLoadError};
 use common_nv::{
-    cuda::memcpy_d2h, sample_nv, slice, udim, DropOption, Gpu, Kernels, NvidiaKernels, Tensor,
+    cuda::memcpy_d2h, sample_nv, slice, udim, DropOption, Gpu, Kernels, KernelsA, KernelsB,
+    NvidiaKernels, Tensor,
 };
 use cuda::{
     ContextResource, ContextSpore, DevByte, DevMem, DevMemSpore, Device, EventSpore, HostMemSpore,
@@ -373,7 +374,7 @@ impl<'a> llama::ComputeStream for ComputeStream<'a> {
         storage.mem.as_mut().sprout_mut(self.compute.ctx())
     }
     #[inline]
-    fn kernels(&self) -> &impl Kernels<Handle = Self::Handle> {
+    fn kernels(&self) -> &impl Kernels<Self::Handle> {
         self.kernels
     }
     #[inline]

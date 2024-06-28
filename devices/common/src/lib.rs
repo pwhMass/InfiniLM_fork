@@ -1,5 +1,8 @@
 use common::utok;
-use operators::{Argument, Handle, QueueOf, TensorLayout};
+use operators::{
+    fuesd_softmax, mat_mul, rms_norm, rope, swiglu, Argument, Handle, Operator, QueueOf,
+    TensorLayout,
+};
 use std::ops::{Deref, DerefMut};
 use tensor::Tensor;
 
@@ -20,19 +23,21 @@ pub fn layout<T>(t: &Tensor<T>) -> TensorLayout {
 
 pub type SliceOn<H> = [<H as Handle>::Byte];
 
-pub trait Kernels {
+pub trait Operators {
     type Handle: Handle;
 
-    fn gather<T, U, I>(
+    fn rms_norm_op(&self, queue: &QueueOf<Self::Handle>) -> &impl rms_norm::RmsNorm<Self::Handle>;
+    fn mat_mul_op(&self, queue: &QueueOf<Self::Handle>) -> &impl mat_mul::MatMul<Self::Handle>;
+    fn rope_op(&self, queue: &QueueOf<Self::Handle>) -> &impl rope::Rope<Self::Handle>;
+    fn softmax_op(
         &self,
-        x: &mut Tensor<T>,
-        table: &Tensor<U>,
-        tokens: I,
         queue: &QueueOf<Self::Handle>,
-    ) where
-        T: DerefMut<Target = SliceOn<Self::Handle>>,
-        U: Deref<Target = [u8]>,
-        I: IntoIterator<Item = utok>;
+    ) -> &impl fuesd_softmax::FusedSoftmax<Self::Handle>;
+    fn swiglu_op(&self, queue: &QueueOf<Self::Handle>) -> &impl swiglu::Swiglu<Self::Handle>;
+}
+
+pub trait KernelsA {
+    type Handle: Handle;
 
     fn rms_norm<T, U, V>(
         &self,
@@ -69,11 +74,6 @@ pub trait Kernels {
         U: Deref<Target = SliceOn<Self::Handle>>,
         V: Deref<Target = SliceOn<Self::Handle>>;
 
-    fn reform<T, U>(&self, dst: &mut Tensor<T>, src: &Tensor<U>, queue: &QueueOf<Self::Handle>)
-    where
-        T: DerefMut<Target = SliceOn<Self::Handle>>,
-        U: Deref<Target = SliceOn<Self::Handle>>;
-
     fn softmax<T>(&self, att: &mut Tensor<T>, queue: &QueueOf<Self::Handle>)
     where
         T: DerefMut<Target = SliceOn<Self::Handle>>;
@@ -84,178 +84,143 @@ pub trait Kernels {
         U: Deref<Target = SliceOn<Self::Handle>>;
 }
 
-// pub fn rms_norm<S, D, Y, X, W>(
-//     _: PhantomData<S>,
-//     op: &S::Operator,
-//     y: &mut Tensor<Y>,
-//     x: &Tensor<X>,
-//     w: &Tensor<W>,
-//     epsilon: f32,
-//     queue: &QueueOf<D>,
-// ) where
-//     D: Device,
-//     S: RmsNorm<D>,
-//     S::Error: fmt::Debug,
-//     Y: DerefMut<Target = [D::Byte]>,
-//     X: Deref<Target = [D::Byte]>,
-//     W: Deref<Target = [D::Byte]>,
-// {
-//     S::new(
-//         op,
-//         rms_norm::LayoutAttrs {
-//             y: layout(y),
-//             x: layout(x),
-//             w: layout(w),
-//         },
-//     )
-//     .unwrap()
-//     .launch(
-//         &(
-//             y.physical_mut().as_mut_ptr(),
-//             x.physical().as_ptr(),
-//             w.physical().as_ptr(),
-//             epsilon,
-//         ),
-//         queue,
-//     );
-// }
+pub trait KernelsB {
+    type Handle: Handle;
 
-// pub fn rope<S, D, T, Pos>(
-//     _: PhantomData<S>,
-//     op: &S::Operator,
-//     t: &mut Tensor<T>,
-//     pos: &Tensor<Pos>,
-//     theta: f32,
-//     queue: &QueueOf<D>,
-// ) where
-//     D: Device,
-//     S: Rope<D>,
-//     S::Error: fmt::Debug,
-//     T: DerefMut<Target = [D::Byte]>,
-//     Pos: Deref<Target = [D::Byte]>,
-// {
-//     S::new(
-//         op,
-//         rope::LayoutAttrs {
-//             t: layout(t),
-//             pos: layout(pos),
-//         },
-//     )
-//     .unwrap()
-//     .launch(
-//         &(
-//             t.physical_mut().as_mut_ptr(),
-//             pos.physical().as_ptr(),
-//             theta,
-//         ),
-//         queue,
-//     );
-// }
+    fn gather<T, U, I>(
+        &self,
+        x: &mut Tensor<T>,
+        table: &Tensor<U>,
+        tokens: I,
+        queue: &QueueOf<Self::Handle>,
+    ) where
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
+        U: Deref<Target = [u8]>,
+        I: IntoIterator<Item = utok>;
 
-// pub fn mat_mul<S, D, C, A, B>(
-//     _: PhantomData<S>,
-//     op: &S::Operator,
-//     c: &mut Tensor<C>,
-//     beta: f32,
-//     a: &Tensor<A>,
-//     b: &Tensor<B>,
-//     alpha: f32,
-//     queue: &QueueOf<D>,
-// ) where
-//     D: Device,
-//     S: MatMul<D>,
-//     S::Error: fmt::Debug,
-//     C: DerefMut<Target = [D::Byte]>,
-//     A: Deref<Target = [D::Byte]>,
-//     B: Deref<Target = [D::Byte]>,
-// {
-//     S::new(
-//         op,
-//         mat_mul::LayoutAttrs {
-//             c: layout(c),
-//             a: layout(a),
-//             b: layout(b),
-//         },
-//     )
-//     .unwrap()
-//     .launch(
-//         &(
-//             c.physical_mut().as_mut_ptr(),
-//             beta,
-//             a.physical().as_ptr(),
-//             b.physical().as_ptr(),
-//             alpha,
-//         ),
-//         queue,
-//     );
-// }
+    fn reform<T, U>(&self, dst: &mut Tensor<T>, src: &Tensor<U>, queue: &QueueOf<Self::Handle>)
+    where
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
+        U: Deref<Target = SliceOn<Self::Handle>>;
+}
 
-// pub fn reform<S, D, Dst, Src>(
-//     _: PhantomData<S>,
-//     op: &S::Operator,
-//     dst: &mut Tensor<Dst>,
-//     src: &Tensor<Src>,
-//     queue: &QueueOf<D>,
-// ) where
-//     D: Device,
-//     S: Reform<D>,
-//     S::Error: fmt::Debug,
-//     Dst: DerefMut<Target = [D::Byte]>,
-//     Src: Deref<Target = [D::Byte]>,
-// {
-//     S::new(
-//         op,
-//         reform::LayoutAttrs {
-//             dst: layout(dst),
-//             src: layout(src),
-//         },
-//     )
-//     .unwrap()
-//     .launch(
-//         &(dst.physical_mut().as_mut_ptr(), src.physical().as_ptr()),
-//         queue,
-//     );
-// }
+pub trait Kernels<H: Handle>: KernelsA<Handle = H> + KernelsB<Handle = H> {}
 
-// pub fn softmax<S, D, Att>(
-//     _: PhantomData<S>,
-//     op: &S::Operator,
-//     att: &mut Tensor<Att>,
-//     queue: &QueueOf<D>,
-// ) where
-//     D: Device,
-//     S: FuesdSoftmax<D>,
-//     S::Error: fmt::Debug,
-//     Att: DerefMut<Target = [D::Byte]>,
-// {
-//     S::new(op, fuesd_softmax::LayoutAttrs { att: layout(att) })
-//         .unwrap()
-//         .launch(&att.physical_mut().as_mut_ptr(), queue);
-// }
+impl<Ops: Operators> KernelsA for Ops {
+    type Handle = <Ops as Operators>::Handle;
 
-// pub fn swiglu<S, D, Gate, Up>(
-//     _: PhantomData<S>,
-//     op: &S::Operator,
-//     gate: &mut Tensor<Gate>,
-//     up: &Tensor<Up>,
-//     queue: &QueueOf<D>,
-// ) where
-//     D: Device,
-//     S: Swiglu<D>,
-//     S::Error: fmt::Debug,
-//     Gate: DerefMut<Target = [D::Byte]>,
-//     Up: Deref<Target = [D::Byte]>,
-// {
-//     S::new(
-//         op,
-//         swiglu::LayoutAttrs {
-//             gate: layout(gate),
-//             up: layout(up),
-//         },
-//     )
-//     .unwrap()
-//     .launch(
-//         &(gate.physical_mut().as_mut_ptr(), up.physical().as_ptr()),
-//         queue,
-//     );
-// }
+    fn rms_norm<T, U, V>(
+        &self,
+        y: &mut Tensor<T>,
+        x: &Tensor<U>,
+        w: &Tensor<V>,
+        epsilon: f32,
+        queue: &QueueOf<Self::Handle>,
+    ) where
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
+        U: Deref<Target = SliceOn<Self::Handle>>,
+        V: Deref<Target = SliceOn<Self::Handle>>,
+    {
+        self.rms_norm_op(queue)
+            .launch(
+                &rms_norm::Args {
+                    y_layout: layout(y),
+                    y_base: y.base_mut(),
+                    x_layout: layout(x),
+                    x_base: x.base(),
+                    w_layout: layout(w),
+                    w_base: w.base(),
+                    epsilon,
+                },
+                queue,
+            )
+            .unwrap();
+    }
+
+    fn rope<T, U>(
+        &self,
+        t: &mut Tensor<T>,
+        pos: &Tensor<U>,
+        theta: f32,
+        queue: &QueueOf<Self::Handle>,
+    ) where
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
+        U: Deref<Target = SliceOn<Self::Handle>>,
+    {
+        self.rope_op(queue)
+            .launch(
+                &rope::Args {
+                    t_layout: layout(t),
+                    t_base: t.base_mut(),
+                    p_layout: layout(pos),
+                    p_base: pos.base(),
+                    theta,
+                },
+                queue,
+            )
+            .unwrap();
+    }
+
+    fn mat_mul<T, U, V>(
+        &self,
+        c: &mut Tensor<T>,
+        beta: f32,
+        a: &Tensor<U>,
+        b: &Tensor<V>,
+        alpha: f32,
+        queue: &QueueOf<Self::Handle>,
+    ) where
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
+        U: Deref<Target = SliceOn<Self::Handle>>,
+        V: Deref<Target = SliceOn<Self::Handle>>,
+    {
+        self.mat_mul_op(queue)
+            .launch(
+                &mat_mul::Args {
+                    c_layout: layout(c),
+                    c_base: c.base_mut(),
+                    beta,
+                    a_layout: layout(a),
+                    a_base: a.base(),
+                    b_layout: layout(b),
+                    b_base: b.base(),
+                    alpha,
+                },
+                queue,
+            )
+            .unwrap();
+    }
+
+    fn softmax<T>(&self, att: &mut Tensor<T>, queue: &QueueOf<Self::Handle>)
+    where
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
+    {
+        self.softmax_op(queue)
+            .launch(
+                &fuesd_softmax::Args {
+                    att_layout: layout(att),
+                    att_base: att.base_mut(),
+                },
+                queue,
+            )
+            .unwrap();
+    }
+
+    fn swiglu<T, U>(&self, gate: &mut Tensor<T>, up: &Tensor<U>, queue: &QueueOf<Self::Handle>)
+    where
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
+        U: Deref<Target = SliceOn<Self::Handle>>,
+    {
+        self.swiglu_op(queue)
+            .launch(
+                &swiglu::Args {
+                    gate_layout: layout(gate),
+                    gate_base: gate.base_mut(),
+                    up_layout: layout(up),
+                    up_base: up.base(),
+                },
+                queue,
+            )
+            .unwrap();
+    }
+}

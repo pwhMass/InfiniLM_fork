@@ -1,7 +1,7 @@
 use super::MixtralCPU;
 use causal_lm::{CausalLM, DecodingMeta, QueryContext, SampleMeta};
 use common::{f16, upos, utok, Blob};
-use common_cpu::{Kernels, ThisThread};
+use common_cpu::{KernelsA, KernelsB, ThisThread};
 use digit_layout::{types::U32, DigitLayout};
 use itertools::izip;
 use std::{iter::repeat, slice::from_raw_parts};
