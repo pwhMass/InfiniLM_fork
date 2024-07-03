@@ -280,9 +280,9 @@ checksum = "4b82cf0babdbd58558212896d1a4272303a57bdb245c2bf1147185fb45640e70"
 
 [[package]]
 name = "cndrv"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a21723573400a39e79668317feefb29f0d86ce2fefba6aeee9ed781c5c0ece03"
+checksum = "e214fcc4c0f5219ea135f371289c24614a39dc8bd300ef7a1b13093bdca5f28a"
 dependencies = [
  "bindgen",
  "build-script-cfg",

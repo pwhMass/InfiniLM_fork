@@ -1,12 +1,9 @@
-﻿use common_cn::{
-    cndrv::{Context, ContextResource, DevMemSpore},
-    DropOption,
-};
-use std::sync::Arc;
+﻿use common_cn::cndrv::{Context, ContextResource, ContextSpore, DevMemSpore};
+use std::{mem::ManuallyDrop, sync::Arc};
 
 pub struct Cache {
     res: Arc<Context>,
-    pub(super) mem: DropOption<DevMemSpore>,
+    pub(super) mem: ManuallyDrop<DevMemSpore>,
 }
 
 impl Cache {
@@ -14,7 +11,7 @@ impl Cache {
     pub(super) fn new(res: &Arc<Context>, len: usize) -> Self {
         Self {
             res: res.clone(),
-            mem: res.apply(|ctx| ctx.malloc::<u8>(len).sporulate()).into(),
+            mem: ManuallyDrop::new(res.apply(|ctx| ctx.malloc::<u8>(len).sporulate())),
         }
     }
 }
@@ -22,6 +19,7 @@ impl Cache {
 impl Drop for Cache {
     #[inline]
     fn drop(&mut self) {
-        self.res.apply(|ctx| drop(self.mem.sprout(ctx)));
+        let mem = unsafe { ManuallyDrop::take(&mut self.mem) };
+        self.res.apply(|ctx| drop(mem.sprout(ctx)));
     }
 }

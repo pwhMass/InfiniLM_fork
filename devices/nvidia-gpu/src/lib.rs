@@ -5,10 +5,10 @@ mod sample;
 
 use common::utok;
 use common_devices::{layout, Operators, SliceOn};
-use cuda::{AsRaw, ContextSpore, Device};
+use cuda::{AsRaw, Device};
 use digit_layout::types::{F16, U32};
 use operators::{
-    cuda::CurrentCtx, dyn_, fuesd_softmax::nvidia_gpu as softmax, mat_mul::nvidia_gpu as mat_mul,
+    dyn_, fuesd_softmax::nvidia_gpu as softmax, mat_mul::nvidia_gpu as mat_mul,
     reform::nvidia_gpu as reform, rms_norm::nvidia_gpu as rms_norm, rope::nvidia_gpu as rope,
     swiglu::nvidia_gpu as swiglu, Operator, QueueOf, TensorLayout,
 };
@@ -194,36 +194,6 @@ impl KernelsB for NvidiaKernels {
                 queue,
             )
             .unwrap();
-    }
-}
-
-pub struct DropOption<T>(Option<T>);
-
-impl<T> From<T> for DropOption<T> {
-    #[inline]
-    fn from(value: T) -> Self {
-        Self(Some(value))
-    }
-}
-
-impl<T> AsRef<T> for DropOption<T> {
-    #[inline]
-    fn as_ref(&self) -> &T {
-        self.0.as_ref().unwrap()
-    }
-}
-
-impl<T> AsMut<T> for DropOption<T> {
-    #[inline]
-    fn as_mut(&mut self) -> &mut T {
-        self.0.as_mut().unwrap()
-    }
-}
-
-impl<T: ContextSpore> DropOption<T> {
-    #[inline]
-    pub fn sprout<'ctx>(&mut self, ctx: &'ctx CurrentCtx) -> <T as ContextSpore>::Resource<'ctx> {
-        self.0.take().unwrap().sprout(ctx)
     }
 }
 
