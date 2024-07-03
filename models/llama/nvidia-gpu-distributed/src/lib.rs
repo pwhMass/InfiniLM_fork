@@ -13,7 +13,8 @@ use common_nv::{
         AsRaw, Context, ContextResource, ContextSpore, DevByte, DevMem, DevMemSpore, Device,
         HostMemSpore, Stream, StreamSpore,
     },
-    sample_nv, slice, split, udim, DropOption, Kernels, LocalSplitable, NvidiaKernels, Tensor,
+    sample_nv, slice, split, udim, DropOption, KernelsA, KernelsB, LocalSplitable, NvidiaKernels,
+    Tensor,
 };
 use digit_layout::types::F16;
 use itertools::izip;
@@ -54,7 +55,7 @@ impl Model for Transformer {
         let host = llama::Storage::load_safetensors(model_dir)?;
         info!("load host: {:?}", time.elapsed());
 
-        let kernels = NvidiaKernels::new(&meta, host.config.d as _, host.config.max_seq_len as _);
+        let kernels = NvidiaKernels::new(&meta, host.config.d as _);
 
         let contexts = meta
             .iter()

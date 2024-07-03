@@ -1,6 +1,6 @@
 ﻿use crate::distribute::{DistributeScheme, Distributer};
 use common_nv::{
-    cuda::{Context, ContextGuard, ContextResource, ContextSpore, DevByte, DevMemSpore},
+    cuda::{Context, ContextResource, ContextSpore, CurrentCtx, DevByte, DevMemSpore},
     udim, Tensor,
 };
 use std::time::Instant;
@@ -58,7 +58,7 @@ pub struct Layer<'ctx> {
 }
 
 impl ParameterMatrix {
-    pub fn get<'ctx>(&'ctx self, layer: usize, i: usize, ctx: &'ctx ContextGuard) -> Layer<'ctx> {
+    pub fn get<'ctx>(&'ctx self, layer: usize, i: usize, ctx: &'ctx CurrentCtx) -> Layer<'ctx> {
         let nlayers = self.matrix.len() / self.scheme.n;
         Layer {
             scheme: &self.scheme,
