@@ -1,7 +1,6 @@
 #![cfg(detected_neuware)]
 
-pub extern crate cndrv;
-
+pub use operators::cndrv;
 pub use tensor::Tensor;
 
 pub fn synchronize() {

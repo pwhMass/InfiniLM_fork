@@ -281,13 +281,24 @@ checksum = "4b82cf0babdbd58558212896d1a4272303a57bdb245c2bf1147185fb45640e70"
 [[package]]
 name = "cndrv"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e214fcc4c0f5219ea135f371289c24614a39dc8bd300ef7a1b13093bdca5f28a"
+source = "git+https://github.com/InfiniTensor/cndrv?rev=d354eee#d354eee4f37bc64ac3d56358bb6263316982d29e"
 dependencies = [
  "bindgen",
  "build-script-cfg",
  "log",
- "search-neuware-tools",
+ "search-neuware-tools 0.0.0 (git+https://github.com/InfiniTensor/cndrv?rev=d354eee)",
+]
+
+[[package]]
+name = "cnnl"
+version = "0.0.0"
+source = "git+https://github.com/InfiniTensor/cndrv?rev=d354eee#d354eee4f37bc64ac3d56358bb6263316982d29e"
+dependencies = [
+ "bindgen",
+ "build-script-cfg",
+ "cndrv",
+ "digit-layout",
+ "search-neuware-tools 0.0.0 (git+https://github.com/InfiniTensor/cndrv?rev=d354eee)",
 ]
 
 [[package]]
@@ -320,7 +331,7 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=189c2d5#189c2d5cfa525a751ef9d80499a90789412072ae"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=3807deb#3807deb37e74122bb8b86015e8f20c6513593b74"
 dependencies = [
  "digit-layout",
 ]
@@ -330,10 +341,10 @@ name = "common-cn"
 version = "0.0.0"
 dependencies = [
  "build-script-cfg",
- "cndrv",
  "common 0.0.0",
  "common-devices",
- "search-neuware-tools",
+ "operators",
+ "search-neuware-tools 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tensor",
 ]
 
@@ -898,7 +909,7 @@ dependencies = [
  "common 0.0.0",
  "common-cn",
  "llama",
- "search-neuware-tools",
+ "search-neuware-tools 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1164,9 +1175,11 @@ checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 [[package]]
 name = "operators"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=189c2d5#189c2d5cfa525a751ef9d80499a90789412072ae"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=3807deb#3807deb37e74122bb8b86015e8f20c6513593b74"
 dependencies = [
  "build-script-cfg",
+ "cndrv",
+ "cnnl",
  "common 0.1.0",
  "cublas",
  "cuda",
@@ -1174,8 +1187,9 @@ dependencies = [
  "gemm",
  "half",
  "log",
+ "rayon",
  "search-cuda-tools",
- "search-neuware-tools",
+ "search-neuware-tools 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1437,6 +1451,11 @@ name = "search-neuware-tools"
 version = "0.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c83ae237201de85c7ece8ad034bc749a6f229f42f07f62a30008b30a3f1e2231"
+
+[[package]]
+name = "search-neuware-tools"
+version = "0.0.0"
+source = "git+https://github.com/InfiniTensor/cndrv?rev=d354eee#d354eee4f37bc64ac3d56358bb6263316982d29e"
 
 [[package]]
 name = "seq-macro"
@@ -1913,7 +1932,7 @@ dependencies = [
  "mixtral",
  "mixtral-cpu",
  "search-cuda-tools",
- "search-neuware-tools",
+ "search-neuware-tools 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "service",
  "simple_logger",
  "tensor",

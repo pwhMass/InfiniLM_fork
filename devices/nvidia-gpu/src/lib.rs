@@ -4,7 +4,7 @@ mod gather;
 mod sample;
 
 use common::utok;
-use common_devices::{layout, Operators, SliceOn};
+use common_devices::{Operators, SliceOn};
 use cuda::{AsRaw, Device};
 use digit_layout::types::{F16, U32};
 use operators::{
@@ -127,6 +127,13 @@ impl Kernels<Gpu> for NvidiaKernels {}
 impl Operators for NvidiaKernels {
     type Handle = Gpu;
 
+    fn reform_op(
+        &self,
+        queue: &QueueOf<Self::Handle>,
+    ) -> &impl operators::reform::Reform<Self::Handle> {
+        &self.get(queue).reform
+    }
+
     fn rms_norm_op(
         &self,
         queue: &QueueOf<Self::Handle>,
@@ -175,25 +182,6 @@ impl KernelsB for NvidiaKernels {
         I: IntoIterator<Item = utok>,
     {
         gather::gather(x, table, tokens, queue);
-    }
-
-    fn reform<T, U>(&self, dst: &mut Tensor<T>, src: &Tensor<U>, queue: &QueueOf<Self::Handle>)
-    where
-        T: DerefMut<Target = SliceOn<Self::Handle>>,
-        U: Deref<Target = SliceOn<Self::Handle>>,
-    {
-        self.get(queue)
-            .reform
-            .launch(
-                &operators::reform::Args {
-                    dst_layout: layout(dst),
-                    dst_base: dst.base_mut(),
-                    src_layout: layout(src),
-                    src_base: src.base(),
-                },
-                queue,
-            )
-            .unwrap();
     }
 }
 

@@ -1,5 +1,5 @@
 ﻿use causal_lm::QueryContext;
-use common_devices::{Kernels, KernelsA, KernelsB, SliceOn};
+use common_devices::{Kernels, KernelsA, SliceOn};
 use itertools::izip;
 use operators::{Handle, QueueOf};
 use std::ops::{Deref, DerefMut};

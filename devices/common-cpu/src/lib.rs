@@ -11,8 +11,8 @@ use common::utok;
 use common_devices::{Operators, SliceOn};
 use operators::{
     fuesd_softmax::common_cpu as softmax, mat_mul::common_cpu as mat_mul,
-    rms_norm::common_cpu as rms_norm, rope::common_cpu as rope, swiglu::common_cpu as swiglu,
-    Operator, QueueOf,
+    reform::common_cpu as reform, rms_norm::common_cpu as rms_norm, rope::common_cpu as rope,
+    swiglu::common_cpu as swiglu, Operator, QueueOf,
 };
 use std::ops::{Deref, DerefMut};
 use tensor::Tensor;
@@ -23,6 +23,7 @@ pub use common_devices::{Kernels, KernelsA, KernelsB};
 pub use operators::common_cpu::{Handle as Cpu, ThisThread};
 
 pub struct CpuKernels {
+    reform: reform::Operator,
     mat_mul: mat_mul::Operator,
     rms_norm: rms_norm::Operator,
     rope: rope::Operator,
@@ -33,6 +34,7 @@ pub struct CpuKernels {
 impl Default for CpuKernels {
     fn default() -> Self {
         Self {
+            reform: reform::Operator::new(&Cpu),
             mat_mul: mat_mul::Operator::new(&Cpu),
             rms_norm: rms_norm::Operator::new(&Cpu),
             rope: rope::Operator::new(&Cpu),
@@ -47,6 +49,12 @@ impl Kernels<Cpu> for CpuKernels {}
 impl Operators for CpuKernels {
     type Handle = Cpu;
 
+    fn reform_op(
+        &self,
+        _: &QueueOf<Self::Handle>,
+    ) -> &impl operators::reform::Reform<Self::Handle> {
+        &self.reform
+    }
     fn rms_norm_op(
         &self,
         _: &QueueOf<Self::Handle>,
@@ -91,13 +99,5 @@ impl KernelsB for CpuKernels {
         I: IntoIterator<Item = utok>,
     {
         gather::gather(x, table, tokens);
-    }
-
-    fn reform<T, U>(&self, dst: &mut Tensor<T>, src: &Tensor<U>, _queue: &QueueOf<Self::Handle>)
-    where
-        T: DerefMut<Target = SliceOn<Self::Handle>>,
-        U: Deref<Target = SliceOn<Self::Handle>>,
-    {
-        src.reform_to(dst);
     }
 }

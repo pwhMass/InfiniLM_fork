@@ -1,6 +1,6 @@
 use common::utok;
 use operators::{
-    fuesd_softmax, mat_mul, rms_norm, rope, swiglu, Argument, Handle, Operator, QueueOf,
+    fuesd_softmax, mat_mul, reform, rms_norm, rope, swiglu, Argument, Handle, Operator, QueueOf,
     TensorLayout,
 };
 use std::ops::{Deref, DerefMut};
@@ -26,6 +26,7 @@ pub type SliceOn<H> = [<H as Handle>::Byte];
 pub trait Operators {
     type Handle: Handle;
 
+    fn reform_op(&self, queue: &QueueOf<Self::Handle>) -> &impl reform::Reform<Self::Handle>;
     fn rms_norm_op(&self, queue: &QueueOf<Self::Handle>) -> &impl rms_norm::RmsNorm<Self::Handle>;
     fn mat_mul_op(&self, queue: &QueueOf<Self::Handle>) -> &impl mat_mul::MatMul<Self::Handle>;
     fn rope_op(&self, queue: &QueueOf<Self::Handle>) -> &impl rope::Rope<Self::Handle>;
@@ -38,6 +39,11 @@ pub trait Operators {
 
 pub trait KernelsA {
     type Handle: Handle;
+
+    fn reform<T, U>(&self, dst: &mut Tensor<T>, src: &Tensor<U>, queue: &QueueOf<Self::Handle>)
+    where
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
+        U: Deref<Target = SliceOn<Self::Handle>>;
 
     fn rms_norm<T, U, V>(
         &self,
@@ -97,17 +103,30 @@ pub trait KernelsB {
         T: DerefMut<Target = SliceOn<Self::Handle>>,
         U: Deref<Target = [u8]>,
         I: IntoIterator<Item = utok>;
-
-    fn reform<T, U>(&self, dst: &mut Tensor<T>, src: &Tensor<U>, queue: &QueueOf<Self::Handle>)
-    where
-        T: DerefMut<Target = SliceOn<Self::Handle>>,
-        U: Deref<Target = SliceOn<Self::Handle>>;
 }
 
 pub trait Kernels<H: Handle>: KernelsA<Handle = H> + KernelsB<Handle = H> {}
 
 impl<Ops: Operators> KernelsA for Ops {
     type Handle = <Ops as Operators>::Handle;
+
+    fn reform<T, U>(&self, dst: &mut Tensor<T>, src: &Tensor<U>, queue: &QueueOf<Self::Handle>)
+    where
+        T: DerefMut<Target = SliceOn<Self::Handle>>,
+        U: Deref<Target = SliceOn<Self::Handle>>,
+    {
+        self.reform_op(queue)
+            .launch(
+                &reform::Args {
+                    dst_layout: layout(dst),
+                    dst_base: dst.base_mut(),
+                    src_layout: layout(src),
+                    src_base: src.base(),
+                },
+                queue,
+            )
+            .unwrap();
+    }
 
     fn rms_norm<T, U, V>(
         &self,
