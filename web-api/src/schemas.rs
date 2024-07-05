@@ -35,6 +35,20 @@ pub enum SessionId {
     Temporary(AnonymousSessionId),
 }
 
+impl From<String> for SessionId {
+    #[inline]
+    fn from(value: String) -> Self {
+        Self::Permanent(value)
+    }
+}
+
+impl From<AnonymousSessionId> for SessionId {
+    #[inline]
+    fn from(value: AnonymousSessionId) -> Self {
+        Self::Temporary(value)
+    }
+}
+
 #[derive(serde::Deserialize)]
 pub(crate) struct Fork {
     pub session_id: String,

@@ -2,7 +2,7 @@ use crate::schemas::{
     AnonymousSessionId, DropSuccess, Drop_, Error, Fork, ForkSuccess, Infer, Sentence, SessionId,
 };
 use causal_lm::CausalLM;
-use service::{Service, Session, SessionError, SessionManager};
+use service::{Service, Session, SessionManager};
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 
@@ -77,7 +77,7 @@ where
                 let session_id = SessionId::Permanent(session_id_str);
                 let mut session = self
                     .session_manager
-                    .get_or_insert(session_id.clone(), || self.service.launch())
+                    .take_or_register(session_id.clone(), || self.service.launch())
                     .map_err(Error::Session)?;
                 let (sender, receiver) = mpsc::unbounded_channel();
                 let self_ = self.clone();
@@ -135,7 +135,7 @@ where
                 let session_id = SessionId::Temporary(AnonymousSessionId::new());
                 let mut session = self
                     .session_manager
-                    .get_or_insert(session_id.clone(), || self.service.launch())
+                    .take_or_register(session_id.clone(), || self.service.launch())
                     .map_err(Error::Session)?;
                 let (sender, receiver) = mpsc::unbounded_channel();
                 let self_ = self.clone();
@@ -151,7 +151,7 @@ where
                             sender,
                         )
                         .await;
-                        self_.drop_with_session_id(session_id).unwrap();
+                        self_.session_manager.drop_(&session_id).unwrap();
                     });
                 }
                 Ok(receiver)
@@ -170,23 +170,16 @@ where
             new_session_id,
         }: Fork,
     ) -> Result<ForkSuccess, Error> {
-        let new_session_id = SessionId::Permanent(new_session_id);
-        let session_id = SessionId::Permanent(session_id);
         self.session_manager
-            .fork(session_id, new_session_id)
-            .map_err(Error::Session)?;
-        Ok(ForkSuccess)
+            .fork(session_id.into(), new_session_id.into())
+            .map(|()| ForkSuccess)
+            .map_err(Error::Session)
     }
 
     pub fn drop_(&self, Drop_ { session_id }: Drop_) -> Result<DropSuccess, Error> {
-        self.drop_with_session_id(SessionId::Permanent(session_id))
-            .map_err(Error::Session)?;
-        Ok(DropSuccess)
-    }
-
-    fn drop_with_session_id(&self, session_id: SessionId) -> Result<DropSuccess, SessionError> {
         self.session_manager
-            .drop_(&session_id)
+            .drop_(&session_id.into())
             .map(|()| DropSuccess)
+            .map_err(Error::Session)
     }
 }

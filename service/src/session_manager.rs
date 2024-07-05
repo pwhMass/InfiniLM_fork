@@ -36,7 +36,7 @@ impl<SessionId: Eq + Hash + Debug, M: CausalLM> SessionManager<SessionId, M> {
             .ok_or(SessionError::Busy)
     }
 
-    pub fn get_or_insert(
+    pub fn take_or_register(
         &self,
         session_id: SessionId,
         f: impl FnOnce() -> Session<M>,
