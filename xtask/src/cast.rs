@@ -31,8 +31,14 @@ impl CastArgs {
 
         let target = self.target.map(PathBuf::from).unwrap_or_else(|| {
             model_dir.parent().unwrap().join(format!(
-                "{}_{ty:?}",
-                model_dir.file_name().unwrap().to_str().unwrap()
+                "{}_{}",
+                model_dir.file_name().unwrap().to_str().unwrap(),
+                match ty {
+                    F16 => "f16",
+                    F32 => "f32",
+                    BF16 => "bf16",
+                    _ => unreachable!(),
+                }
             ))
         });
         fs::create_dir_all(&target).unwrap();
