@@ -2,6 +2,7 @@ mod cast;
 mod chat;
 mod deploy;
 mod generate;
+mod list_turbo;
 mod service;
 
 use causal_lm::{CausalLM, SampleArgs};
@@ -17,6 +18,7 @@ extern crate clap;
 fn main() {
     use Commands::*;
     match Cli::parse().command {
+        ListTurbo => list_turbo::list_turbo(),
         Deploy(deploy) => deploy.deploy(),
         Cast(cast) => cast.invode(),
         Generate(args) => args.run(),
@@ -35,6 +37,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    ///
+    ListTurbo,
     /// Deploy binary
     Deploy(DeployArgs),
     /// Cast model
