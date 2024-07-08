@@ -14,7 +14,7 @@ causal-lm = { path = "../causal-lm" }
 log.workspace = true
 tokio.workspace = true
 lru = "0.12"
-rangemap = { version = "1"  }
+rangemap = "1.5"
 
 [dev-dependencies]
 colored = "2.1"
