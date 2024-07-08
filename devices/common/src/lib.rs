@@ -1,25 +1,9 @@
 use common::utok;
 use operators::{
-    fuesd_softmax, mat_mul, reform, rms_norm, rope, swiglu, Argument, Handle, Operator, QueueOf,
-    TensorLayout,
+    fuesd_softmax, mat_mul, reform, rms_norm, rope, swiglu, Handle, Operator, QueueOf,
 };
 use std::ops::{Deref, DerefMut};
 use tensor::Tensor;
-
-pub fn layout<T>(t: &Tensor<T>) -> TensorLayout {
-    let dt = t.data_layout();
-    let shape = t
-        .shape()
-        .iter()
-        .map(|&x| Argument::new(x as usize))
-        .collect::<Vec<_>>();
-    let strides = t
-        .strides()
-        .iter()
-        .map(|&x| Argument::new(x as isize * dt.nbytes() as isize))
-        .collect::<Vec<_>>();
-    TensorLayout::new(dt, shape, strides)
-}
 
 pub type SliceOn<H> = [<H as Handle>::Byte];
 
@@ -118,9 +102,9 @@ impl<Ops: Operators> KernelsA for Ops {
         self.reform_op(queue)
             .launch(
                 &reform::Args {
-                    dst_layout: layout(dst),
+                    dst_layout: dst.layout(),
                     dst_base: dst.base_mut(),
-                    src_layout: layout(src),
+                    src_layout: src.layout(),
                     src_base: src.base(),
                 },
                 queue,
@@ -143,11 +127,11 @@ impl<Ops: Operators> KernelsA for Ops {
         self.rms_norm_op(queue)
             .launch(
                 &rms_norm::Args {
-                    y_layout: layout(y),
+                    y_layout: y.layout(),
                     y_base: y.base_mut(),
-                    x_layout: layout(x),
+                    x_layout: x.layout(),
                     x_base: x.base(),
-                    w_layout: layout(w),
+                    w_layout: w.layout(),
                     w_base: w.base(),
                     epsilon,
                 },
@@ -169,9 +153,9 @@ impl<Ops: Operators> KernelsA for Ops {
         self.rope_op(queue)
             .launch(
                 &rope::Args {
-                    t_layout: layout(t),
+                    t_layout: t.layout(),
                     t_base: t.base_mut(),
-                    p_layout: layout(pos),
+                    p_layout: pos.layout(),
                     p_base: pos.base(),
                     theta,
                 },
@@ -196,12 +180,12 @@ impl<Ops: Operators> KernelsA for Ops {
         self.mat_mul_op(queue)
             .launch(
                 &mat_mul::Args {
-                    c_layout: layout(c),
+                    c_layout: c.layout(),
                     c_base: c.base_mut(),
                     beta,
-                    a_layout: layout(a),
+                    a_layout: a.layout(),
                     a_base: a.base(),
-                    b_layout: layout(b),
+                    b_layout: b.layout(),
                     b_base: b.base(),
                     alpha,
                 },
@@ -217,7 +201,7 @@ impl<Ops: Operators> KernelsA for Ops {
         self.softmax_op(queue)
             .launch(
                 &fuesd_softmax::Args {
-                    att_layout: layout(att),
+                    att_layout: att.layout(),
                     att_base: att.base_mut(),
                 },
                 queue,
@@ -233,9 +217,9 @@ impl<Ops: Operators> KernelsA for Ops {
         self.swiglu_op(queue)
             .launch(
                 &swiglu::Args {
-                    gate_layout: layout(gate),
+                    gate_layout: gate.layout(),
                     gate_base: gate.base_mut(),
-                    up_layout: layout(up),
+                    up_layout: up.layout(),
                     up_base: up.base(),
                 },
                 queue,

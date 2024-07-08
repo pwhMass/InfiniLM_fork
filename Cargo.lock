@@ -280,25 +280,25 @@ checksum = "4b82cf0babdbd58558212896d1a4272303a57bdb245c2bf1147185fb45640e70"
 
 [[package]]
 name = "cndrv"
-version = "0.1.1"
-source = "git+https://github.com/InfiniTensor/cndrv?rev=d354eee#d354eee4f37bc64ac3d56358bb6263316982d29e"
+version = "0.1.2"
+source = "git+https://github.com/InfiniTensor/cndrv?rev=1dab7ce#1dab7ce97522974f3065ae9de6b1351d8a37feb9"
 dependencies = [
  "bindgen",
  "build-script-cfg",
  "log",
- "search-neuware-tools 0.0.0 (git+https://github.com/InfiniTensor/cndrv?rev=d354eee)",
+ "search-neuware-tools 0.0.0 (git+https://github.com/InfiniTensor/cndrv?rev=1dab7ce)",
 ]
 
 [[package]]
 name = "cnnl"
 version = "0.0.0"
-source = "git+https://github.com/InfiniTensor/cndrv?rev=d354eee#d354eee4f37bc64ac3d56358bb6263316982d29e"
+source = "git+https://github.com/InfiniTensor/cndrv?rev=1dab7ce#1dab7ce97522974f3065ae9de6b1351d8a37feb9"
 dependencies = [
  "bindgen",
  "build-script-cfg",
  "cndrv",
  "digit-layout",
- "search-neuware-tools 0.0.0 (git+https://github.com/InfiniTensor/cndrv?rev=d354eee)",
+ "search-neuware-tools 0.0.0 (git+https://github.com/InfiniTensor/cndrv?rev=1dab7ce)",
 ]
 
 [[package]]
@@ -331,7 +331,7 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=3807deb#3807deb37e74122bb8b86015e8f20c6513593b74"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=3e9b113#3e9b1136efa2e167ad09b2bfe24f6ab186c97a64"
 dependencies = [
  "digit-layout",
 ]
@@ -381,7 +381,7 @@ dependencies = [
  "operators",
  "rand",
  "sample",
- "search-cuda-tools",
+ "search-cuda-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=877df52)",
  "tensor",
 ]
 
@@ -419,13 +419,25 @@ checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 [[package]]
 name = "cublas"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=877df52#877df5295ee9ab0a24737346349e55fe08940b7f"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=0befb35#0befb351182c18ac36f76aab0c6ba3398b8eeee3"
 dependencies = [
  "bindgen",
  "build-script-cfg",
- "cuda",
+ "cuda 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=0befb35)",
  "half",
- "search-cuda-tools",
+ "search-cuda-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=0befb35)",
+]
+
+[[package]]
+name = "cuda"
+version = "0.1.0"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=0befb35#0befb351182c18ac36f76aab0c6ba3398b8eeee3"
+dependencies = [
+ "bindgen",
+ "build-script-cfg",
+ "half",
+ "log",
+ "search-cuda-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=0befb35)",
 ]
 
 [[package]]
@@ -437,7 +449,7 @@ dependencies = [
  "build-script-cfg",
  "half",
  "log",
- "search-cuda-tools",
+ "search-cuda-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=877df52)",
 ]
 
 [[package]]
@@ -934,7 +946,7 @@ dependencies = [
  "itertools 0.13.0",
  "llama",
  "log",
- "search-cuda-tools",
+ "search-cuda-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=877df52)",
 ]
 
 [[package]]
@@ -950,7 +962,7 @@ dependencies = [
  "llama",
  "log",
  "nccl",
- "search-cuda-tools",
+ "search-cuda-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=877df52)",
  "simple_logger",
 ]
 
@@ -1078,9 +1090,9 @@ source = "git+https://github.com/YdrMaster/cuda-driver?rev=877df52#877df5295ee9a
 dependencies = [
  "bindgen",
  "build-script-cfg",
- "cuda",
+ "cuda 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=877df52)",
  "digit-layout",
- "search-cuda-tools",
+ "search-cuda-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=877df52)",
 ]
 
 [[package]]
@@ -1175,20 +1187,20 @@ checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 [[package]]
 name = "operators"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=3807deb#3807deb37e74122bb8b86015e8f20c6513593b74"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=3e9b113#3e9b1136efa2e167ad09b2bfe24f6ab186c97a64"
 dependencies = [
  "build-script-cfg",
  "cndrv",
  "cnnl",
  "common 0.1.0",
  "cublas",
- "cuda",
+ "cuda 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=0befb35)",
  "digit-layout",
  "gemm",
  "half",
  "log",
  "rayon",
- "search-cuda-tools",
+ "search-cuda-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=0befb35)",
  "search-neuware-tools 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1447,6 +1459,14 @@ dependencies = [
 [[package]]
 name = "search-cuda-tools"
 version = "0.1.0"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=0befb35#0befb351182c18ac36f76aab0c6ba3398b8eeee3"
+dependencies = [
+ "find_cuda_helper",
+]
+
+[[package]]
+name = "search-cuda-tools"
+version = "0.1.0"
 source = "git+https://github.com/YdrMaster/cuda-driver?rev=877df52#877df5295ee9ab0a24737346349e55fe08940b7f"
 dependencies = [
  "find_cuda_helper",
@@ -1461,7 +1481,7 @@ checksum = "c83ae237201de85c7ece8ad034bc749a6f229f42f07f62a30008b30a3f1e2231"
 [[package]]
 name = "search-neuware-tools"
 version = "0.0.0"
-source = "git+https://github.com/InfiniTensor/cndrv?rev=d354eee#d354eee4f37bc64ac3d56358bb6263316982d29e"
+source = "git+https://github.com/InfiniTensor/cndrv?rev=1dab7ce#1dab7ce97522974f3065ae9de6b1351d8a37feb9"
 
 [[package]]
 name = "seq-macro"
@@ -1601,7 +1621,7 @@ dependencies = [
  "digit-layout",
  "half",
  "nalgebra",
- "rayon",
+ "operators",
  "serde",
  "smallvec",
 ]
@@ -1938,7 +1958,7 @@ dependencies = [
  "log",
  "mixtral",
  "mixtral-cpu",
- "search-cuda-tools",
+ "search-cuda-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=877df52)",
  "search-neuware-tools 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "service",
  "simple_logger",

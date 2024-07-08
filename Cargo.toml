@@ -31,12 +31,11 @@ itertools = "0.13"
 serde = "1.0"
 serde_json = "1.0"
 memmap2 = "0.9"
-rayon = "1.10"
 tokio = { version = "1.38", features = ["rt-multi-thread", "sync"] }
 digit-layout = "0.0"
 build-script-cfg = "0.0"
 
-operators = { git = "https://github.com/YdrMaster/operators-rs", rev = "3807deb", default-features = false }
+operators = { git = "https://github.com/YdrMaster/operators-rs", rev = "3e9b113", default-features = false }
 nccl = { git = "https://github.com/YdrMaster/cuda-driver", rev = "877df52" }
 search-cuda-tools = { git = "https://github.com/YdrMaster/cuda-driver", rev = "877df52" }
 search-neuware-tools = "0.0"

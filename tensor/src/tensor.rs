@@ -1,11 +1,10 @@
-﻿use crate::{expand_indices, idim, idx_strides, pattern::Pattern, udim, Compatibility, Shape};
+﻿use crate::{idim, pattern::Pattern, udim, Shape};
 use digit_layout::DigitLayout;
 use nalgebra::DVector;
-use rayon::iter::*;
+use operators::{Argument, Operator, TensorLayout};
 use std::{
     mem::{align_of, size_of},
     ops::{Deref, DerefMut},
-    panic,
 };
 
 #[derive(Clone, Debug)]
@@ -161,6 +160,21 @@ impl<Physical> Tensor<Physical> {
             physical: f(self.physical),
         }
     }
+
+    pub fn layout(&self) -> TensorLayout {
+        let dt = self.data_layout();
+        let shape: Vec<Argument<usize>> = self
+            .shape
+            .iter()
+            .map(|&x| Argument::new(x as usize))
+            .collect::<Vec<_>>();
+        let strides = self
+            .strides()
+            .iter()
+            .map(|&x| Argument::new(x as isize * dt.nbytes() as isize))
+            .collect::<Vec<_>>();
+        TensorLayout::new(dt, shape, strides)
+    }
 }
 
 impl<B: Sized, P: Deref<Target = [B]>> Tensor<P> {
@@ -202,53 +216,61 @@ impl<Physical: Deref<Target = [u8]>> Tensor<Physical> {
     ///
     /// The caller must ensure that the `dst` can be a valid tensor physical.
     pub unsafe fn reform_to_raw(&self, dst: &mut [u8]) {
-        let src = &self.physical[self.bytes_offset() as usize..];
-        // 计算结尾连续维度数量
-        let contiguous = self.contiguous_len();
-        if contiguous == self.shape.len() {
-            // 所有维度都连续，直接拷贝所有数据
-            dst.copy_from_slice(&src[..dst.len()]);
-        } else {
-            let dt = self.layout.nbytes();
-            // 一部分维度连续，迭代不连续的部分
-            let (iter, contiguous) = self.shape.split_at(self.shape.len() - contiguous);
-            let (n, idx_strides) = idx_strides(iter);
-            let len = contiguous.iter().product::<udim>() as usize * dt;
-            let pattern = self.pattern.0.view_range(..iter.len(), ..);
-            let ptr = dst.as_mut_ptr() as usize;
-            (0..n).into_par_iter().for_each(|i| {
-                let j = pattern.dot(&expand_indices(i, &idx_strides, &[]));
-                unsafe { std::slice::from_raw_parts_mut((ptr + i as usize * len) as *mut u8, len) }
-                    .copy_from_slice(&src[j as usize * dt..][..len]);
-            });
-        }
+        assert_eq!(self.bytes_size(), dst.len());
+        use operators::{
+            common_cpu::{Handle as Cpu, ThisThread},
+            reform::{common_cpu::Operator as Reform, Args},
+        };
+        Reform::new(&Cpu)
+            .launch(
+                &Args {
+                    dst_layout: {
+                        let shape = self
+                            .shape
+                            .iter()
+                            .map(|&d| Argument::new(d as usize))
+                            .collect::<Vec<_>>();
+                        let mut strides = self
+                            .shape
+                            .iter()
+                            .rev()
+                            .scan(self.layout.nbytes() as isize, |mul, &d| {
+                                let s = *mul;
+                                *mul *= d as isize;
+                                Some(Argument::new(s))
+                            })
+                            .collect::<Vec<_>>();
+                        strides.reverse();
+                        TensorLayout::new(self.layout, shape, strides)
+                    },
+                    dst_base: dst.as_mut_ptr(),
+                    src_layout: self.layout(),
+                    src_base: self.base(),
+                },
+                &ThisThread,
+            )
+            .unwrap();
     }
 
     pub fn reform_to<U>(&self, dst: &mut Tensor<U>)
     where
         U: DerefMut<Target = [u8]>,
     {
-        match Compatibility::between(self, dst) {
-            Compatibility::None => panic!("Incompatible tensors"),
-            _ => {
-                let contiguous = self.contiguous_len().min(dst.contiguous_len());
-                let dt = self.layout.nbytes();
-                // 一部分维度连续，迭代不连续的部分
-                let (iter, contiguous) = self.shape.split_at(self.shape.len() - contiguous);
-                let (n, idx_strides) = idx_strides(iter);
-                let src_pattern = self.pattern.0.view_range(..iter.len(), ..);
-                let dst_pattern = dst.pattern.0.view_range(..iter.len(), ..);
-                let src = self.base() as usize;
-                let dst = dst.base() as usize;
-                let count = contiguous.iter().product::<udim>() as usize * dt;
-                (0..n).into_par_iter().for_each(|i| {
-                    let indices = expand_indices(i, &idx_strides, &[]);
-                    let src = (src + src_pattern.dot(&indices) as usize * dt) as *const u8;
-                    let dst = (dst + dst_pattern.dot(&indices) as usize * dt) as *mut u8;
-                    unsafe { std::ptr::copy_nonoverlapping(src, dst, count) };
-                });
-            }
-        }
+        use operators::{
+            common_cpu::{Handle as Cpu, ThisThread},
+            reform::{common_cpu::Operator as Reform, Args},
+        };
+        Reform::new(&Cpu)
+            .launch(
+                &Args {
+                    dst_layout: dst.layout(),
+                    dst_base: dst.base_mut(),
+                    src_layout: self.layout(),
+                    src_base: self.base(),
+                },
+                &ThisThread,
+            )
+            .unwrap();
     }
 }
 

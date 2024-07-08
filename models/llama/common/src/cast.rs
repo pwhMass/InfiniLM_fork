@@ -4,6 +4,7 @@ use digit_layout::{
     types::{BF16, F16, F32},
     AsDigit, DigitLayout,
 };
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use tensor::Tensor;
 
 impl Storage {
@@ -48,7 +49,6 @@ fn typed<T: AsDigit + Sync, U: AsDigit + Send>(
     src: Tensor<Weight>,
     cast: impl Fn(&T) -> U + Sync,
 ) -> Tensor<Weight> {
-    use rayon::iter::*;
     use tensor::{reslice, reslice_mut};
 
     assert_eq!(src.data_layout(), T::LAYOUT);
