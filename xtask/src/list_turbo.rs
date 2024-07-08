@@ -10,7 +10,7 @@ fn list_nv() {
     use llama_nv::cuda::{self, Device as Gpu};
 
     cuda::init();
-    println!("NVidia CUDA environment detected.");
+    println!("NVidia CUDA environment detected, use `--turbo nv:` to select.");
     for i in 0..Gpu::count() {
         let gpu = Gpu::new(i as _);
         println!(
@@ -28,7 +28,7 @@ fn list_cn() {
     use llama_cn::cndrv::{self, Device as Mlu};
 
     cndrv::init();
-    println!("Cambricon Neuware environment detected.");
+    println!("Cambricon Neuware environment detected, use `--turbo cn:` to select.");
     for i in 0..Mlu::count() {
         let mlu = Mlu::new(i as _);
         println!(

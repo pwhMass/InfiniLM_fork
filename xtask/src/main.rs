@@ -9,7 +9,7 @@ use causal_lm::{CausalLM, SampleArgs};
 use clap::Parser;
 use deploy::DeployArgs;
 use service::ServiceArgs;
-use std::{ffi::c_int, fmt};
+use std::{ffi::c_int, fmt, num::ParseIntError, str::FromStr};
 use time::UtcOffset;
 
 #[macro_use]
@@ -37,7 +37,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    ///
+    /// List available turbo hardware
     ListTurbo,
     /// Deploy binary
     Deploy(DeployArgs),
@@ -74,10 +74,9 @@ struct InferenceArgs {
     #[clap(long)]
     top_p: Option<f32>,
 
-    #[cfg(detected_cuda)]
-    /// Use Nvidia GPU, specify device IDs separated by comma, e.g. `0` or `0,1`.
+    /// Select turbo hardware, the format is "ty:detail".
     #[clap(long)]
-    nvidia: Option<String>,
+    turbo: Option<String>,
 }
 
 /// TODO 应该根据参数自动识别模型
@@ -116,40 +115,16 @@ impl InferenceArgs {
             .unwrap();
     }
 
-    #[cfg(detected_cuda)]
-    fn nvidia(&self) -> Vec<c_int> {
-        if let Some(nv) = self.nvidia.as_ref() {
-            {
-                if let Some((start, end)) = nv.split_once("..") {
-                    let start = start.trim();
-                    let end = end.trim();
-                    let start = if start.is_empty() {
-                        0
-                    } else {
-                        start.parse::<c_int>().unwrap()
-                    };
-                    let end = if end.is_empty() {
-                        llama_nv::cuda::Device::count() as _
-                    } else {
-                        end.parse::<c_int>().unwrap()
-                    };
-                    (start..end).collect()
-                } else {
-                    nv.split(',')
-                        .map(|s| s.trim())
-                        .filter(|s| !s.is_empty())
-                        .map(|s| s.parse::<c_int>().unwrap())
-                        .collect()
-                }
+    fn turbo(&self) -> (&str, &str) {
+        if let Some(turbo) = self.turbo.as_ref() {
+            if let Some((ty, detail)) = turbo.split_once(':') {
+                (ty.trim(), detail.trim())
+            } else {
+                (turbo.trim(), "")
             }
         } else {
-            vec![]
+            ("", "")
         }
-    }
-
-    #[cfg(not(detected_cuda))]
-    fn nvidia(&self) -> Vec<c_int> {
-        vec![]
     }
 
     #[inline]
@@ -205,35 +180,54 @@ trait Task: Sized {
             llama_cn::cndrv::init();
         }
 
-        let nvidia = self.inference().nvidia();
+        let (turbo, detail) = self.inference().turbo();
         match self.inference().model_type() {
-            ModelType::Llama => match nvidia.as_slice() {
-                [] => {
+            ModelType::Llama => match turbo.to_ascii_lowercase().as_str() {
+                "" => {
                     use llama_cpu::Transformer as M;
                     runtime.block_on(self.typed::<M>(()));
                 }
                 #[cfg(detected_cuda)]
-                &[n] => {
-                    use llama_nv::{ModelLoadMeta, Transformer as M};
-                    let meta = ModelLoadMeta::load_all_to(n);
-                    runtime.block_on(self.typed::<M>(meta));
-                }
-                #[cfg(detected_nccl)]
-                distribute => {
-                    use llama_nv_distributed::{cuda::Device, Transformer as M};
-                    let meta = distribute.iter().copied().map(Device::new).collect();
-                    runtime.block_on(self.typed::<M>(meta));
-                }
-                #[cfg(not(all(detected_cuda, detected_nccl)))]
-                _ => panic!("Device not detected"),
+                "nv" | "nvidia" => match &*detail
+                    .parse::<VecOrRange>()
+                    .unwrap()
+                    .into_vec(llama_nv::cuda::Device::count)
+                {
+                    [] => {
+                        use llama_nv::{ModelLoadMeta, Transformer as M};
+                        let meta = ModelLoadMeta::load_all_to(0);
+                        runtime.block_on(self.typed::<M>(meta));
+                    }
+                    &[n] => {
+                        use llama_nv::{ModelLoadMeta, Transformer as M};
+                        let meta = ModelLoadMeta::load_all_to(n);
+                        runtime.block_on(self.typed::<M>(meta));
+                    }
+                    #[cfg(detected_nccl)]
+                    list => {
+                        use llama_nv_distributed::{cuda::Device, Transformer as M};
+                        let meta = list.iter().copied().map(Device::new).collect();
+                        runtime.block_on(self.typed::<M>(meta));
+                    }
+                    #[cfg(not(detected_nccl))]
+                    _ => panic!("NCCL not detected"),
+                },
+                #[cfg(detected_neuware)]
+                "cn" | "cambricon" => match &*detail
+                    .parse::<VecOrRange>()
+                    .unwrap()
+                    .into_vec(llama_cn::cndrv::Device::count)
+                {
+                    [] => todo!(),
+                    &[_n] => todo!(),
+                    _list => todo!(),
+                },
+                _ => panic!("Turbo environment not detected"),
             },
-            ModelType::Mixtral => match nvidia.as_slice() {
-                [] => {
-                    use mixtral_cpu::MixtralCPU as M;
-                    runtime.block_on(self.typed::<M>(()));
-                }
-                _ => panic!("Unsupported device"),
-            },
+            ModelType::Mixtral => {
+                use mixtral_cpu::MixtralCPU as M;
+                runtime.block_on(self.typed::<M>(()));
+            }
         }
         // 正常退出
         // 同步等待 NV 上任务结束
@@ -248,6 +242,50 @@ trait Task: Sized {
         }
         // 关闭 tokio 运行时
         runtime.shutdown_background();
+    }
+}
+
+enum VecOrRange {
+    Vec(Vec<c_int>),
+    Range(c_int, Option<c_int>),
+}
+
+impl FromStr for VecOrRange {
+    type Err = ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.is_empty() {
+            Ok(VecOrRange::Vec(Vec::new()))
+        } else if let Some((start, end)) = s.split_once("..") {
+            Ok(VecOrRange::Range(
+                match start.trim_end() {
+                    "" => 0,
+                    num => num.parse::<c_int>()?,
+                },
+                match end.trim_start() {
+                    "" => None,
+                    num => Some(num.parse::<c_int>()?),
+                },
+            ))
+        } else {
+            let mut list = Vec::new();
+            for s in s.split(',') {
+                let s = s.trim();
+                if !s.is_empty() {
+                    list.push(s.parse::<c_int>()?);
+                }
+            }
+            Ok(Self::Vec(list))
+        }
+    }
+}
+
+impl VecOrRange {
+    fn into_vec(self, len: impl FnOnce() -> usize) -> Vec<c_int> {
+        match self {
+            Self::Vec(vec) => vec,
+            Self::Range(start, end) => (start..end.unwrap_or_else(|| len() as _)).collect(),
+        }
     }
 }
 
