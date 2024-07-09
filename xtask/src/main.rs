@@ -180,7 +180,7 @@ trait Task: Sized {
             llama_cn::cndrv::init();
         }
 
-        let (turbo, detail) = self.inference().turbo();
+        let (turbo, _detail) = self.inference().turbo();
         match self.inference().model_type() {
             ModelType::Llama => match turbo.to_ascii_lowercase().as_str() {
                 "" => {
@@ -188,7 +188,7 @@ trait Task: Sized {
                     runtime.block_on(self.typed::<M>(()));
                 }
                 #[cfg(detected_cuda)]
-                "nv" | "nvidia" => match &*detail
+                "nv" | "nvidia" => match &*_detail
                     .parse::<VecOrRange>()
                     .unwrap()
                     .into_vec(llama_nv::cuda::Device::count)
@@ -213,7 +213,7 @@ trait Task: Sized {
                     _ => panic!("NCCL not detected"),
                 },
                 #[cfg(detected_neuware)]
-                "cn" | "cambricon" => match &*detail
+                "cn" | "cambricon" => match &*_detail
                     .parse::<VecOrRange>()
                     .unwrap()
                     .into_vec(llama_cn::cndrv::Device::count)
@@ -245,6 +245,7 @@ trait Task: Sized {
     }
 }
 
+#[allow(dead_code)]
 enum VecOrRange {
     Vec(Vec<c_int>),
     Range(c_int, Option<c_int>),
@@ -281,6 +282,7 @@ impl FromStr for VecOrRange {
 }
 
 impl VecOrRange {
+    #[allow(dead_code)]
     fn into_vec(self, len: impl FnOnce() -> usize) -> Vec<c_int> {
         match self {
             Self::Vec(vec) => vec,
