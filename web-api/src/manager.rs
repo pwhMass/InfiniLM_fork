@@ -1,6 +1,7 @@
 use crate::schemas::{
     AnonymousSessionId, DropSuccess, Drop_, Error, Fork, ForkSuccess, Infer, Sentence, SessionId,
 };
+use base64::{engine::general_purpose, Engine};
 use causal_lm::CausalLM;
 use service::{Service, Session, SessionManager};
 use std::sync::Arc;
@@ -29,7 +30,8 @@ where
     pub fn infer(
         self: &Arc<Self>,
         Infer {
-            inputs: messages,
+            inputs: mut messages,
+            encoding,
             session_id,
             dialog_pos,
             temperature,
@@ -37,6 +39,21 @@ where
             top_p,
         }: Infer,
     ) -> Result<UnboundedReceiver<String>, Error> {
+        match encoding.as_deref() {
+            Some("base64") | None => {
+                for m in &mut messages {
+                    let content = m.content.as_str();
+                    m.content = general_purpose::STANDARD
+                        .decode(content)
+                        .map(String::from_utf8)
+                        .map_err(|_| Error::ContentError(format!("Decode failed: {content}")))?
+                        .map_err(|_| Error::ContentError(format!("Decode failed: {content}")))?;
+                }
+            }
+            Some("text") => {}
+            Some(e) => return Err(Error::ContentError(format!("Unknown encoding: {e}"))),
+        };
+
         async fn infer<M: CausalLM>(
             session_id: &SessionId,
             session: &mut Session<M>,

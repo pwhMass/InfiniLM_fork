@@ -99,17 +99,24 @@ impl<Ops: Operators> KernelsA for Ops {
         T: DerefMut<Target = SliceOn<Self::Handle>>,
         U: Deref<Target = SliceOn<Self::Handle>>,
     {
-        self.reform_op(queue)
-            .launch(
-                &reform::Args {
-                    dst_layout: dst.layout(),
-                    dst_base: dst.base_mut(),
-                    src_layout: src.layout(),
-                    src_base: src.base(),
-                },
-                queue,
-            )
-            .unwrap();
+        if let Err(e) = self.reform_op(queue).launch(
+            &reform::Args {
+                dst_layout: dst.layout(),
+                dst_base: dst.base_mut(),
+                src_layout: src.layout(),
+                src_base: src.base(),
+            },
+            queue,
+        ) {
+            panic!(
+                "\
+reform failed: {e}
+{:?}|{:?}->{:?}",
+                src.shape(),
+                src.strides(),
+                dst.strides(),
+            );
+        }
     }
 
     fn rms_norm<T, U, V>(

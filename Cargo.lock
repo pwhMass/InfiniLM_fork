@@ -124,6 +124,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "base64"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+
+[[package]]
 name = "bindgen"
 version = "0.69.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -331,7 +337,7 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=54aa528#54aa528b0d2bc0341fb342ae6d700238f84681ea"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=04e71d5#04e71d5774ad2749aaa45ca5d50185b4e83cae07"
 dependencies = [
  "digit-layout",
 ]
@@ -1175,7 +1181,7 @@ checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 [[package]]
 name = "operators"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=54aa528#54aa528b0d2bc0341fb342ae6d700238f84681ea"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=04e71d5#04e71d5774ad2749aaa45ca5d50185b4e83cae07"
 dependencies = [
  "build-script-cfg",
  "cndrv",
@@ -1738,6 +1744,7 @@ checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 name = "web-api"
 version = "0.0.1"
 dependencies = [
+ "base64",
  "causal-lm",
  "http-body-util",
  "hyper",
