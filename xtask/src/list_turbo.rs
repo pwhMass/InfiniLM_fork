@@ -9,7 +9,9 @@
 fn list_nv() {
     use llama_nv::cuda::{self, Device as Gpu};
 
-    cuda::init();
+    if let Err(cuda::NoDevice) = cuda::init() {
+        return;
+    }
     println!("NVidia CUDA environment detected, use `--turbo nv:` to select.");
     for i in 0..Gpu::count() {
         let gpu = Gpu::new(i as _);

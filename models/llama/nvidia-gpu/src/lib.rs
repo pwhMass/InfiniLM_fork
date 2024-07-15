@@ -550,17 +550,18 @@ impl Drop for LayerLoader<'_> {
 
 #[test]
 fn test_infer() {
-    cuda::init();
-    if let Some(device) = cuda::Device::fetch() {
-        causal_lm::test_impl::<Transformer>(
-            ModelLoadMeta {
-                device,
-                load_layers: 20,
-            },
-            &[
-                29966, 29989, 1792, 29989, 29958, 13, 29903, 388, 376, 18567, 29908, 304, 592,
-                21106, 29879, 5299, 29989, 465, 22137, 29989, 29958, 13,
-            ],
-        );
-    };
+    if let Err(cuda::NoDevice) = cuda::init() {
+        return;
+    }
+    let device = cuda::Device::new(0);
+    causal_lm::test_impl::<Transformer>(
+        ModelLoadMeta {
+            device,
+            load_layers: 20,
+        },
+        &[
+            29966, 29989, 1792, 29989, 29958, 13, 29903, 388, 376, 18567, 29908, 304, 592, 21106,
+            29879, 5299, 29989, 465, 22137, 29989, 29958, 13,
+        ],
+    );
 }

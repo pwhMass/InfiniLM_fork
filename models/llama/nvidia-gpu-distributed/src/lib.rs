@@ -13,12 +13,12 @@ use common_nv::{
         AsRaw, Context, ContextResource, ContextSpore, DevByte, DevMem, DevMemSpore, Device,
         HostMemSpore, Stream, StreamSpore,
     },
+    nccl::{CommunicatorGroup, ReduceType},
     sample_nv, slice, split, udim, KernelsA, KernelsB, LocalSplitable, NvidiaKernels, Tensor,
 };
 use digit_layout::types::F16;
 use itertools::izip;
 use llama::InferenceConfig;
-use nccl::CommunicatorGroup;
 use parameters::{Layer, ParameterMatrix};
 use std::{
     iter::{repeat, zip},
@@ -312,7 +312,7 @@ impl CausalLM for Transformer {
                                     x.physical_mut(),
                                     None,
                                     self.config.dt,
-                                    nccl::ReduceType::ncclSum,
+                                    ReduceType::ncclSum,
                                     stream,
                                 );
 
@@ -321,7 +321,7 @@ impl CausalLM for Transformer {
                                     x.physical_mut(),
                                     None,
                                     self.config.dt,
-                                    nccl::ReduceType::ncclSum,
+                                    ReduceType::ncclSum,
                                     stream,
                                 );
                             }
@@ -623,7 +623,9 @@ fn malloc_all(contexts: &[Context], len: usize) -> Vec<DevMemSpore> {
 
 #[test]
 fn test_infer() {
-    cuda::init();
+    if let Err(cuda::NoDevice) = cuda::init() {
+        return;
+    }
     if cuda::Device::count() >= 2 {
         causal_lm::test_impl::<Transformer>(
             [0, 1].map(cuda::Device::new).into_iter().collect(),

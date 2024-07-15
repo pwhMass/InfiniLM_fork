@@ -198,9 +198,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
-version = "1.6.0"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "514de17de45fdb8dc022b1a7975556c53c86f9f0aa5f534b98977b171857c2c9"
+checksum = "a12916984aab3fa6e39d655a33e09c0071eb36d6ab3aea5c2d78551f1df6d952"
 
 [[package]]
 name = "causal-lm"
@@ -214,9 +214,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.1.1"
+version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "907d8581360765417f8f2e0e7d602733bbed60156b4465b7617243689ef9b83d"
+checksum = "324c74f2155653c90b04f25b2a47a8a631360cb908f92a772695f430c7e31052"
 
 [[package]]
 name = "cexpr"
@@ -337,7 +337,7 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=04e71d5#04e71d5774ad2749aaa45ca5d50185b4e83cae07"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=b05568a#b05568a30570c5a25bfc84a4cced2413701f9e0c"
 dependencies = [
  "digit-layout",
 ]
@@ -424,8 +424,8 @@ checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
 name = "cublas"
-version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=343b0e0#343b0e09125cadf3775d625818b7ec50332b2479"
+version = "0.0.0"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=fb088b6#fb088b6fed435818590525caf45dd751999a174e"
 dependencies = [
  "bindgen",
  "build-script-cfg",
@@ -436,8 +436,8 @@ dependencies = [
 
 [[package]]
 name = "cuda"
-version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=343b0e0#343b0e09125cadf3775d625818b7ec50332b2479"
+version = "0.0.0"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=fb088b6#fb088b6fed435818590525caf45dd751999a174e"
 dependencies = [
  "bindgen",
  "build-script-cfg",
@@ -753,9 +753,9 @@ dependencies = [
 
 [[package]]
 name = "http-body"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cac85db508abc24a2e48553ba12a996e87244a0395ce011e62b37158745d643"
+checksum = "1efedce1fb8e6913f23e0c92de8e62cd5b772a67e7b3946df930a62566c93184"
 dependencies = [
  "bytes",
  "http",
@@ -955,7 +955,6 @@ dependencies = [
  "itertools 0.13.0",
  "llama",
  "log",
- "nccl",
  "search-cuda-tools",
  "simple_logger",
 ]
@@ -1079,8 +1078,8 @@ dependencies = [
 
 [[package]]
 name = "nccl"
-version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=343b0e0#343b0e09125cadf3775d625818b7ec50332b2479"
+version = "0.0.0"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=fb088b6#fb088b6fed435818590525caf45dd751999a174e"
 dependencies = [
  "bindgen",
  "build-script-cfg",
@@ -1181,7 +1180,7 @@ checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 [[package]]
 name = "operators"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=04e71d5#04e71d5774ad2749aaa45ca5d50185b4e83cae07"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=b05568a#b05568a30570c5a25bfc84a4cced2413701f9e0c"
 dependencies = [
  "build-script-cfg",
  "cndrv",
@@ -1192,7 +1191,9 @@ dependencies = [
  "digit-layout",
  "gemm",
  "half",
+ "libloading",
  "log",
+ "nccl",
  "rayon",
  "search-cuda-tools",
  "search-neuware-tools 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1452,8 +1453,8 @@ dependencies = [
 
 [[package]]
 name = "search-cuda-tools"
-version = "0.1.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=343b0e0#343b0e09125cadf3775d625818b7ec50332b2479"
+version = "0.0.0"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=fb088b6#fb088b6fed435818590525caf45dd751999a174e"
 dependencies = [
  "find_cuda_helper",
 ]
@@ -1577,9 +1578,9 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "syn"
-version = "2.0.70"
+version = "2.0.71"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f0209b68b3613b093e0ec905354eccaedcfe83b8cb37cbdeae64026c3064c16"
+checksum = "b146dcf730474b4bcd16c311627b31ede9ab149045db4d6088b3becaea046462"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1676,9 +1677,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.38.0"
+version = "1.38.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba4f4a02a7a80d6f274636f0aa95c7e383b912d41fe721a31f29e29698585a4a"
+checksum = "eb2caba9f80616f438e09748d5acda951967e1ea58508ef53d9c6402485a46df"
 dependencies = [
  "backtrace",
  "libc",

@@ -23,6 +23,9 @@ pub use operators::{cuda, nvidia_gpu::Handle as Gpu};
 pub use sample::{sample_cpu, sample_nv};
 pub use tensor::{reslice, reslice_mut, slice, split, udim, LocalSplitable, Tensor};
 
+#[cfg(detected_nccl)]
+pub use operators::nccl;
+
 pub struct NvidiaKernels(HashMap<i32, Internal>);
 
 struct Internal {
@@ -186,7 +189,9 @@ impl KernelsB for NvidiaKernels {
 }
 
 pub fn synchronize() {
-    cuda::init();
+    if let Err(cuda::NoDevice) = cuda::init() {
+        return;
+    }
     for i in 0..cuda::Device::count() {
         cuda::Device::new(i as _)
             .retain_primary()
