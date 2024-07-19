@@ -18,4 +18,3 @@ digit-layout.workspace = true
 [build-dependencies]
 build-script-cfg.workspace = true
 search-cuda-tools.workspace = true
-cc = "1.0"

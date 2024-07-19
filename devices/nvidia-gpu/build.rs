@@ -9,13 +9,5 @@ fn main() {
         if find_nccl_root().is_some() {
             nccl.define();
         }
-        println!("cargo:rerun-if-changed=src/sample.cu");
-        cc::Build::new()
-            .cuda(true)
-            .flag("-gencode")
-            .flag("arch=compute_80,code=sm_80")
-            .flag("-allow-unsupported-compiler")
-            .file("src/sample.cu")
-            .compile("sample");
     }
 }
