@@ -287,6 +287,7 @@ impl CausalLM for Transformer {
             let workspace =
                 unsafe { from_raw_parts_mut(workspace_ptr as *mut DevByte, workspace_len) };
             self.0.kernels.sample(
+                self.0.config.voc as _,
                 args.into_iter()
                     .flat_map(|meta| repeat(meta.args).take(meta.num_decode)),
                 logits.take_physical().mem.sprout_ref(compute.ctx()),

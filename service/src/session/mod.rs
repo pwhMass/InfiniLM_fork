@@ -65,7 +65,7 @@ impl<M: CausalLM> Session<M> {
     pub fn fork(&self) -> Self {
         Self {
             component: self.component.clone(),
-            sample: self.sample.clone(),
+            sample: self.sample,
             dialog: self.dialog.clone(),
             cache: self
                 .cache
@@ -125,9 +125,8 @@ impl<M: CausalLM> Session<M> {
 
     /// 启动推理任务，返回忙会话。
     pub fn chat(&mut self) -> BusySession<M> {
-        let sample = self.sample.clone();
         let cache = self.cache.take().unwrap();
-        let handle = self.component.infer(sample, cache);
+        let handle = self.component.infer(self.sample, cache);
         BusySession {
             session: self,
             handle,

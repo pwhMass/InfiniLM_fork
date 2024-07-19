@@ -2,7 +2,6 @@
 
 mod gather;
 
-use ::sample::SampleArgs;
 use common::{f16, utok};
 use common_devices::{Operators, SliceOn};
 use cuda::{AsRaw, Device};
@@ -12,7 +11,7 @@ use operators::{
     dyn_,
     fuesd_softmax::nvidia_gpu as softmax,
     mat_mul::nvidia_gpu as mat_mul,
-    random_sample::{nvidia_gpu as random_sample, KVPair, RandomSample},
+    random_sample::{nvidia_gpu as random_sample, KVPair, RandomSample, SampleArgs},
     reform::nvidia_gpu as reform,
     rms_norm::nvidia_gpu as rms_norm,
     rope::nvidia_gpu as rope,
@@ -21,7 +20,6 @@ use operators::{
 };
 use std::{
     collections::HashMap,
-    mem::size_of,
     ops::{Deref, DerefMut},
     ptr::{null, null_mut},
 };
@@ -136,42 +134,41 @@ impl NvidiaKernels {
         self.0.get(&unsafe { queue.ctx().dev().as_raw() }).unwrap()
     }
 
-    pub fn sample_workspace<'ctx>(&self, queue: &'ctx QueueOf<Gpu>) -> DevMem<'ctx> {
-        let random_sample = &self.get(queue).random_sample;
-        let workspace_len = random_sample.workspace();
-        let scheme_n = random_sample.scheme_n();
-        let mut workspace = queue.malloc::<u8>(workspace_len);
-        let host = (0..scheme_n).map(|i| i as u32).collect::<Vec<_>>();
-        queue.memcpy_h2d(&mut workspace[..scheme_n * size_of::<u32>()], &host);
-        workspace
+    pub fn sample_workspace<'ctx>(&self, queue: &QueueOf<'ctx, Gpu>) -> DevMem<'ctx> {
+        // let random_sample = &;
+        // let workspace_len = random_sample.workspace();
+        // let scheme_n = random_sample.scheme_n();
+        // let mut workspace = queue.malloc::<u8>(workspace_len);
+        // let host = (0..scheme_n).map(|i| i as u32).collect::<Vec<_>>();
+        // queue.memcpy_h2d(&mut workspace[..scheme_n * size_of::<u32>()], &host);
+        // workspace
+        self.get(queue).random_sample.workspace(queue)
     }
 
     pub fn sample(
         &self,
+        voc_size: usize,
         args: impl IntoIterator<Item = SampleArgs>,
         logits: &[DevByte],
         workspace: &mut [DevByte],
         stream: &Stream,
     ) -> Vec<utok> {
         let random_sample = &self.get(stream).random_sample;
-        let voc = random_sample.scheme_n();
         let logits = logits.as_ptr();
 
         let details = args.into_iter().collect::<Vec<_>>();
         let kv_pair_size = KVPair::<()>::LAYOUT.nbytes();
         let mut kv_pairs = stream.malloc::<u8>(details.len() * kv_pair_size);
 
-        let mut args = operators::random_sample::Args::<Gpu>::new(F16, voc);
+        let mut args = operators::random_sample::Args::<Gpu>::new(F16, voc_size);
         args.workspace = Workspace {
             ptr: workspace.as_mut_ptr(),
             len: workspace.len(),
         };
-        for (i, arg) in details.iter().enumerate() {
+        for (i, detail) in details.iter().enumerate() {
             args.kv_pair_base = unsafe { kv_pairs.as_mut_ptr().add(i * kv_pair_size) };
-            args.data_base = unsafe { logits.add(i * voc * F16.nbytes()) };
-            args.detail.temperature = arg.temperature;
-            args.detail.top_p = arg.top_p;
-            args.detail.top_k = arg.top_k;
+            args.data_base = unsafe { logits.add(i * voc_size * F16.nbytes()) };
+            args.detail = *detail;
             random_sample.launch(&args, stream).unwrap();
         }
 

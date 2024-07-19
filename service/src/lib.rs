@@ -66,14 +66,14 @@ impl<M: CausalLM> Service<M> {
     #[inline]
     pub fn launch(&self) -> Session<M> {
         let mut session: Session<M> = self.component.clone().into();
-        session.sample = self.default_sample.clone();
+        session.sample = self.default_sample;
         session
     }
 
     /// 从对话服务启动一个文本生成器。
     #[inline]
     pub fn generate(&self, prompt: impl AsRef<str>, sample: Option<SampleArgs>) -> Generator<M> {
-        let sample = sample.unwrap_or_else(|| self.default_sample.clone());
+        let sample = sample.unwrap_or(self.default_sample);
         Generator::new(self.component.clone(), prompt, sample)
     }
 }
