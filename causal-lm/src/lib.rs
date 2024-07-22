@@ -10,8 +10,8 @@ use std::path::Path;
 use tensor::{udim, Tensor};
 
 pub use decoding::DecodingMeta;
+pub use operators::random_sample::SampleArgs;
 pub use query_context::QueryContext;
-pub use sample::SampleArgs;
 
 /// 从文件系统加载的模型。
 pub trait Model: Sized {
@@ -142,7 +142,7 @@ where
 
         let args = [SampleMeta {
             num_decode: 1,
-            args: SampleArgs::default(),
+            args: SampleArgs::ARG_MAX,
         }];
         let tokens = CausalLM::sample(&model, args, logits);
 

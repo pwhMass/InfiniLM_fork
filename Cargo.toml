@@ -4,7 +4,6 @@ members = [
     "tensor",
     "tokenizer",
     "causal-lm",
-    "sample",
     "service",
     "web-api",
     "xtask",
@@ -35,7 +34,6 @@ tokio = { version = "1.38", features = ["rt-multi-thread", "sync"] }
 digit-layout = "0.0"
 build-script-cfg = "0.0"
 
-operators = { git = "https://github.com/YdrMaster/operators-rs", rev = "04e71d5", default-features = false }
-nccl = { git = "https://github.com/YdrMaster/cuda-driver", rev = "343b0e0" }
-search-cuda-tools = { git = "https://github.com/YdrMaster/cuda-driver", rev = "343b0e0" }
+operators = { git = "https://github.com/YdrMaster/operators-rs", rev = "5a88159", default-features = false }
+search-cuda-tools = { git = "https://github.com/YdrMaster/cuda-driver", rev = "fb088b6" }
 search-neuware-tools = "0.0"

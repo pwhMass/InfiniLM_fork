@@ -46,12 +46,12 @@ where
                     m.content = general_purpose::STANDARD
                         .decode(content)
                         .map(String::from_utf8)
-                        .map_err(|_| Error::ContentError(format!("Decode failed: {content}")))?
-                        .map_err(|_| Error::ContentError(format!("Decode failed: {content}")))?;
+                        .map_err(|_| Error::InvalidContent(format!("Decode failed: {content}")))?
+                        .map_err(|_| Error::InvalidContent(format!("Decode failed: {content}")))?;
                 }
             }
             Some("text") => {}
-            Some(e) => return Err(Error::ContentError(format!("Unknown encoding: {e}"))),
+            Some(e) => return Err(Error::InvalidContent(format!("Unknown encoding: {e}"))),
         };
 
         async fn infer<M: CausalLM>(

@@ -1,16 +1,22 @@
 ﻿#![cfg(detected_cuda)]
 
 mod gather;
-mod sample;
 
-use common::utok;
+use common::{f16, utok};
 use common_devices::{Operators, SliceOn};
 use cuda::{AsRaw, Device};
 use digit_layout::types::{F16, U32};
 use operators::{
-    dyn_, fuesd_softmax::nvidia_gpu as softmax, mat_mul::nvidia_gpu as mat_mul,
-    reform::nvidia_gpu as reform, rms_norm::nvidia_gpu as rms_norm, rope::nvidia_gpu as rope,
-    swiglu::nvidia_gpu as swiglu, Operator, QueueOf, TensorLayout,
+    cuda::{memcpy_d2h, DevByte, DevMem, Stream},
+    dyn_,
+    fuesd_softmax::nvidia_gpu as softmax,
+    mat_mul::nvidia_gpu as mat_mul,
+    random_sample::{nvidia_gpu as random_sample, KVPair, RandomSample, SampleArgs},
+    reform::nvidia_gpu as reform,
+    rms_norm::nvidia_gpu as rms_norm,
+    rope::nvidia_gpu as rope,
+    swiglu::nvidia_gpu as swiglu,
+    Operator, QueueOf, TensorLayout, Workspace,
 };
 use std::{
     collections::HashMap,
@@ -20,8 +26,10 @@ use std::{
 
 pub use common_devices::{Kernels, KernelsA, KernelsB};
 pub use operators::{cuda, nvidia_gpu::Handle as Gpu};
-pub use sample::{sample_cpu, sample_nv};
 pub use tensor::{reslice, reslice_mut, slice, split, udim, LocalSplitable, Tensor};
+
+#[cfg(detected_nccl)]
+pub use operators::nccl;
 
 pub struct NvidiaKernels(HashMap<i32, Internal>);
 
@@ -32,10 +40,11 @@ struct Internal {
     reform: reform::Operator,
     softmax: softmax::Operator,
     swiglu: swiglu::Operator,
+    random_sample: random_sample::Operator,
 }
 
 impl Internal {
-    pub fn new(handle: &Gpu, d: usize) -> Self {
+    pub fn new(handle: &Gpu, d: usize, voc: usize) -> Self {
         let mat_mul = mat_mul::Operator::new(handle);
 
         let mut rms_norm = rms_norm::Operator::new(handle);
@@ -89,6 +98,11 @@ impl Internal {
             })
             .unwrap();
 
+        let mut random_sample = random_sample::Operator::new(handle);
+        random_sample
+            .scheme(&operators::random_sample::Args::new(F16, voc))
+            .unwrap();
+
         Self {
             mat_mul,
             rms_norm,
@@ -96,29 +110,73 @@ impl Internal {
             reform,
             softmax,
             swiglu,
+            random_sample,
         }
     }
 }
 
 impl NvidiaKernels {
-    pub fn new(devices: &[Device], rms_norm_size: usize) -> Self {
+    pub fn new(devices: &[Device], rms_norm_size: usize, voc_size: usize) -> Self {
         Self(
             devices
                 .iter()
                 .map(|d| {
                     (
                         unsafe { d.as_raw() },
-                        Internal::new(&Gpu::new(d.retain_primary()), rms_norm_size),
+                        Internal::new(&Gpu::new(d.retain_primary()), rms_norm_size, voc_size),
                     )
                 })
                 .collect(),
         )
     }
-}
 
-impl NvidiaKernels {
     fn get(&self, queue: &QueueOf<Gpu>) -> &Internal {
         self.0.get(&unsafe { queue.ctx().dev().as_raw() }).unwrap()
+    }
+
+    pub fn sample_workspace<'ctx>(&self, queue: &QueueOf<'ctx, Gpu>) -> DevMem<'ctx> {
+        // let random_sample = &;
+        // let workspace_len = random_sample.workspace();
+        // let scheme_n = random_sample.scheme_n();
+        // let mut workspace = queue.malloc::<u8>(workspace_len);
+        // let host = (0..scheme_n).map(|i| i as u32).collect::<Vec<_>>();
+        // queue.memcpy_h2d(&mut workspace[..scheme_n * size_of::<u32>()], &host);
+        // workspace
+        self.get(queue).random_sample.workspace(queue)
+    }
+
+    pub fn sample(
+        &self,
+        voc_size: usize,
+        args: impl IntoIterator<Item = SampleArgs>,
+        logits: &[DevByte],
+        workspace: &mut [DevByte],
+        stream: &Stream,
+    ) -> Vec<utok> {
+        let random_sample = &self.get(stream).random_sample;
+        let logits = logits.as_ptr();
+
+        let details = args.into_iter().collect::<Vec<_>>();
+        let kv_pair_size = KVPair::<()>::LAYOUT.nbytes();
+        let mut kv_pairs = stream.malloc::<u8>(details.len() * kv_pair_size);
+
+        let mut args = operators::random_sample::Args::<Gpu>::new(F16, voc_size);
+        args.workspace = Workspace {
+            ptr: workspace.as_mut_ptr(),
+            len: workspace.len(),
+        };
+        for (i, detail) in details.iter().enumerate() {
+            args.kv_pair_base = unsafe { kv_pairs.as_mut_ptr().add(i * kv_pair_size) };
+            args.data_base = unsafe { logits.add(i * voc_size * F16.nbytes()) };
+            args.detail = *detail;
+            random_sample.launch(&args, stream).unwrap();
+        }
+
+        let mut host = vec![KVPair::new(0, f16::ZERO); details.len()];
+        stream.synchronize();
+        memcpy_d2h(&mut host, &kv_pairs);
+
+        host.into_iter().map(|kv| kv.idx() as _).collect()
     }
 }
 
@@ -186,7 +244,9 @@ impl KernelsB for NvidiaKernels {
 }
 
 pub fn synchronize() {
-    cuda::init();
+    if let Err(cuda::NoDevice) = cuda::init() {
+        return;
+    }
     for i in 0..cuda::Device::count() {
         cuda::Device::new(i as _)
             .retain_primary()

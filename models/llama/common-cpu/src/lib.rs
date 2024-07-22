@@ -201,7 +201,14 @@ impl CausalLM for Transformer {
         args.into_iter()
             .flat_map(|meta| repeat(meta.args).take(meta.num_decode))
             .enumerate()
-            .map(|(i, args)| args.random(&common_cpu::slice!(logits; voc; [i])))
+            .map(|(i, args)| {
+                self.kernels.sample(
+                    args.temperature,
+                    args.top_p,
+                    args.top_k,
+                    &common_cpu::slice!(logits; voc; [i]),
+                )
+            })
             .collect()
     }
 }

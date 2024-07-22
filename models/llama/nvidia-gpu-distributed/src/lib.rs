@@ -13,18 +13,17 @@ use common_nv::{
         AsRaw, Context, ContextResource, ContextSpore, DevByte, DevMem, DevMemSpore, Device,
         HostMemSpore, Stream, StreamSpore,
     },
-    sample_nv, slice, split, udim, KernelsA, KernelsB, LocalSplitable, NvidiaKernels, Tensor,
+    nccl::{CommunicatorGroup, ReduceType},
+    slice, split, udim, KernelsA, KernelsB, LocalSplitable, NvidiaKernels, Tensor,
 };
-use digit_layout::types::F16;
 use itertools::izip;
 use llama::InferenceConfig;
-use nccl::CommunicatorGroup;
 use parameters::{Layer, ParameterMatrix};
 use std::{
     iter::{repeat, zip},
     mem::{take, ManuallyDrop},
     path::Path,
-    slice::from_raw_parts,
+    slice::{from_raw_parts, from_raw_parts_mut},
     sync::Arc,
     time::Instant,
 };
@@ -37,6 +36,7 @@ pub struct Transformer {
     comms: CommunicatorGroup,
     streams: Vec<StreamSpore>,
     kernels: NvidiaKernels,
+    sample_workspace: ManuallyDrop<DevMemSpore>,
 
     embed_tokens: Tensor<ManuallyDrop<HostMemSpore>>,
     matrix: ParameterMatrix,
@@ -54,7 +54,7 @@ impl Model for Transformer {
         let host = llama::Storage::load_safetensors(model_dir)?;
         info!("load host: {:?}", time.elapsed());
 
-        let kernels = NvidiaKernels::new(&meta, host.config.d as _);
+        let kernels = NvidiaKernels::new(&meta, host.config.d as _, host.config.voc as _);
 
         let contexts = meta
             .iter()
@@ -70,7 +70,15 @@ impl Model for Transformer {
                 .collect::<Vec<_>>(),
         );
         let matrix = ParameterMatrix::load(&host, &contexts);
-        let (embed_tokens, lm_layernorm, lm_head) = comms.contexts().next().unwrap().apply(|ctx| {
+        let streams = contexts
+            .iter()
+            .map(|context| context.apply(|ctx| ctx.stream().sporulate()))
+            .collect::<Vec<_>>();
+        let (embed_tokens, lm_layernorm, lm_head, sample_workspace) = contexts[0].apply(|ctx| {
+            let sample_workspace = kernels
+                .sample_workspace(streams[0].sprout_ref(ctx))
+                .sporulate();
+
             (
                 host.embed_tokens.map_physical(|u| {
                     let mut host = ctx.malloc_host::<u8>(u.len());
@@ -81,16 +89,14 @@ impl Model for Transformer {
                     .map_physical(|u| ManuallyDrop::new(ctx.from_host(&u).sporulate())),
                 host.lm_head
                     .map_physical(|u| ManuallyDrop::new(ctx.from_host(&u).sporulate())),
+                ManuallyDrop::new(sample_workspace),
             )
         });
-        let streams = contexts
-            .iter()
-            .map(|context| context.apply(|ctx| ctx.stream().sporulate()))
-            .collect::<Vec<_>>();
         Ok(Self {
             comms,
             streams,
             kernels,
+            sample_workspace,
 
             embed_tokens,
             matrix,
@@ -312,7 +318,7 @@ impl CausalLM for Transformer {
                                     x.physical_mut(),
                                     None,
                                     self.config.dt,
-                                    nccl::ReduceType::ncclSum,
+                                    ReduceType::ncclSum,
                                     stream,
                                 );
 
@@ -321,7 +327,7 @@ impl CausalLM for Transformer {
                                     x.physical_mut(),
                                     None,
                                     self.config.dt,
-                                    nccl::ReduceType::ncclSum,
+                                    ReduceType::ncclSum,
                                     stream,
                                 );
                             }
@@ -409,20 +415,18 @@ impl CausalLM for Transformer {
         args: impl IntoIterator<Item = SampleMeta>,
         logits: Tensor<Self::Storage>,
     ) -> Vec<utok> {
-        assert_eq!(logits.data_layout(), F16);
-        let &[_nt, voc] = logits.shape() else {
-            panic!()
-        };
-        let voc = voc as usize;
+        let workspace_ptr = unsafe { self.sample_workspace.as_raw() };
+        let workspace_len = self.sample_workspace.len();
         let Cache { contexts, mem } = logits.physical();
-
         contexts[0].apply(|ctx| {
-            sample_nv(
+            let workspace =
+                unsafe { from_raw_parts_mut(workspace_ptr as *mut DevByte, workspace_len) };
+            self.kernels.sample(
+                self.config.voc as _,
                 args.into_iter()
-                    .flat_map(|meta| repeat(meta.args).take(meta.num_decode))
-                    .enumerate(),
+                    .flat_map(|meta| repeat(meta.args).take(meta.num_decode)),
                 mem[0].sprout_ref(ctx),
-                voc,
+                workspace,
                 self.streams[0].sprout_ref(ctx),
             )
         })
@@ -623,7 +627,9 @@ fn malloc_all(contexts: &[Context], len: usize) -> Vec<DevMemSpore> {
 
 #[test]
 fn test_infer() {
-    cuda::init();
+    if let Err(cuda::NoDevice) = cuda::init() {
+        return;
+    }
     if cuda::Device::count() >= 2 {
         causal_lm::test_impl::<Transformer>(
             [0, 1].map(cuda::Device::new).into_iter().collect(),
