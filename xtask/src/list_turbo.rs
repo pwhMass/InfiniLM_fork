@@ -14,7 +14,7 @@ fn list_nv() {
     if let Err(cuda::NoDevice) = cuda::init() {
         return;
     }
-    println!("NVidia CUDA environment detected, use `--turbo nv:` to select.");
+    println!("NVidia CUDA environment detected, use `--turbo nv` to select.");
     for i in 0..Gpu::count() {
         let gpu = Gpu::new(i as _);
         println!(
@@ -32,7 +32,7 @@ fn list_cn() {
     use llama_cn::cndrv::{self, Device as Mlu};
 
     cndrv::init();
-    println!("Cambricon Neuware environment detected, use `--turbo cn:` to select.");
+    println!("Cambricon Neuware environment detected, use `--turbo cn` to select.");
     for i in 0..Mlu::count() {
         let mlu = Mlu::new(i as _);
         println!(
@@ -46,4 +46,14 @@ fn list_cn() {
 }
 
 #[cfg(detected_ascend)]
-fn list_acl() {}
+fn list_acl() {
+    use common_acl::ascendcl::{self, Device as Card};
+
+    ascendcl::init();
+    println!("AscendCL environment detected, use `--turbo acl` to select.");
+    for i in 0..Card::count() {
+        let card = Card::new(i as _);
+        println!("Ascend{i}: {}", card.name().to_str().unwrap());
+    }
+    println!();
+}

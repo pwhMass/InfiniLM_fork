@@ -13,6 +13,8 @@ causal-lm = { path = "../causal-lm" }
 service = { path = "../service" }
 web-api = { path = "../web-api" }
 
+common-acl = { path = "../devices/ascend-card", optional = true }
+
 # models
 llama = { path = "../models/llama/common" }
 llama-cpu = { path = "../models/llama/common-cpu" }
@@ -40,4 +42,4 @@ search-ascend-tools.workspace = true
 default = ["nvidia", "cambricon", "ascend"]
 nvidia = ["llama-nv", "llama-nv-distributed"]
 cambricon = ["llama-cn"]
-ascend = []
+ascend = ["common-acl"]

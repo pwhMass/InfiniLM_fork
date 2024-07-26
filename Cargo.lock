@@ -103,6 +103,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ascendcl"
+version = "0.0.0"
+source = "git+https://github.com/InfiniTensor/ascendcl?rev=1e7a696#1e7a696b41d939655d6041d0adc93dc8b93c4def"
+dependencies = [
+ "bindgen",
+ "build-script-cfg",
+ "context-spore",
+ "log",
+ "search-ascend-tools",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -341,6 +353,18 @@ version = "0.1.0"
 source = "git+https://github.com/YdrMaster/operators-rs?rev=1d55b48#1d55b484b663d3063b631680e3342c87cf3c5e61"
 dependencies = [
  "digit-layout",
+]
+
+[[package]]
+name = "common-acl"
+version = "0.0.0"
+dependencies = [
+ "build-script-cfg",
+ "common 0.0.0",
+ "common-devices",
+ "operators",
+ "search-ascend-tools",
+ "tensor",
 ]
 
 [[package]]
@@ -1179,6 +1203,7 @@ name = "operators"
 version = "0.0.0"
 source = "git+https://github.com/YdrMaster/operators-rs?rev=1d55b48#1d55b484b663d3063b631680e3342c87cf3c5e61"
 dependencies = [
+ "ascendcl",
  "build-script-cfg",
  "cndrv",
  "cnnl",
@@ -1932,6 +1957,7 @@ dependencies = [
  "clap",
  "colored",
  "common 0.0.0",
+ "common-acl",
  "digit-layout",
  "llama",
  "llama-cn",

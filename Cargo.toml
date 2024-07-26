@@ -12,6 +12,7 @@ members = [
     "devices/common-cpu",
     "devices/nvidia-gpu",
     "devices/cambricon-mlu",
+    "devices/ascend-card",
 
     "models/llama/common",
     "models/llama/common-cpu",
