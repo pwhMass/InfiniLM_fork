@@ -46,9 +46,9 @@ checksum = "5c6cb57a04249c6480766f7f7cef5467412af1490f8d1e243141daddada3264f"
 
 [[package]]
 name = "anstream"
-version = "0.6.14"
+version = "0.6.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "418c75fa768af9c03be99d17643f93f79bbba589895012a80e3452a19ddda15b"
+checksum = "64e15c1ab1f89faffbf04a634d5e1962e9074f2741eef6d97f3c4e322426d526"
 dependencies = [
  "anstyle",
  "anstyle-parse",
@@ -61,33 +61,33 @@ dependencies = [
 
 [[package]]
 name = "anstyle"
-version = "1.0.7"
+version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "038dfcf04a5feb68e9c60b21c9625a54c2c0616e79b72b0fd87075a056ae1d1b"
+checksum = "1bec1de6f59aedf83baf9ff929c98f2ad654b97c9510f4e70cf6f661d49fd5b1"
 
 [[package]]
 name = "anstyle-parse"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c03a11a9034d92058ceb6ee011ce58af4a9bf61491aa7e1e59ecd24bd40d22d4"
+checksum = "eb47de1e80c2b463c735db5b217a0ddc39d612e7ac9e2e96a5aed1f57616c1cb"
 dependencies = [
  "utf8parse",
 ]
 
 [[package]]
 name = "anstyle-query"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad186efb764318d35165f1758e7dcef3b10628e26d41a44bc5550652e6804391"
+checksum = "6d36fc52c7f6c869915e99412912f22093507da8d9e942ceaf66fe4b7c14422a"
 dependencies = [
  "windows-sys 0.52.0",
 ]
 
 [[package]]
 name = "anstyle-wincon"
-version = "3.0.3"
+version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61a38449feb7068f52bb06c12759005cf459ee52bb4adc1d5a7c4322d716fb19"
+checksum = "5bf74e1b6e971609db8ca7a9ce79fd5768ab6ae46441c572e46cf596f59e57f8"
 dependencies = [
  "anstyle",
  "windows-sys 0.52.0",
@@ -246,9 +246,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.9"
+version = "4.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64acc1846d54c1fe936a78dc189c34e28d3f5afc348403f28ecf53660b9b8462"
+checksum = "35723e6a11662c2afb578bcf0b88bf6ea8e21282a953428f240574fcc3a2b5b3"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -256,9 +256,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.9"
+version = "4.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fb8393d67ba2e7bfaf28a23458e4e2b543cc73a99595511eb207fdb8aede942"
+checksum = "49eb96cbfa7cfa35017b7cd548c75b14c3118c98b423041d70562665e07fb0fa"
 dependencies = [
  "anstream",
  "anstyle",
@@ -268,9 +268,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.5.8"
+version = "4.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bac35c6dafb060fd4d275d9a4ffae97917c13a6327903a8be2153cd964f7085"
+checksum = "5d029b67f89d30bbb547c89fd5161293c0aec155fc691d7924b64550662db93e"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -280,38 +280,39 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b82cf0babdbd58558212896d1a4272303a57bdb245c2bf1147185fb45640e70"
+checksum = "1462739cb27611015575c0c11df5df7601141071f07518d56fcc1be504cbec97"
 
 [[package]]
 name = "cndrv"
-version = "0.1.3"
-source = "git+https://github.com/InfiniTensor/cndrv?rev=ab2b1c9#ab2b1c9c379bb88bd8f695f5acda2780990ecfb3"
+version = "0.2.0"
+source = "git+https://github.com/InfiniTensor/cndrv?rev=36acd5f#36acd5f2e549c78fcd23c7654b6794f250b63f09"
 dependencies = [
  "bindgen",
  "build-script-cfg",
+ "context-spore",
  "log",
- "search-neuware-tools 0.0.0 (git+https://github.com/InfiniTensor/cndrv?rev=ab2b1c9)",
+ "search-neuware-tools 0.0.0 (git+https://github.com/InfiniTensor/cndrv?rev=36acd5f)",
 ]
 
 [[package]]
 name = "cnnl"
 version = "0.0.0"
-source = "git+https://github.com/InfiniTensor/cndrv?rev=ab2b1c9#ab2b1c9c379bb88bd8f695f5acda2780990ecfb3"
+source = "git+https://github.com/InfiniTensor/cndrv?rev=36acd5f#36acd5f2e549c78fcd23c7654b6794f250b63f09"
 dependencies = [
  "bindgen",
  "build-script-cfg",
  "cndrv",
  "digit-layout",
- "search-neuware-tools 0.0.0 (git+https://github.com/InfiniTensor/cndrv?rev=ab2b1c9)",
+ "search-neuware-tools 0.0.0 (git+https://github.com/InfiniTensor/cndrv?rev=36acd5f)",
 ]
 
 [[package]]
 name = "colorchoice"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b6a852b24ab71dffc585bcb46eaf7959d175cb865a7152e35b348d1b2960422"
+checksum = "d3fd119d74b830634cea2a0f58bbd0d54540518a14397557951e79340abc28c0"
 
 [[package]]
 name = "colored"
@@ -337,7 +338,7 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.1.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=5a88159#5a88159923a38b45db099bc973a868a0e9afd944"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=1d55b48#1d55b484b663d3063b631680e3342c87cf3c5e61"
 dependencies = [
  "digit-layout",
 ]
@@ -390,6 +391,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "context-spore"
+version = "0.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "388bff087fb87466bbcd62536660c45c12636fc7749ecafa94ed78dc9ccdb023"
+
+[[package]]
 name = "crossbeam-deque"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -423,7 +430,7 @@ checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 [[package]]
 name = "cublas"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=fb088b6#fb088b6fed435818590525caf45dd751999a174e"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=d089ada#d089ada328a9c3d43039e35444e04aafafbfdfee"
 dependencies = [
  "bindgen",
  "build-script-cfg",
@@ -435,10 +442,11 @@ dependencies = [
 [[package]]
 name = "cuda"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=fb088b6#fb088b6fed435818590525caf45dd751999a174e"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=d089ada#d089ada328a9c3d43039e35444e04aafafbfdfee"
 dependencies = [
  "bindgen",
  "build-script-cfg",
+ "context-spore",
  "half",
  "log",
  "search-cuda-tools",
@@ -820,9 +828,9 @@ dependencies = [
 
 [[package]]
 name = "is_terminal_polyfill"
-version = "1.70.0"
+version = "1.70.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8478577c03552c21db0e2724ffb8986a5ce7af88107e6be5d2ee6e158c12800"
+checksum = "7943c866cc5cd64cbc25b2e01621d07fa8eb2a1a23160ee81ce38704e97b8ecf"
 
 [[package]]
 name = "itertools"
@@ -1014,13 +1022,14 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "0.8.11"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4a650543ca06a924e8b371db273b2756685faae30f8487da1b56505a8f78b0c"
+checksum = "4569e456d394deccd22ce1c1913e6ea0e54519f577285001215d33557431afe4"
 dependencies = [
+ "hermit-abi",
  "libc",
  "wasi",
- "windows-sys 0.48.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1077,7 +1086,7 @@ dependencies = [
 [[package]]
 name = "nccl"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=fb088b6#fb088b6fed435818590525caf45dd751999a174e"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=d089ada#d089ada328a9c3d43039e35444e04aafafbfdfee"
 dependencies = [
  "bindgen",
  "build-script-cfg",
@@ -1142,16 +1151,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num_cpus"
-version = "1.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
-dependencies = [
- "hermit-abi",
- "libc",
-]
-
-[[package]]
 name = "num_threads"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1162,9 +1161,9 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.36.1"
+version = "0.36.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "081b846d1d56ddfc18fdf1a922e4f6e07a11768ea1b92dec44e42b72712ccfce"
+checksum = "3f203fa8daa7bb185f760ae12bd8e097f63d17041dcdcaf675ac54cdf863170e"
 dependencies = [
  "memchr",
 ]
@@ -1178,7 +1177,7 @@ checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 [[package]]
 name = "operators"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=5a88159#5a88159923a38b45db099bc973a868a0e9afd944"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=1d55b48#1d55b484b663d3063b631680e3342c87cf3c5e61"
 dependencies = [
  "build-script-cfg",
  "cndrv",
@@ -1194,6 +1193,7 @@ dependencies = [
  "nccl",
  "rand",
  "rayon",
+ "search-ascend-tools",
  "search-cuda-tools",
  "search-neuware-tools 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1443,9 +1443,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "search-ascend-tools"
+version = "0.0.0"
+source = "git+https://github.com/InfiniTensor/ascendcl?rev=1e7a696#1e7a696b41d939655d6041d0adc93dc8b93c4def"
+
+[[package]]
 name = "search-cuda-tools"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=fb088b6#fb088b6fed435818590525caf45dd751999a174e"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=d089ada#d089ada328a9c3d43039e35444e04aafafbfdfee"
 dependencies = [
  "find_cuda_helper",
 ]
@@ -1459,7 +1464,7 @@ checksum = "c83ae237201de85c7ece8ad034bc749a6f229f42f07f62a30008b30a3f1e2231"
 [[package]]
 name = "search-neuware-tools"
 version = "0.0.0"
-source = "git+https://github.com/InfiniTensor/cndrv?rev=ab2b1c9#ab2b1c9c379bb88bd8f695f5acda2780990ecfb3"
+source = "git+https://github.com/InfiniTensor/cndrv?rev=36acd5f#36acd5f2e549c78fcd23c7654b6794f250b63f09"
 
 [[package]]
 name = "seq-macro"
@@ -1668,17 +1673,16 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.38.1"
+version = "1.39.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb2caba9f80616f438e09748d5acda951967e1ea58508ef53d9c6402485a46df"
+checksum = "d040ac2b29ab03b09d4129c2f5bbd012a3ac2f79d38ff506a4bf8dd34b0eac8a"
 dependencies = [
  "backtrace",
  "libc",
  "mio",
- "num_cpus",
  "pin-project-lite",
  "socket2",
- "windows-sys 0.48.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1712,9 +1716,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "version_check"
-version = "0.9.4"
+version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
+checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "walkdir"
@@ -1937,6 +1941,7 @@ dependencies = [
  "log",
  "mixtral",
  "mixtral-cpu",
+ "search-ascend-tools",
  "search-cuda-tools",
  "search-neuware-tools 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "service",

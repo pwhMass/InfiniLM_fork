@@ -3,6 +3,8 @@
     list_nv();
     #[cfg(detected_neuware)]
     list_cn();
+    #[cfg(detected_ascend)]
+    list_acl();
 }
 
 #[cfg(detected_cuda)]
@@ -42,3 +44,6 @@ fn list_cn() {
     }
     println!();
 }
+
+#[cfg(detected_ascend)]
+fn list_acl() {}
