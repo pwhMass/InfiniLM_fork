@@ -13,11 +13,11 @@ use digit_layout::types::F16;
 use operators::{
     fuesd_softmax::common_cpu as softmax,
     mat_mul::common_cpu as mat_mul,
+    mlp::common_cpu as mlp,
     random_sample::{common_cpu as random_sample, Args, KVPair, SampleArgs},
     reform::common_cpu as reform,
     rms_norm::common_cpu as rms_norm,
     rope::common_cpu as rope,
-    swiglu::common_cpu as swiglu,
     Operator, QueueOf,
 };
 use std::ops::{Deref, DerefMut};
@@ -34,7 +34,7 @@ pub struct CpuKernels {
     rms_norm: rms_norm::Operator,
     rope: rope::Operator,
     softmax: softmax::Operator,
-    swiglu: swiglu::Operator,
+    mlp: mlp::Operator,
     sample: random_sample::Operator,
 }
 
@@ -62,7 +62,7 @@ impl Default for CpuKernels {
             rms_norm: rms_norm::Operator::new(&Cpu),
             rope: rope::Operator::new(&Cpu),
             softmax: softmax::Operator::new(&Cpu),
-            swiglu: swiglu::Operator::new(&Cpu),
+            mlp: mlp::Operator::new(&Cpu),
             sample: random_sample::Operator::new(&Cpu),
         }
     }
@@ -100,11 +100,8 @@ impl Operators for CpuKernels {
     ) -> &impl operators::fuesd_softmax::FusedSoftmax<Self::Handle> {
         &self.softmax
     }
-    fn swiglu_op(
-        &self,
-        _: &QueueOf<Self::Handle>,
-    ) -> &impl operators::swiglu::Swiglu<Self::Handle> {
-        &self.swiglu
+    fn mlp_op(&self, _: &QueueOf<Self::Handle>) -> &impl operators::mlp::Mlp<Self::Handle> {
+        &self.mlp
     }
 }
 

@@ -564,17 +564,14 @@ impl Transformer {
         let mut gate_up = gate_up.slice(&[slice![=>], slice![=> (di + di) / n]]);
 
         kernels.rms_norm(&mut x1, x, &params.post_att_layernorm(), epsilon, stream);
-        kernels.mat_mul(&mut gate_up, 0., &x1, &params.mlp_gate_up(), 1., stream);
-
-        let (mut gate, up) = split!(gate_up; [1]: di / n, di / n);
-
-        kernels.swiglu(&mut gate, &up, stream);
-        kernels.mat_mul(
+        kernels.mlp(
             x,
-            if i == 0 { 1. } else { 0. },
-            &gate,
+            &x1,
+            &mut gate_up,
+            &params.mlp_gate_up(),
             &params.mlp_down(),
             1.,
+            i == 0,
             stream,
         );
     }
