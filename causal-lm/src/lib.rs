@@ -43,6 +43,8 @@ pub trait CausalLM: Model {
     type Storage;
     /// 最大序列长度。
     fn max_seq_len(&self) -> upos;
+    /// 模型定义的句子起始符。
+    fn bos_token(&self) -> utok;
     /// 模型定义的句子结束符。
     fn eos_token(&self) -> utok;
     /// 创建一个未填充的缓存张量（`num_layers x 2 x num_kv_head x max_seq_len x head_dim`）。

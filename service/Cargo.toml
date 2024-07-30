@@ -11,6 +11,7 @@ common = { path = "../common" }
 tensor = { path = "../tensor" }
 tokenizer = { path = "../tokenizer" }
 causal-lm = { path = "../causal-lm" }
+chat-template = { path = "../chat-template" }
 log.workspace = true
 tokio.workspace = true
 lru = "0.12"

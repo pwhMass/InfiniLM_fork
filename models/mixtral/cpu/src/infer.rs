@@ -11,6 +11,10 @@ impl CausalLM for MixtralCPU {
     type Storage = Blob;
 
     #[inline]
+    fn bos_token(&self) -> utok {
+        self.bos_token
+    }
+    #[inline]
     fn eos_token(&self) -> utok {
         self.eos_token
     }

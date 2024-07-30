@@ -4,6 +4,7 @@ members = [
     "tensor",
     "tokenizer",
     "causal-lm",
+    "chat-template",
     "service",
     "web-api",
     "xtask",

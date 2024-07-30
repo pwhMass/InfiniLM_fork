@@ -152,6 +152,10 @@ impl CausalLM for Transformer {
         self.0.config.max_seq_len
     }
     #[inline]
+    fn bos_token(&self) -> utok {
+        self.0.config.bos_token
+    }
+    #[inline]
     fn eos_token(&self) -> utok {
         self.0.config.eos_token
     }
