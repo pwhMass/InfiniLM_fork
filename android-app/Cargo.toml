@@ -1,0 +1,61 @@
+[package]
+name = "infiniLM"
+version = "0.1.0"
+edition = "2021"
+
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+slint = { version = "1.6", features = ["backend-android-activity-06"] }
+
+
+common = { path = "../common" }
+tensor = { path = "../tensor" }
+causal-lm = { path = "../causal-lm" }
+service = { path = "../service" }
+web-api = { path = "../web-api" }
+
+# models
+llama-cpu = { path = "../models/llama/common-cpu" }
+llama = { path = "../models/llama/common" }
+
+
+tokio.workspace = true
+colored = "2.1"
+ndk = "0.9.0"
+log = "0.4"
+android_logger = "0.13"
+
+
+[package.metadata.android]
+package = "pwh.asdf.new"
+build_targets = ["aarch64-linux-android"]
+assets = "./assets"
+strip = "strip"
+
+
+[package.metadata.android.sdk]
+min_sdk_version = 23
+target_sdk_version = 34
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.INTERNET"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.WRITE_EXTERNAL_STORAGE"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.READ_EXTERNAL_STORAGE"
+
+
+[package.metadata.android.application.activity]
+launch_mode = "singleTop"
+orientation = "portrait"
+always_retain_task_state = true
+
+
+[package.metadata.android.signing.release]
+path = "./keystore/release.keystore"
+keystore_password = "123456"

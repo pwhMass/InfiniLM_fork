@@ -1,0 +1,927 @@
+infiniLM v0.1.0 (/mnt/c/Users/peng/Documents/transformer-rs/android-app)
+├── causal-lm v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/causal-lm)
+│   ├── common v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/common)
+│   │   ├── half v2.4.1
+│   │   │   └── cfg-if v1.0.0
+│   │   ├── memmap2 v0.9.4
+│   │   │   └── libc v0.2.155
+│   │   ├── safetensors v0.4.3
+│   │   │   ├── serde v1.0.203
+│   │   │   │   └── serde_derive v1.0.203 (proc-macro)
+│   │   │   │       ├── proc-macro2 v1.0.86
+│   │   │   │       │   └── unicode-ident v1.0.12
+│   │   │   │       ├── quote v1.0.36
+│   │   │   │       │   └── proc-macro2 v1.0.86 (*)
+│   │   │   │       └── syn v2.0.68
+│   │   │   │           ├── proc-macro2 v1.0.86 (*)
+│   │   │   │           ├── quote v1.0.36 (*)
+│   │   │   │           └── unicode-ident v1.0.12
+│   │   │   └── serde_json v1.0.120
+│   │   │       ├── itoa v1.0.11
+│   │   │       ├── ryu v1.0.18
+│   │   │       └── serde v1.0.203 (*)
+│   │   ├── serde v1.0.203 (*)
+│   │   └── serde_json v1.0.120 (*)
+│   ├── digit-layout v0.0.0
+│   │   └── half v2.4.1 (*)
+│   ├── sample v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/sample)
+│   │   ├── common v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/common) (*)
+│   │   └── rand v0.8.5
+│   │       ├── libc v0.2.155
+│   │       ├── rand_chacha v0.3.1
+│   │       │   ├── ppv-lite86 v0.2.17
+│   │       │   └── rand_core v0.6.4
+│   │       │       └── getrandom v0.2.15
+│   │       │           ├── cfg-if v1.0.0
+│   │       │           └── libc v0.2.155
+│   │       └── rand_core v0.6.4 (*)
+│   └── tensor v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/tensor)
+│       ├── digit-layout v0.0.0 (*)
+│       ├── half v2.4.1 (*)
+│       ├── nalgebra v0.32.6
+│       │   ├── approx v0.5.1
+│       │   │   └── num-traits v0.2.19
+│       │   │       └── libm v0.2.8
+│       │   │       [build-dependencies]
+│       │   │       └── autocfg v1.3.0
+│       │   ├── matrixmultiply v0.3.8
+│       │   │   └── rawpointer v0.2.1
+│       │   │   [build-dependencies]
+│       │   │   └── autocfg v1.3.0
+│       │   ├── nalgebra-macros v0.2.2 (proc-macro)
+│       │   │   ├── proc-macro2 v1.0.86 (*)
+│       │   │   ├── quote v1.0.36 (*)
+│       │   │   └── syn v2.0.68 (*)
+│       │   ├── num-complex v0.4.6
+│       │   │   └── num-traits v0.2.19 (*)
+│       │   ├── num-rational v0.4.2
+│       │   │   ├── num-integer v0.1.46
+│       │   │   │   └── num-traits v0.2.19 (*)
+│       │   │   └── num-traits v0.2.19 (*)
+│       │   ├── num-traits v0.2.19 (*)
+│       │   ├── simba v0.8.1
+│       │   │   ├── approx v0.5.1 (*)
+│       │   │   ├── num-complex v0.4.6 (*)
+│       │   │   ├── num-traits v0.2.19 (*)
+│       │   │   ├── paste v1.0.15 (proc-macro)
+│       │   │   └── wide v0.7.25
+│       │   │       ├── bytemuck v1.16.1
+│       │   │       │   └── bytemuck_derive v1.7.0 (proc-macro)
+│       │   │       │       ├── proc-macro2 v1.0.86 (*)
+│       │   │       │       ├── quote v1.0.36 (*)
+│       │   │       │       └── syn v2.0.68 (*)
+│       │   │       └── safe_arch v0.7.2
+│       │   │           └── bytemuck v1.16.1 (*)
+│       │   └── typenum v1.17.0
+│       ├── rayon v1.10.0
+│       │   ├── either v1.13.0
+│       │   └── rayon-core v1.12.1
+│       │       ├── crossbeam-deque v0.8.5
+│       │       │   ├── crossbeam-epoch v0.9.18
+│       │       │   │   └── crossbeam-utils v0.8.20
+│       │       │   └── crossbeam-utils v0.8.20
+│       │       └── crossbeam-utils v0.8.20
+│       ├── serde v1.0.203 (*)
+│       └── smallvec v1.13.2
+├── common v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/common) (*)
+├── llama v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/models/llama/common)
+│   ├── causal-lm v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/causal-lm) (*)
+│   ├── common v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/common) (*)
+│   ├── common-devices v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/devices/common)
+│   │   ├── common v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/common) (*)
+│   │   ├── digit-layout v0.0.0 (*)
+│   │   ├── operators v0.0.0 (https://github.com/YdrMaster/operators-rs?rev=3807deb#3807deb3)
+│   │   │   ├── common v0.1.0 (https://github.com/YdrMaster/operators-rs?rev=3807deb#3807deb3)
+│   │   │   │   └── digit-layout v0.0.0 (*)
+│   │   │   ├── digit-layout v0.0.0 (*)
+│   │   │   ├── half v2.4.1 (*)
+│   │   │   └── log v0.4.22
+│   │   │   [build-dependencies]
+│   │   │   ├── build-script-cfg v0.0.0
+│   │   │   ├── search-cuda-tools v0.1.0 (https://github.com/YdrMaster/cuda-driver?rev=877df52#877df529)
+│   │   │   │   └── find_cuda_helper v0.2.0
+│   │   │   │       └── glob v0.3.1
+│   │   │   └── search-neuware-tools v0.0.0
+│   │   └── tensor v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/tensor) (*)
+│   ├── digit-layout v0.0.0 (*)
+│   ├── itertools v0.13.0
+│   │   └── either v1.13.0
+│   ├── operators v0.0.0 (https://github.com/YdrMaster/operators-rs?rev=3807deb#3807deb3) (*)
+│   ├── rayon v1.10.0 (*)
+│   ├── serde v1.0.203 (*)
+│   ├── serde_json v1.0.120 (*)
+│   └── tensor v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/tensor) (*)
+├── service v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/service)
+│   ├── causal-lm v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/causal-lm) (*)
+│   ├── common v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/common) (*)
+│   ├── log v0.4.22
+│   ├── lru v0.12.3
+│   │   └── hashbrown v0.14.5
+│   │       ├── ahash v0.8.11
+│   │       │   ├── cfg-if v1.0.0
+│   │       │   ├── getrandom v0.2.15 (*)
+│   │       │   ├── once_cell v1.19.0
+│   │       │   │   ├── critical-section v1.1.2
+│   │       │   │   └── portable-atomic v1.7.0
+│   │       │   │       └── critical-section v1.1.2
+│   │       │   └── zerocopy v0.7.35
+│   │       │   [build-dependencies]
+│   │       │   └── version_check v0.9.4
+│   │       └── allocator-api2 v0.2.18
+│   ├── tensor v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/tensor) (*)
+│   ├── tokenizer v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/tokenizer)
+│   │   ├── common v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/common) (*)
+│   │   ├── memmap2 v0.9.4 (*)
+│   │   └── patricia_tree v0.8.0
+│   │       └── bitflags v2.6.0
+│   └── tokio v1.38.0
+│       ├── libc v0.2.155
+│       ├── mio v0.8.11
+│       │   └── libc v0.2.155
+│       ├── num_cpus v1.16.0
+│       │   └── libc v0.2.155
+│       ├── pin-project-lite v0.2.14
+│       └── socket2 v0.5.7
+│           └── libc v0.2.155
+├── slint v1.7.0
+│   ├── const-field-offset v0.1.5
+│   │   ├── const-field-offset-macro v0.1.5 (proc-macro)
+│   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   ├── quote v1.0.36 (*)
+│   │   │   └── syn v2.0.68 (*)
+│   │   └── field-offset v0.3.6
+│   │       └── memoffset v0.9.1
+│   │           [build-dependencies]
+│   │           └── autocfg v1.3.0
+│   │       [build-dependencies]
+│   │       └── rustc_version v0.4.0
+│   │           └── semver v1.0.23
+│   ├── i-slint-backend-qt v1.7.0
+│   │   ├── const-field-offset v0.1.5 (*)
+│   │   ├── cpp v0.5.9
+│   │   │   └── cpp_macros v0.5.9 (proc-macro)
+│   │   │       ├── aho-corasick v1.1.3
+│   │   │       │   └── memchr v2.7.4
+│   │   │       ├── byteorder v1.5.0
+│   │   │       ├── cpp_common v0.5.9
+│   │   │       │   ├── lazy_static v1.5.0
+│   │   │       │   ├── proc-macro2 v1.0.86 (*)
+│   │   │       │   └── syn v2.0.68 (*)
+│   │   │       ├── lazy_static v1.5.0
+│   │   │       ├── proc-macro2 v1.0.86 (*)
+│   │   │       ├── quote v1.0.36 (*)
+│   │   │       └── syn v2.0.68 (*)
+│   │   ├── i-slint-common v1.7.0
+│   │   │   ├── cfg-if v1.0.0
+│   │   │   ├── derive_more v0.99.18 (proc-macro)
+│   │   │   │   ├── convert_case v0.4.0
+│   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   └── syn v2.0.68 (*)
+│   │   │   │   [build-dependencies]
+│   │   │   │   └── rustc_version v0.4.0 (*)
+│   │   │   ├── fontdb v0.18.0
+│   │   │   │   ├── fontconfig-parser v0.5.6
+│   │   │   │   │   └── roxmltree v0.19.0
+│   │   │   │   ├── log v0.4.22
+│   │   │   │   ├── memmap2 v0.9.4 (*)
+│   │   │   │   ├── slotmap v1.0.7
+│   │   │   │   │   [build-dependencies]
+│   │   │   │   │   └── version_check v0.9.4
+│   │   │   │   ├── tinyvec v1.8.0
+│   │   │   │   │   └── tinyvec_macros v0.1.1
+│   │   │   │   └── ttf-parser v0.21.1
+│   │   │   └── libloading v0.8.4
+│   │   │       └── cfg-if v1.0.0
+│   │   ├── i-slint-core v1.7.0
+│   │   │   ├── auto_enums v0.8.5 (proc-macro)
+│   │   │   │   ├── derive_utils v0.14.1
+│   │   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   │   └── syn v2.0.68 (*)
+│   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   └── syn v2.0.68 (*)
+│   │   │   ├── bitflags v2.6.0
+│   │   │   ├── bytemuck v1.16.1 (*)
+│   │   │   ├── cfg-if v1.0.0
+│   │   │   ├── chrono v0.4.38
+│   │   │   │   ├── iana-time-zone v0.1.60
+│   │   │   │   └── num-traits v0.2.19 (*)
+│   │   │   ├── clru v0.6.2
+│   │   │   ├── const-field-offset v0.1.5 (*)
+│   │   │   ├── derive_more v0.99.18 (proc-macro) (*)
+│   │   │   ├── euclid v0.22.10
+│   │   │   │   └── num-traits v0.2.19 (*)
+│   │   │   ├── fontdue v0.9.2
+│   │   │   │   ├── hashbrown v0.14.5 (*)
+│   │   │   │   └── ttf-parser v0.21.1
+│   │   │   ├── i-slint-common v1.7.0 (*)
+│   │   │   ├── i-slint-core-macros v1.7.0 (proc-macro)
+│   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   └── syn v2.0.68 (*)
+│   │   │   ├── image v0.24.9
+│   │   │   │   ├── bytemuck v1.16.1 (*)
+│   │   │   │   ├── byteorder v1.5.0
+│   │   │   │   ├── color_quant v1.1.0
+│   │   │   │   ├── jpeg-decoder v0.3.1
+│   │   │   │   ├── num-traits v0.2.19 (*)
+│   │   │   │   └── png v0.17.13
+│   │   │   │       ├── bitflags v1.3.2
+│   │   │   │       ├── crc32fast v1.4.2
+│   │   │   │       │   └── cfg-if v1.0.0
+│   │   │   │       ├── fdeflate v0.3.4
+│   │   │   │       │   └── simd-adler32 v0.3.7
+│   │   │   │       ├── flate2 v1.0.30
+│   │   │   │       │   ├── crc32fast v1.4.2 (*)
+│   │   │   │       │   └── miniz_oxide v0.7.4
+│   │   │   │       │       ├── adler v1.0.2
+│   │   │   │       │       └── simd-adler32 v0.3.7
+│   │   │   │       └── miniz_oxide v0.7.4 (*)
+│   │   │   ├── integer-sqrt v0.1.5
+│   │   │   │   └── num-traits v0.2.19 (*)
+│   │   │   ├── lyon_algorithms v1.0.4
+│   │   │   │   ├── lyon_path v1.0.5
+│   │   │   │   │   ├── lyon_geom v1.0.5
+│   │   │   │   │   │   ├── arrayvec v0.7.4
+│   │   │   │   │   │   ├── euclid v0.22.10 (*)
+│   │   │   │   │   │   └── num-traits v0.2.19 (*)
+│   │   │   │   │   └── num-traits v0.2.19 (*)
+│   │   │   │   └── num-traits v0.2.19 (*)
+│   │   │   ├── lyon_extra v1.0.2
+│   │   │   │   ├── lyon_path v1.0.5 (*)
+│   │   │   │   └── thiserror v1.0.61
+│   │   │   │       └── thiserror-impl v1.0.61 (proc-macro)
+│   │   │   │           ├── proc-macro2 v1.0.86 (*)
+│   │   │   │           ├── quote v1.0.36 (*)
+│   │   │   │           └── syn v2.0.68 (*)
+│   │   │   ├── lyon_geom v1.0.5 (*)
+│   │   │   ├── lyon_path v1.0.5 (*)
+│   │   │   ├── num-traits v0.2.19 (*)
+│   │   │   ├── once_cell v1.19.0 (*)
+│   │   │   ├── pin-project v1.1.5
+│   │   │   │   └── pin-project-internal v1.1.5 (proc-macro)
+│   │   │   │       ├── proc-macro2 v1.0.86 (*)
+│   │   │   │       ├── quote v1.0.36 (*)
+│   │   │   │       └── syn v2.0.68 (*)
+│   │   │   ├── pin-weak v1.1.0
+│   │   │   ├── portable-atomic v1.7.0 (*)
+│   │   │   ├── resvg v0.42.0
+│   │   │   │   ├── log v0.4.22
+│   │   │   │   ├── pico-args v0.5.0
+│   │   │   │   ├── rgb v0.8.45
+│   │   │   │   │   └── bytemuck v1.16.1 (*)
+│   │   │   │   ├── svgtypes v0.15.1
+│   │   │   │   │   ├── kurbo v0.11.0
+│   │   │   │   │   │   ├── arrayvec v0.7.4
+│   │   │   │   │   │   └── smallvec v1.13.2
+│   │   │   │   │   └── siphasher v1.0.1
+│   │   │   │   ├── tiny-skia v0.11.4
+│   │   │   │   │   ├── arrayref v0.3.8
+│   │   │   │   │   ├── arrayvec v0.7.4
+│   │   │   │   │   ├── bytemuck v1.16.1 (*)
+│   │   │   │   │   ├── cfg-if v1.0.0
+│   │   │   │   │   ├── log v0.4.22
+│   │   │   │   │   ├── png v0.17.13 (*)
+│   │   │   │   │   └── tiny-skia-path v0.11.4
+│   │   │   │   │       ├── arrayref v0.3.8
+│   │   │   │   │       ├── bytemuck v1.16.1 (*)
+│   │   │   │   │       └── strict-num v0.1.1
+│   │   │   │   │           └── float-cmp v0.9.0
+│   │   │   │   └── usvg v0.42.0
+│   │   │   │       ├── base64 v0.22.1
+│   │   │   │       ├── data-url v0.3.1
+│   │   │   │       ├── flate2 v1.0.30 (*)
+│   │   │   │       ├── fontdb v0.18.0 (*)
+│   │   │   │       ├── imagesize v0.12.0
+│   │   │   │       ├── kurbo v0.11.0 (*)
+│   │   │   │       ├── log v0.4.22
+│   │   │   │       ├── pico-args v0.5.0
+│   │   │   │       ├── roxmltree v0.20.0
+│   │   │   │       ├── rustybuzz v0.14.1
+│   │   │   │       │   ├── bitflags v2.6.0
+│   │   │   │       │   ├── bytemuck v1.16.1 (*)
+│   │   │   │       │   ├── smallvec v1.13.2
+│   │   │   │       │   ├── ttf-parser v0.21.1
+│   │   │   │       │   ├── unicode-bidi-mirroring v0.2.0
+│   │   │   │       │   ├── unicode-ccc v0.2.0
+│   │   │   │       │   ├── unicode-properties v0.1.1
+│   │   │   │       │   └── unicode-script v0.5.6
+│   │   │   │       ├── simplecss v0.2.1
+│   │   │   │       │   └── log v0.4.22
+│   │   │   │       ├── siphasher v1.0.1
+│   │   │   │       ├── strict-num v0.1.1 (*)
+│   │   │   │       ├── svgtypes v0.15.1 (*)
+│   │   │   │       ├── tiny-skia-path v0.11.4 (*)
+│   │   │   │       ├── unicode-bidi v0.3.15
+│   │   │   │       ├── unicode-script v0.5.6
+│   │   │   │       ├── unicode-vo v0.1.0
+│   │   │   │       └── xmlwriter v0.1.0
+│   │   │   ├── rgb v0.8.45 (*)
+│   │   │   ├── rustybuzz v0.14.1 (*)
+│   │   │   ├── scoped-tls-hkt v0.1.4
+│   │   │   ├── scopeguard v1.2.0
+│   │   │   ├── slab v0.4.9
+│   │   │   │   [build-dependencies]
+│   │   │   │   └── autocfg v1.3.0
+│   │   │   ├── static_assertions v1.1.0
+│   │   │   ├── strum v0.26.3
+│   │   │   │   └── strum_macros v0.26.4 (proc-macro)
+│   │   │   │       ├── heck v0.5.0
+│   │   │   │       ├── proc-macro2 v1.0.86 (*)
+│   │   │   │       ├── quote v1.0.36 (*)
+│   │   │   │       ├── rustversion v1.0.17 (proc-macro)
+│   │   │   │       └── syn v2.0.68 (*)
+│   │   │   ├── unicode-linebreak v0.1.5
+│   │   │   ├── unicode-script v0.5.6
+│   │   │   ├── unicode-segmentation v1.11.0
+│   │   │   └── vtable v0.2.0
+│   │   │       ├── const-field-offset v0.1.5 (*)
+│   │   │       ├── portable-atomic v1.7.0 (*)
+│   │   │       ├── stable_deref_trait v1.2.0
+│   │   │       └── vtable-macro v0.2.0 (proc-macro)
+│   │   │           ├── proc-macro2 v1.0.86 (*)
+│   │   │           ├── quote v1.0.36 (*)
+│   │   │           └── syn v2.0.68 (*)
+│   │   ├── i-slint-core-macros v1.7.0 (proc-macro) (*)
+│   │   ├── lyon_path v1.0.5 (*)
+│   │   ├── once_cell v1.19.0 (*)
+│   │   ├── pin-project v1.1.5 (*)
+│   │   ├── pin-weak v1.1.0
+│   │   ├── qttypes v0.2.11
+│   │   │   └── cpp v0.5.9 (*)
+│   │   │   [build-dependencies]
+│   │   │   ├── cpp_build v0.5.9
+│   │   │   │   ├── cc v1.0.104
+│   │   │   │   ├── cpp_common v0.5.9 (*)
+│   │   │   │   ├── lazy_static v1.5.0
+│   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   ├── regex v1.10.5
+│   │   │   │   │   ├── aho-corasick v1.1.3 (*)
+│   │   │   │   │   ├── memchr v2.7.4
+│   │   │   │   │   ├── regex-automata v0.4.7
+│   │   │   │   │   │   ├── aho-corasick v1.1.3 (*)
+│   │   │   │   │   │   ├── memchr v2.7.4
+│   │   │   │   │   │   └── regex-syntax v0.8.4
+│   │   │   │   │   └── regex-syntax v0.8.4
+│   │   │   │   ├── syn v2.0.68 (*)
+│   │   │   │   └── unicode-xid v0.2.4
+│   │   │   └── semver v1.0.23
+│   │   └── vtable v0.2.0 (*)
+│   │   [build-dependencies]
+│   │   └── cpp_build v0.5.9 (*)
+│   ├── i-slint-backend-selector v1.7.0
+│   │   ├── cfg-if v1.0.0
+│   │   ├── i-slint-backend-qt v1.7.0 (*)
+│   │   ├── i-slint-backend-winit v1.7.0
+│   │   │   ├── accesskit v0.16.0
+│   │   │   ├── accesskit_winit v0.22.0
+│   │   │   │   ├── accesskit v0.16.0
+│   │   │   │   ├── accesskit_unix v0.12.0
+│   │   │   │   │   ├── accesskit v0.16.0
+│   │   │   │   │   ├── accesskit_atspi_common v0.9.0
+│   │   │   │   │   │   ├── accesskit v0.16.0
+│   │   │   │   │   │   ├── accesskit_consumer v0.24.0
+│   │   │   │   │   │   │   ├── accesskit v0.16.0
+│   │   │   │   │   │   │   └── immutable-chunkmap v2.0.5
+│   │   │   │   │   │   │       └── arrayvec v0.7.4
+│   │   │   │   │   │   ├── atspi-common v0.3.0
+│   │   │   │   │   │   │   ├── enumflags2 v0.7.10
+│   │   │   │   │   │   │   │   ├── enumflags2_derive v0.7.10 (proc-macro)
+│   │   │   │   │   │   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   │   │   │   │   │   └── syn v2.0.68 (*)
+│   │   │   │   │   │   │   │   └── serde v1.0.203 (*)
+│   │   │   │   │   │   │   ├── serde v1.0.203 (*)
+│   │   │   │   │   │   │   ├── static_assertions v1.1.0
+│   │   │   │   │   │   │   ├── zbus v3.15.2
+│   │   │   │   │   │   │   │   ├── async-broadcast v0.5.1
+│   │   │   │   │   │   │   │   │   ├── event-listener v2.5.3
+│   │   │   │   │   │   │   │   │   └── futures-core v0.3.30
+│   │   │   │   │   │   │   │   ├── async-executor v1.13.0
+│   │   │   │   │   │   │   │   │   ├── async-task v4.7.1
+│   │   │   │   │   │   │   │   │   ├── concurrent-queue v2.5.0
+│   │   │   │   │   │   │   │   │   │   └── crossbeam-utils v0.8.20
+│   │   │   │   │   │   │   │   │   ├── fastrand v2.1.0
+│   │   │   │   │   │   │   │   │   ├── futures-lite v2.3.0
+│   │   │   │   │   │   │   │   │   │   ├── futures-core v0.3.30
+│   │   │   │   │   │   │   │   │   │   └── pin-project-lite v0.2.14
+│   │   │   │   │   │   │   │   │   └── slab v0.4.9 (*)
+│   │   │   │   │   │   │   │   ├── async-fs v1.6.0
+│   │   │   │   │   │   │   │   │   ├── async-lock v2.8.0
+│   │   │   │   │   │   │   │   │   │   └── event-listener v2.5.3
+│   │   │   │   │   │   │   │   │   ├── blocking v1.6.1
+│   │   │   │   │   │   │   │   │   │   ├── async-channel v2.3.1
+│   │   │   │   │   │   │   │   │   │   │   ├── concurrent-queue v2.5.0 (*)
+│   │   │   │   │   │   │   │   │   │   │   ├── event-listener-strategy v0.5.2
+│   │   │   │   │   │   │   │   │   │   │   │   ├── event-listener v5.3.1
+│   │   │   │   │   │   │   │   │   │   │   │   │   ├── concurrent-queue v2.5.0 (*)
+│   │   │   │   │   │   │   │   │   │   │   │   │   ├── parking v2.2.0
+│   │   │   │   │   │   │   │   │   │   │   │   │   └── pin-project-lite v0.2.14
+│   │   │   │   │   │   │   │   │   │   │   │   └── pin-project-lite v0.2.14
+│   │   │   │   │   │   │   │   │   │   │   ├── futures-core v0.3.30
+│   │   │   │   │   │   │   │   │   │   │   └── pin-project-lite v0.2.14
+│   │   │   │   │   │   │   │   │   │   ├── async-task v4.7.1
+│   │   │   │   │   │   │   │   │   │   ├── futures-io v0.3.30
+│   │   │   │   │   │   │   │   │   │   ├── futures-lite v2.3.0 (*)
+│   │   │   │   │   │   │   │   │   │   └── piper v0.2.3
+│   │   │   │   │   │   │   │   │   │       ├── atomic-waker v1.1.2
+│   │   │   │   │   │   │   │   │   │       ├── fastrand v2.1.0
+│   │   │   │   │   │   │   │   │   │       └── futures-io v0.3.30
+│   │   │   │   │   │   │   │   │   └── futures-lite v1.13.0
+│   │   │   │   │   │   │   │   │       ├── fastrand v1.9.0
+│   │   │   │   │   │   │   │   │       ├── futures-core v0.3.30
+│   │   │   │   │   │   │   │   │       ├── futures-io v0.3.30
+│   │   │   │   │   │   │   │   │       ├── memchr v2.7.4
+│   │   │   │   │   │   │   │   │       ├── parking v2.2.0
+│   │   │   │   │   │   │   │   │       ├── pin-project-lite v0.2.14
+│   │   │   │   │   │   │   │   │       └── waker-fn v1.2.0
+│   │   │   │   │   │   │   │   │   [build-dependencies]
+│   │   │   │   │   │   │   │   │   └── autocfg v1.3.0
+│   │   │   │   │   │   │   │   ├── async-io v1.13.0
+│   │   │   │   │   │   │   │   │   ├── async-lock v2.8.0 (*)
+│   │   │   │   │   │   │   │   │   ├── cfg-if v1.0.0
+│   │   │   │   │   │   │   │   │   ├── concurrent-queue v2.5.0 (*)
+│   │   │   │   │   │   │   │   │   ├── futures-lite v1.13.0 (*)
+│   │   │   │   │   │   │   │   │   ├── log v0.4.22
+│   │   │   │   │   │   │   │   │   ├── parking v2.2.0
+│   │   │   │   │   │   │   │   │   ├── polling v2.8.0
+│   │   │   │   │   │   │   │   │   │   ├── cfg-if v1.0.0
+│   │   │   │   │   │   │   │   │   │   ├── libc v0.2.155
+│   │   │   │   │   │   │   │   │   │   └── log v0.4.22
+│   │   │   │   │   │   │   │   │   │   [build-dependencies]
+│   │   │   │   │   │   │   │   │   │   └── autocfg v1.3.0
+│   │   │   │   │   │   │   │   │   ├── rustix v0.37.27
+│   │   │   │   │   │   │   │   │   │   ├── bitflags v1.3.2
+│   │   │   │   │   │   │   │   │   │   ├── io-lifetimes v1.0.11
+│   │   │   │   │   │   │   │   │   │   │   └── libc v0.2.155
+│   │   │   │   │   │   │   │   │   │   └── linux-raw-sys v0.3.8
+│   │   │   │   │   │   │   │   │   ├── slab v0.4.9 (*)
+│   │   │   │   │   │   │   │   │   ├── socket2 v0.4.10
+│   │   │   │   │   │   │   │   │   │   └── libc v0.2.155
+│   │   │   │   │   │   │   │   │   └── waker-fn v1.2.0
+│   │   │   │   │   │   │   │   │   [build-dependencies]
+│   │   │   │   │   │   │   │   │   └── autocfg v1.3.0
+│   │   │   │   │   │   │   │   ├── async-lock v2.8.0 (*)
+│   │   │   │   │   │   │   │   ├── async-recursion v1.1.1 (proc-macro)
+│   │   │   │   │   │   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   │   │   │   │   │   └── syn v2.0.68 (*)
+│   │   │   │   │   │   │   │   ├── async-task v4.7.1
+│   │   │   │   │   │   │   │   ├── async-trait v0.1.81 (proc-macro)
+│   │   │   │   │   │   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   │   │   │   │   │   └── syn v2.0.68 (*)
+│   │   │   │   │   │   │   │   ├── blocking v1.6.1 (*)
+│   │   │   │   │   │   │   │   ├── byteorder v1.5.0
+│   │   │   │   │   │   │   │   ├── derivative v2.2.0 (proc-macro)
+│   │   │   │   │   │   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   │   │   │   │   │   └── syn v1.0.109
+│   │   │   │   │   │   │   │   │       ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   │   │   │       ├── quote v1.0.36 (*)
+│   │   │   │   │   │   │   │   │       └── unicode-ident v1.0.12
+│   │   │   │   │   │   │   │   ├── enumflags2 v0.7.10 (*)
+│   │   │   │   │   │   │   │   ├── event-listener v2.5.3
+│   │   │   │   │   │   │   │   ├── futures-core v0.3.30
+│   │   │   │   │   │   │   │   ├── futures-sink v0.3.30
+│   │   │   │   │   │   │   │   ├── futures-util v0.3.30
+│   │   │   │   │   │   │   │   │   ├── futures-core v0.3.30
+│   │   │   │   │   │   │   │   │   ├── futures-io v0.3.30
+│   │   │   │   │   │   │   │   │   ├── futures-macro v0.3.30 (proc-macro)
+│   │   │   │   │   │   │   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   │   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   │   │   │   │   │   │   └── syn v2.0.68 (*)
+│   │   │   │   │   │   │   │   │   ├── futures-sink v0.3.30
+│   │   │   │   │   │   │   │   │   ├── futures-task v0.3.30
+│   │   │   │   │   │   │   │   │   ├── memchr v2.7.4
+│   │   │   │   │   │   │   │   │   ├── pin-project-lite v0.2.14
+│   │   │   │   │   │   │   │   │   ├── pin-utils v0.1.0
+│   │   │   │   │   │   │   │   │   └── slab v0.4.9 (*)
+│   │   │   │   │   │   │   │   ├── hex v0.4.3
+│   │   │   │   │   │   │   │   ├── nix v0.26.4
+│   │   │   │   │   │   │   │   │   ├── bitflags v1.3.2
+│   │   │   │   │   │   │   │   │   ├── cfg-if v1.0.0
+│   │   │   │   │   │   │   │   │   ├── libc v0.2.155
+│   │   │   │   │   │   │   │   │   └── memoffset v0.7.1
+│   │   │   │   │   │   │   │   │       [build-dependencies]
+│   │   │   │   │   │   │   │   │       └── autocfg v1.3.0
+│   │   │   │   │   │   │   │   ├── once_cell v1.19.0 (*)
+│   │   │   │   │   │   │   │   ├── ordered-stream v0.2.0
+│   │   │   │   │   │   │   │   │   ├── futures-core v0.3.30
+│   │   │   │   │   │   │   │   │   └── pin-project-lite v0.2.14
+│   │   │   │   │   │   │   │   ├── rand v0.8.5 (*)
+│   │   │   │   │   │   │   │   ├── serde v1.0.203 (*)
+│   │   │   │   │   │   │   │   ├── serde_repr v0.1.19 (proc-macro)
+│   │   │   │   │   │   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   │   │   │   │   │   └── syn v2.0.68 (*)
+│   │   │   │   │   │   │   │   ├── sha1 v0.10.6
+│   │   │   │   │   │   │   │   │   ├── cfg-if v1.0.0
+│   │   │   │   │   │   │   │   │   ├── cpufeatures v0.2.12
+│   │   │   │   │   │   │   │   │   └── digest v0.10.7
+│   │   │   │   │   │   │   │   │       ├── block-buffer v0.10.4
+│   │   │   │   │   │   │   │   │       │   └── generic-array v0.14.7
+│   │   │   │   │   │   │   │   │       │       └── typenum v1.17.0
+│   │   │   │   │   │   │   │   │       │       [build-dependencies]
+│   │   │   │   │   │   │   │   │       │       └── version_check v0.9.4
+│   │   │   │   │   │   │   │   │       └── crypto-common v0.1.6
+│   │   │   │   │   │   │   │   │           ├── generic-array v0.14.7 (*)
+│   │   │   │   │   │   │   │   │           └── typenum v1.17.0
+│   │   │   │   │   │   │   │   ├── static_assertions v1.1.0
+│   │   │   │   │   │   │   │   ├── tracing v0.1.40
+│   │   │   │   │   │   │   │   │   ├── pin-project-lite v0.2.14
+│   │   │   │   │   │   │   │   │   ├── tracing-attributes v0.1.27 (proc-macro)
+│   │   │   │   │   │   │   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   │   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   │   │   │   │   │   │   └── syn v2.0.68 (*)
+│   │   │   │   │   │   │   │   │   └── tracing-core v0.1.32
+│   │   │   │   │   │   │   │   │       └── once_cell v1.19.0 (*)
+│   │   │   │   │   │   │   │   ├── xdg-home v1.2.0
+│   │   │   │   │   │   │   │   │   └── libc v0.2.155
+│   │   │   │   │   │   │   │   ├── zbus_macros v3.15.2 (proc-macro)
+│   │   │   │   │   │   │   │   │   ├── proc-macro-crate v1.3.1
+│   │   │   │   │   │   │   │   │   │   ├── once_cell v1.19.0
+│   │   │   │   │   │   │   │   │   │   └── toml_edit v0.19.15
+│   │   │   │   │   │   │   │   │   │       ├── indexmap v2.2.6
+│   │   │   │   │   │   │   │   │   │       │   ├── equivalent v1.0.1
+│   │   │   │   │   │   │   │   │   │       │   └── hashbrown v0.14.5
+│   │   │   │   │   │   │   │   │   │       ├── toml_datetime v0.6.6
+│   │   │   │   │   │   │   │   │   │       └── winnow v0.5.40
+│   │   │   │   │   │   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   │   │   │   │   │   ├── regex v1.10.5 (*)
+│   │   │   │   │   │   │   │   │   ├── syn v1.0.109 (*)
+│   │   │   │   │   │   │   │   │   └── zvariant_utils v1.0.1
+│   │   │   │   │   │   │   │   │       ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   │   │   │       ├── quote v1.0.36 (*)
+│   │   │   │   │   │   │   │   │       └── syn v1.0.109 (*)
+│   │   │   │   │   │   │   │   ├── zbus_names v2.6.1
+│   │   │   │   │   │   │   │   │   ├── serde v1.0.203 (*)
+│   │   │   │   │   │   │   │   │   ├── static_assertions v1.1.0
+│   │   │   │   │   │   │   │   │   └── zvariant v3.15.2
+│   │   │   │   │   │   │   │   │       ├── byteorder v1.5.0
+│   │   │   │   │   │   │   │   │       ├── enumflags2 v0.7.10 (*)
+│   │   │   │   │   │   │   │   │       ├── libc v0.2.155
+│   │   │   │   │   │   │   │   │       ├── serde v1.0.203 (*)
+│   │   │   │   │   │   │   │   │       ├── static_assertions v1.1.0
+│   │   │   │   │   │   │   │   │       └── zvariant_derive v3.15.2 (proc-macro)
+│   │   │   │   │   │   │   │   │           ├── proc-macro-crate v1.3.1 (*)
+│   │   │   │   │   │   │   │   │           ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   │   │   │           ├── quote v1.0.36 (*)
+│   │   │   │   │   │   │   │   │           ├── syn v1.0.109 (*)
+│   │   │   │   │   │   │   │   │           └── zvariant_utils v1.0.1 (*)
+│   │   │   │   │   │   │   │   └── zvariant v3.15.2 (*)
+│   │   │   │   │   │   │   ├── zbus_names v2.6.1 (*)
+│   │   │   │   │   │   │   └── zvariant v3.15.2 (*)
+│   │   │   │   │   │   ├── serde v1.0.203 (*)
+│   │   │   │   │   │   ├── thiserror v1.0.61 (*)
+│   │   │   │   │   │   └── zvariant v3.15.2 (*)
+│   │   │   │   │   ├── async-channel v2.3.1 (*)
+│   │   │   │   │   ├── async-executor v1.13.0 (*)
+│   │   │   │   │   ├── async-task v4.7.1
+│   │   │   │   │   ├── atspi v0.19.0
+│   │   │   │   │   │   ├── atspi-common v0.3.0 (*)
+│   │   │   │   │   │   ├── atspi-connection v0.3.0
+│   │   │   │   │   │   │   ├── atspi-common v0.3.0 (*)
+│   │   │   │   │   │   │   ├── atspi-proxies v0.3.0
+│   │   │   │   │   │   │   │   ├── atspi-common v0.3.0 (*)
+│   │   │   │   │   │   │   │   ├── serde v1.0.203 (*)
+│   │   │   │   │   │   │   │   └── zbus v3.15.2 (*)
+│   │   │   │   │   │   │   ├── futures-lite v1.13.0 (*)
+│   │   │   │   │   │   │   └── zbus v3.15.2 (*)
+│   │   │   │   │   │   └── atspi-proxies v0.3.0 (*)
+│   │   │   │   │   ├── futures-lite v1.13.0 (*)
+│   │   │   │   │   ├── futures-util v0.3.30 (*)
+│   │   │   │   │   ├── serde v1.0.203 (*)
+│   │   │   │   │   └── zbus v3.15.2 (*)
+│   │   │   │   ├── raw-window-handle v0.6.2
+│   │   │   │   └── winit v0.30.4
+│   │   │   │       ├── ahash v0.8.11 (*)
+│   │   │   │       ├── bitflags v2.6.0
+│   │   │   │       ├── bytemuck v1.16.1 (*)
+│   │   │   │       ├── calloop v0.13.0
+│   │   │   │       │   ├── bitflags v2.6.0
+│   │   │   │       │   ├── log v0.4.22
+│   │   │   │       │   ├── polling v3.7.2
+│   │   │   │       │   │   ├── cfg-if v1.0.0
+│   │   │   │       │   │   ├── rustix v0.38.34
+│   │   │   │       │   │   │   ├── bitflags v2.6.0
+│   │   │   │       │   │   │   └── linux-raw-sys v0.4.14
+│   │   │   │       │   │   └── tracing v0.1.40 (*)
+│   │   │   │       │   ├── rustix v0.38.34 (*)
+│   │   │   │       │   ├── slab v0.4.9 (*)
+│   │   │   │       │   └── thiserror v1.0.61 (*)
+│   │   │   │       ├── cursor-icon v1.1.0
+│   │   │   │       ├── dpi v0.1.1
+│   │   │   │       ├── libc v0.2.155
+│   │   │   │       ├── memmap2 v0.9.4 (*)
+│   │   │   │       ├── percent-encoding v2.3.1
+│   │   │   │       ├── raw-window-handle v0.6.2
+│   │   │   │       ├── rustix v0.38.34 (*)
+│   │   │   │       ├── sctk-adwaita v0.10.1
+│   │   │   │       │   ├── ab_glyph v0.2.28
+│   │   │   │       │   │   ├── ab_glyph_rasterizer v0.1.8
+│   │   │   │       │   │   └── owned_ttf_parser v0.24.0
+│   │   │   │       │   │       └── ttf-parser v0.24.0
+│   │   │   │       │   ├── log v0.4.22
+│   │   │   │       │   ├── memmap2 v0.9.4 (*)
+│   │   │   │       │   ├── smithay-client-toolkit v0.19.2
+│   │   │   │       │   │   ├── bitflags v2.6.0
+│   │   │   │       │   │   ├── calloop v0.13.0 (*)
+│   │   │   │       │   │   ├── calloop-wayland-source v0.3.0
+│   │   │   │       │   │   │   ├── calloop v0.13.0 (*)
+│   │   │   │       │   │   │   ├── rustix v0.38.34 (*)
+│   │   │   │       │   │   │   ├── wayland-backend v0.3.6
+│   │   │   │       │   │   │   │   ├── downcast-rs v1.2.1
+│   │   │   │       │   │   │   │   ├── rustix v0.38.34 (*)
+│   │   │   │       │   │   │   │   ├── scoped-tls v1.0.1
+│   │   │   │       │   │   │   │   ├── smallvec v1.13.2
+│   │   │   │       │   │   │   │   └── wayland-sys v0.31.4
+│   │   │   │       │   │   │   │       ├── dlib v0.5.2
+│   │   │   │       │   │   │   │       │   └── libloading v0.8.4 (*)
+│   │   │   │       │   │   │   │       ├── log v0.4.22
+│   │   │   │       │   │   │   │       └── once_cell v1.19.0 (*)
+│   │   │   │       │   │   │   │       [build-dependencies]
+│   │   │   │       │   │   │   │       └── pkg-config v0.3.30
+│   │   │   │       │   │   │   │   [build-dependencies]
+│   │   │   │       │   │   │   │   └── cc v1.0.104
+│   │   │   │       │   │   │   └── wayland-client v0.31.5
+│   │   │   │       │   │   │       ├── bitflags v2.6.0
+│   │   │   │       │   │   │       ├── rustix v0.38.34 (*)
+│   │   │   │       │   │   │       ├── wayland-backend v0.3.6 (*)
+│   │   │   │       │   │   │       └── wayland-scanner v0.31.4 (proc-macro)
+│   │   │   │       │   │   │           ├── proc-macro2 v1.0.86 (*)
+│   │   │   │       │   │   │           ├── quick-xml v0.34.0
+│   │   │   │       │   │   │           │   └── memchr v2.7.4
+│   │   │   │       │   │   │           └── quote v1.0.36 (*)
+│   │   │   │       │   │   ├── cursor-icon v1.1.0
+│   │   │   │       │   │   ├── libc v0.2.155
+│   │   │   │       │   │   ├── log v0.4.22
+│   │   │   │       │   │   ├── memmap2 v0.9.4 (*)
+│   │   │   │       │   │   ├── rustix v0.38.34 (*)
+│   │   │   │       │   │   ├── thiserror v1.0.61 (*)
+│   │   │   │       │   │   ├── wayland-backend v0.3.6 (*)
+│   │   │   │       │   │   ├── wayland-client v0.31.5 (*)
+│   │   │   │       │   │   ├── wayland-csd-frame v0.3.0
+│   │   │   │       │   │   │   ├── bitflags v2.6.0
+│   │   │   │       │   │   │   ├── cursor-icon v1.1.0
+│   │   │   │       │   │   │   └── wayland-backend v0.3.6 (*)
+│   │   │   │       │   │   ├── wayland-cursor v0.31.5
+│   │   │   │       │   │   │   ├── rustix v0.38.34 (*)
+│   │   │   │       │   │   │   ├── wayland-client v0.31.5 (*)
+│   │   │   │       │   │   │   └── xcursor v0.3.6
+│   │   │   │       │   │   ├── wayland-protocols v0.32.3
+│   │   │   │       │   │   │   ├── bitflags v2.6.0
+│   │   │   │       │   │   │   ├── wayland-backend v0.3.6 (*)
+│   │   │   │       │   │   │   ├── wayland-client v0.31.5 (*)
+│   │   │   │       │   │   │   └── wayland-scanner v0.31.4 (proc-macro) (*)
+│   │   │   │       │   │   ├── wayland-protocols-wlr v0.3.3
+│   │   │   │       │   │   │   ├── bitflags v2.6.0
+│   │   │   │       │   │   │   ├── wayland-backend v0.3.6 (*)
+│   │   │   │       │   │   │   ├── wayland-client v0.31.5 (*)
+│   │   │   │       │   │   │   ├── wayland-protocols v0.32.3 (*)
+│   │   │   │       │   │   │   └── wayland-scanner v0.31.4 (proc-macro) (*)
+│   │   │   │       │   │   ├── wayland-scanner v0.31.4 (proc-macro) (*)
+│   │   │   │       │   │   └── xkeysym v0.2.1
+│   │   │   │       │   └── tiny-skia v0.11.4 (*)
+│   │   │   │       ├── smithay-client-toolkit v0.19.2 (*)
+│   │   │   │       ├── smol_str v0.2.2
+│   │   │   │       ├── tracing v0.1.40 (*)
+│   │   │   │       ├── wayland-backend v0.3.6 (*)
+│   │   │   │       ├── wayland-client v0.31.5 (*)
+│   │   │   │       ├── wayland-protocols v0.32.3 (*)
+│   │   │   │       ├── wayland-protocols-plasma v0.3.3
+│   │   │   │       │   ├── bitflags v2.6.0
+│   │   │   │       │   ├── wayland-backend v0.3.6 (*)
+│   │   │   │       │   ├── wayland-client v0.31.5 (*)
+│   │   │   │       │   ├── wayland-protocols v0.32.3 (*)
+│   │   │   │       │   └── wayland-scanner v0.31.4 (proc-macro) (*)
+│   │   │   │       ├── x11-dl v2.21.0
+│   │   │   │       │   ├── libc v0.2.155
+│   │   │   │       │   └── once_cell v1.19.0 (*)
+│   │   │   │       │   [build-dependencies]
+│   │   │   │       │   └── pkg-config v0.3.30
+│   │   │   │       ├── x11rb v0.13.1
+│   │   │   │       │   ├── as-raw-xcb-connection v1.0.1
+│   │   │   │       │   ├── libc v0.2.155
+│   │   │   │       │   ├── libloading v0.8.4 (*)
+│   │   │   │       │   ├── once_cell v1.19.0 (*)
+│   │   │   │       │   ├── rustix v0.38.34 (*)
+│   │   │   │       │   └── x11rb-protocol v0.13.1
+│   │   │   │       └── xkbcommon-dl v0.4.2
+│   │   │   │           ├── bitflags v2.6.0
+│   │   │   │           ├── dlib v0.5.2 (*)
+│   │   │   │           ├── log v0.4.22
+│   │   │   │           ├── once_cell v1.19.0 (*)
+│   │   │   │           └── xkeysym v0.2.1
+│   │   │   │       [build-dependencies]
+│   │   │   │       └── cfg_aliases v0.2.1
+│   │   │   ├── bytemuck v1.16.1 (*)
+│   │   │   ├── cfg-if v1.0.0
+│   │   │   ├── const-field-offset v0.1.5 (*)
+│   │   │   ├── copypasta v0.10.1
+│   │   │   │   ├── smithay-clipboard v0.7.2
+│   │   │   │   │   ├── libc v0.2.155
+│   │   │   │   │   ├── smithay-client-toolkit v0.19.2 (*)
+│   │   │   │   │   └── wayland-backend v0.3.6 (*)
+│   │   │   │   └── x11-clipboard v0.9.2
+│   │   │   │       ├── libc v0.2.155
+│   │   │   │       └── x11rb v0.13.1 (*)
+│   │   │   ├── derive_more v0.99.18 (proc-macro) (*)
+│   │   │   ├── glutin v0.32.0
+│   │   │   │   ├── bitflags v2.6.0
+│   │   │   │   ├── glutin_egl_sys v0.7.0
+│   │   │   │   │   [build-dependencies]
+│   │   │   │   │   └── gl_generator v0.14.0
+│   │   │   │   │       ├── khronos_api v3.1.0
+│   │   │   │   │       ├── log v0.4.22
+│   │   │   │   │       └── xml-rs v0.8.20
+│   │   │   │   ├── glutin_glx_sys v0.6.0
+│   │   │   │   │   └── x11-dl v2.21.0 (*)
+│   │   │   │   │   [build-dependencies]
+│   │   │   │   │   └── gl_generator v0.14.0 (*)
+│   │   │   │   ├── libloading v0.8.4 (*)
+│   │   │   │   ├── once_cell v1.19.0 (*)
+│   │   │   │   ├── raw-window-handle v0.6.2
+│   │   │   │   ├── wayland-sys v0.31.4 (*)
+│   │   │   │   └── x11-dl v2.21.0 (*)
+│   │   │   │   [build-dependencies]
+│   │   │   │   └── cfg_aliases v0.2.1
+│   │   │   ├── glutin-winit v0.5.0
+│   │   │   │   ├── glutin v0.32.0 (*)
+│   │   │   │   ├── raw-window-handle v0.6.2
+│   │   │   │   └── winit v0.30.4 (*)
+│   │   │   │   [build-dependencies]
+│   │   │   │   └── cfg_aliases v0.2.1
+│   │   │   ├── i-slint-common v1.7.0 (*)
+│   │   │   ├── i-slint-core v1.7.0 (*)
+│   │   │   ├── i-slint-core-macros v1.7.0 (proc-macro) (*)
+│   │   │   ├── i-slint-renderer-femtovg v1.7.0
+│   │   │   │   ├── cfg-if v1.0.0
+│   │   │   │   ├── const-field-offset v0.1.5 (*)
+│   │   │   │   ├── derive_more v0.99.18 (proc-macro) (*)
+│   │   │   │   ├── femtovg v0.9.2
+│   │   │   │   │   ├── bitflags v2.6.0
+│   │   │   │   │   ├── fnv v1.0.7
+│   │   │   │   │   ├── glow v0.13.1
+│   │   │   │   │   ├── image v0.25.2
+│   │   │   │   │   │   ├── bytemuck v1.16.1 (*)
+│   │   │   │   │   │   ├── byteorder-lite v0.1.0
+│   │   │   │   │   │   └── num-traits v0.2.19 (*)
+│   │   │   │   │   ├── imgref v1.10.1
+│   │   │   │   │   ├── log v0.4.22
+│   │   │   │   │   ├── lru v0.12.3 (*)
+│   │   │   │   │   ├── rgb v0.8.45 (*)
+│   │   │   │   │   ├── rustybuzz v0.14.1 (*)
+│   │   │   │   │   ├── slotmap v1.0.7 (*)
+│   │   │   │   │   ├── unicode-bidi v0.3.15
+│   │   │   │   │   └── unicode-segmentation v1.11.0
+│   │   │   │   ├── glow v0.13.1
+│   │   │   │   ├── i-slint-common v1.7.0 (*)
+│   │   │   │   ├── i-slint-core v1.7.0 (*)
+│   │   │   │   ├── i-slint-core-macros v1.7.0 (proc-macro) (*)
+│   │   │   │   ├── imgref v1.10.1
+│   │   │   │   ├── lyon_path v1.0.5 (*)
+│   │   │   │   ├── once_cell v1.19.0 (*)
+│   │   │   │   ├── pin-weak v1.1.0
+│   │   │   │   ├── rgb v0.8.45 (*)
+│   │   │   │   ├── scoped-tls-hkt v0.1.4
+│   │   │   │   ├── ttf-parser v0.21.1
+│   │   │   │   ├── unicode-script v0.5.6
+│   │   │   │   └── unicode-segmentation v1.11.0
+│   │   │   ├── imgref v1.10.1
+│   │   │   ├── lyon_path v1.0.5 (*)
+│   │   │   ├── once_cell v1.19.0 (*)
+│   │   │   ├── pin-weak v1.1.0
+│   │   │   ├── raw-window-handle v0.6.2
+│   │   │   ├── rgb v0.8.45 (*)
+│   │   │   ├── scoped-tls-hkt v0.1.4
+│   │   │   ├── scopeguard v1.2.0
+│   │   │   ├── softbuffer v0.4.5
+│   │   │   │   ├── as-raw-xcb-connection v1.0.1
+│   │   │   │   ├── bytemuck v1.16.1 (*)
+│   │   │   │   ├── fastrand v2.1.0
+│   │   │   │   ├── log v0.4.22
+│   │   │   │   ├── memmap2 v0.9.4 (*)
+│   │   │   │   ├── raw-window-handle v0.6.2
+│   │   │   │   ├── rustix v0.38.34 (*)
+│   │   │   │   ├── tiny-xlib v0.2.3
+│   │   │   │   │   ├── as-raw-xcb-connection v1.0.1
+│   │   │   │   │   ├── ctor-lite v0.1.0
+│   │   │   │   │   ├── libloading v0.8.4 (*)
+│   │   │   │   │   └── tracing v0.1.40 (*)
+│   │   │   │   │   [build-dependencies]
+│   │   │   │   │   └── pkg-config v0.3.30
+│   │   │   │   ├── wayland-backend v0.3.6 (*)
+│   │   │   │   ├── wayland-client v0.31.5 (*)
+│   │   │   │   ├── wayland-sys v0.31.4 (*)
+│   │   │   │   └── x11rb v0.13.1 (*)
+│   │   │   │   [build-dependencies]
+│   │   │   │   └── cfg_aliases v0.2.1
+│   │   │   └── winit v0.30.4 (*)
+│   │   │   [build-dependencies]
+│   │   │   └── cfg_aliases v0.2.1
+│   │   └── i-slint-core v1.7.0 (*)
+│   │   [build-dependencies]
+│   │   └── i-slint-common v1.7.0
+│   ├── i-slint-core v1.7.0 (*)
+│   ├── i-slint-renderer-femtovg v1.7.0 (*)
+│   ├── num-traits v0.2.19 (*)
+│   ├── once_cell v1.19.0 (*)
+│   ├── pin-weak v1.1.0
+│   ├── slint-macros v1.7.0 (proc-macro)
+│   │   ├── i-slint-compiler v1.7.0
+│   │   │   ├── by_address v1.2.1
+│   │   │   ├── codemap v0.1.3
+│   │   │   ├── codemap-diagnostic v0.1.2
+│   │   │   │   ├── codemap v0.1.3
+│   │   │   │   └── termcolor v1.4.1
+│   │   │   ├── css-color-parser2 v1.0.1
+│   │   │   │   └── lazy_static v1.5.0
+│   │   │   ├── derive_more v0.99.18 (proc-macro) (*)
+│   │   │   ├── i-slint-common v1.7.0
+│   │   │   ├── itertools v0.13.0 (*)
+│   │   │   ├── linked_hash_set v0.1.4
+│   │   │   │   └── linked-hash-map v0.5.6
+│   │   │   ├── lyon_extra v1.0.2 (*)
+│   │   │   ├── lyon_path v1.0.5 (*)
+│   │   │   ├── num_enum v0.7.2
+│   │   │   │   └── num_enum_derive v0.7.2 (proc-macro)
+│   │   │   │       ├── proc-macro-crate v3.1.0
+│   │   │   │       │   └── toml_edit v0.21.1
+│   │   │   │       │       ├── indexmap v2.2.6 (*)
+│   │   │   │       │       ├── toml_datetime v0.6.6
+│   │   │   │       │       └── winnow v0.5.40
+│   │   │   │       ├── proc-macro2 v1.0.86 (*)
+│   │   │   │       ├── quote v1.0.36 (*)
+│   │   │   │       └── syn v2.0.68 (*)
+│   │   │   ├── once_cell v1.19.0
+│   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   ├── quote v1.0.36 (*)
+│   │   │   ├── rowan v0.15.15
+│   │   │   │   ├── countme v3.0.1
+│   │   │   │   ├── hashbrown v0.14.5
+│   │   │   │   ├── memoffset v0.9.1 (*)
+│   │   │   │   ├── rustc-hash v1.1.0
+│   │   │   │   └── text-size v1.1.1
+│   │   │   ├── smol_str v0.2.2
+│   │   │   ├── strum v0.26.3 (*)
+│   │   │   ├── thiserror v1.0.61 (*)
+│   │   │   └── url v2.5.2
+│   │   │       ├── form_urlencoded v1.2.1
+│   │   │       │   └── percent-encoding v2.3.1
+│   │   │       ├── idna v0.5.0
+│   │   │       │   ├── unicode-bidi v0.3.15
+│   │   │       │   └── unicode-normalization v0.1.23
+│   │   │       │       └── tinyvec v1.8.0 (*)
+│   │   │       └── percent-encoding v2.3.1
+│   │   ├── proc-macro2 v1.0.86 (*)
+│   │   ├── quote v1.0.36 (*)
+│   │   └── spin_on v0.1.1
+│   │       └── pin-utils v0.1.0
+│   └── vtable v0.2.0 (*)
+├── tensor v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/tensor) (*)
+└── web-api v0.0.1 (/mnt/c/Users/peng/Documents/transformer-rs/web-api)
+    ├── causal-lm v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/causal-lm) (*)
+    ├── http-body-util v0.1.2
+    │   ├── bytes v1.6.0
+    │   ├── futures-util v0.3.30 (*)
+    │   ├── http v1.1.0
+    │   │   ├── bytes v1.6.0
+    │   │   ├── fnv v1.0.7
+    │   │   └── itoa v1.0.11
+    │   ├── http-body v1.0.0
+    │   │   ├── bytes v1.6.0
+    │   │   └── http v1.1.0 (*)
+    │   └── pin-project-lite v0.2.14
+    ├── hyper v1.4.0
+    │   ├── bytes v1.6.0
+    │   ├── futures-channel v0.3.30
+    │   │   └── futures-core v0.3.30
+    │   ├── futures-util v0.3.30 (*)
+    │   ├── http v1.1.0 (*)
+    │   ├── http-body v1.0.0 (*)
+    │   ├── httparse v1.9.4
+    │   ├── httpdate v1.0.3
+    │   ├── itoa v1.0.11
+    │   ├── pin-project-lite v0.2.14
+    │   ├── smallvec v1.13.2
+    │   └── tokio v1.38.0 (*)
+    ├── hyper-util v0.1.6
+    │   ├── bytes v1.6.0
+    │   ├── futures-util v0.3.30 (*)
+    │   ├── http v1.1.0 (*)
+    │   ├── http-body v1.0.0 (*)
+    │   ├── hyper v1.4.0 (*)
+    │   ├── pin-project-lite v0.2.14
+    │   └── tokio v1.38.0 (*)
+    ├── log v0.4.22
+    ├── serde v1.0.203 (*)
+    ├── serde_json v1.0.120 (*)
+    ├── service v0.0.0 (/mnt/c/Users/peng/Documents/transformer-rs/service) (*)
+    ├── tokio v1.38.0 (*)
+    └── tokio-stream v0.1.15
+        ├── futures-core v0.3.30
+        ├── pin-project-lite v0.2.14
+        └── tokio v1.38.0 (*)
