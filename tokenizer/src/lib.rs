@@ -1,8 +1,11 @@
 mod bpe;
+mod new_bpe;
 mod normalizer;
 mod vocab_txt;
 
-use common::utok;
+/// `utok` for token id.
+#[allow(non_camel_case_types)]
+pub type utok = u32;
 
 pub trait Tokenizer {
     fn vocab_size(&self) -> usize;
@@ -14,7 +17,7 @@ pub use bpe::BPE;
 pub use normalizer::{BPECommonNormalizer, Normalizer};
 pub use vocab_txt::VocabTxt;
 
-const fn decode_with_ascii<'a>(piece: &'a str) -> &'a str {
+const fn decode_with_ascii(piece: &str) -> &str {
     // 预填充 ASCII 码表的所有字符
     const BYTES: [u8; 256] = {
         let mut ans = [0; 256];

@@ -1,5 +1,4 @@
-﻿use crate::{decode_with_ascii, Tokenizer};
-use common::utok;
+﻿use crate::{decode_with_ascii, utok, Tokenizer};
 use std::{io::Result, path::Path};
 
 /// 由 tokenizer.model 文件定义的 bpe 分词器。
@@ -131,37 +130,37 @@ impl Tokenizer for BPE {
     }
 }
 
-#[test]
-fn read_tokenizer() {
-    let Some(model_dir) = common::test_model::find() else {
-        return;
-    };
-    println!("model_dir: {}", model_dir.display());
+// #[test]
+// fn read_tokenizer() {
+//     let Some(model_dir) = common::test_model::find() else {
+//         return;
+//     };
+//     println!("model_dir: {}", model_dir.display());
 
-    if let Ok(bpe) = BPE::from_model_file(model_dir.join("tokenizer.model")) {
-        for i in 0..bpe.offsets.len() {
-            println!("{}: {}", bpe.get_piece(i as utok), bpe.get_score(i as utok));
-        }
-    }
-}
+//     if let Ok(bpe) = BPE::from_model_file(model_dir.join("tokenizer.model")) {
+//         for i in 0..bpe.offsets.len() {
+//             println!("{}: {}", bpe.get_piece(i as utok), bpe.get_score(i as utok));
+//         }
+//     }
+// }
 
-#[test]
-fn once_upon_a_time() {
-    let Some(model_dir) = common::test_model::find() else {
-        return;
-    };
-    println!("model_dir: {}", model_dir.display());
+// #[test]
+// fn once_upon_a_time() {
+//     let Some(model_dir) = common::test_model::find() else {
+//         return;
+//     };
+//     println!("model_dir: {}", model_dir.display());
 
-    use std::time::Instant;
-    if let Ok(bpe) = BPE::from_model_file(model_dir.join("tokenizer.model")) {
-        const PROMPT: &str = "▁Once▁upon▁a▁time,";
-        let tokens = bpe.encode(PROMPT);
-        let t0 = Instant::now();
-        for _ in 0..10000 {
-            let _tokens = bpe.encode(PROMPT);
-        }
-        let t1 = Instant::now();
-        println!("{:?}", t1 - t0);
-        assert_eq!(tokens, &[9038, 2501, 263, 931, 29892]);
-    }
-}
+//     use std::time::Instant;
+//     if let Ok(bpe) = BPE::from_model_file(model_dir.join("tokenizer.model")) {
+//         const PROMPT: &str = "▁Once▁upon▁a▁time,";
+//         let tokens = bpe.encode(PROMPT);
+//         let t0 = Instant::now();
+//         for _ in 0..10000 {
+//             let _tokens = bpe.encode(PROMPT);
+//         }
+//         let t1 = Instant::now();
+//         println!("{:?}", t1 - t0);
+//         assert_eq!(tokens, &[9038, 2501, 263, 931, 29892]);
+//     }
+// }

@@ -1727,7 +1727,6 @@ dependencies = [
 name = "tokenizer"
 version = "0.0.0"
 dependencies = [
- "common 0.0.0",
  "memmap2",
  "patricia_tree",
 ]
