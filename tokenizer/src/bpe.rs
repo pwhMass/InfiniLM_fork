@@ -1,4 +1,4 @@
-﻿use crate::{ByteDecoder, Tokenizer};
+﻿use crate::{decode_with_ascii, Tokenizer};
 use common::utok;
 use std::{io::Result, path::Path};
 
@@ -12,7 +12,6 @@ pub struct BPE {
     /// 保存根据 token 字符串字典序排序的序号，用于从 token 字符串查询序号。
     sorted_indices: Vec<utok>,
     max_piece_len: usize,
-    byte_pieces: ByteDecoder,
 }
 
 impl BPE {
@@ -47,7 +46,6 @@ impl BPE {
             offsets,
             sorted_indices,
             max_piece_len: 0,
-            byte_pieces: ByteDecoder::new(),
         })
     }
 
@@ -136,7 +134,7 @@ impl Tokenizer for BPE {
 
     #[inline]
     fn decode(&self, token: utok) -> &str {
-        self.byte_pieces.decode(self.get_piece(token))
+        decode_with_ascii(self.get_piece(token))
     }
 }
 

@@ -1,4 +1,4 @@
-﻿use crate::{ByteDecoder, Tokenizer};
+﻿use crate::{decode_with_ascii, Tokenizer};
 use common::utok;
 use memmap2::Mmap;
 use patricia_tree::PatriciaMap;
@@ -12,8 +12,6 @@ pub struct VocabTxt {
     trie: PatriciaMap<utok>,
     /// 词汇的最大长度。
     max_piece_len: usize,
-    /// 单字节词汇转义。
-    byte_pieces: ByteDecoder,
 }
 
 impl VocabTxt {
@@ -35,7 +33,6 @@ impl VocabTxt {
             words,
             trie,
             max_piece_len,
-            byte_pieces: ByteDecoder::new(),
         })
     }
 }
@@ -70,6 +67,6 @@ impl Tokenizer for VocabTxt {
 
     #[inline]
     fn decode(&self, token: utok) -> &str {
-        self.byte_pieces.decode(self.words[token as usize].as_str())
+        decode_with_ascii(self.words[token as usize].as_str())
     }
 }
