@@ -10,8 +10,6 @@ pub struct VocabTxt {
     words: Vec<String>,
     /// 词汇的前缀树。
     trie: PatriciaMap<utok>,
-    /// 词汇的最大长度。
-    max_piece_len: usize,
 }
 
 impl VocabTxt {
@@ -22,29 +20,18 @@ impl VocabTxt {
 
         let mut words = Vec::new();
         let mut trie = PatriciaMap::new();
-        let mut max_piece_len = 0;
         for (i, line) in text.lines().enumerate() {
             let piece = line.strip_prefix('"').unwrap().strip_suffix('"').unwrap();
-            max_piece_len = max_piece_len.max(piece.len());
             words.push(piece.to_string());
             trie.insert(piece, i as _);
         }
-        Ok(Self {
-            words,
-            trie,
-            max_piece_len,
-        })
+        Ok(Self { words, trie })
     }
 }
 
 impl Tokenizer for VocabTxt {
     fn vocab_size(&self) -> usize {
         self.words.len()
-    }
-
-    #[inline]
-    fn max_piece_len(&self) -> usize {
-        self.max_piece_len
     }
 
     fn encode(&self, mut text: &str) -> Vec<utok> {

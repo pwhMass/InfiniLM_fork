@@ -6,7 +6,6 @@ use common::utok;
 
 pub trait Tokenizer {
     fn vocab_size(&self) -> usize;
-    fn max_piece_len(&self) -> usize;
     fn encode(&self, text: &str) -> Vec<utok>;
     fn decode(&self, token: utok) -> &str;
 }

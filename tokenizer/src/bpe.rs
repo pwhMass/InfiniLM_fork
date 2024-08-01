@@ -11,7 +11,6 @@ pub struct BPE {
     offsets: Vec<usize>,
     /// 保存根据 token 字符串字典序排序的序号，用于从 token 字符串查询序号。
     sorted_indices: Vec<utok>,
-    max_piece_len: usize,
 }
 
 impl BPE {
@@ -45,7 +44,6 @@ impl BPE {
             mmap,
             offsets,
             sorted_indices,
-            max_piece_len: 0,
         })
     }
 
@@ -81,11 +79,6 @@ impl BPE {
 impl Tokenizer for BPE {
     fn vocab_size(&self) -> usize {
         self.offsets.len()
-    }
-
-    #[inline]
-    fn max_piece_len(&self) -> usize {
-        self.max_piece_len
     }
 
     fn encode(&self, text: &str) -> Vec<utok> {
