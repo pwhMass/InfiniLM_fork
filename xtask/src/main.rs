@@ -20,7 +20,7 @@ fn main() {
     match Cli::parse().command {
         ListTurbo => list_turbo::list_turbo(),
         Deploy(deploy) => deploy.deploy(),
-        Cast(cast) => cast.invode(),
+        Cast(cast) => cast.invoke(),
         Generate(args) => args.run(),
         Chat(chat) => chat.run(),
         Service(service) => service.run(),
