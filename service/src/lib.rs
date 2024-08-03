@@ -152,7 +152,7 @@ fn template(model_dir: impl AsRef<Path>) -> ChatTemplate {
 
 fn normalizer(model_dir: impl AsRef<Path>) -> Box<dyn Normalizer + Send + Sync> {
     use std::io::ErrorKind::NotFound;
-    match BPE::from_model_file(model_dir.as_ref().join("tokenizer.model")) {
+    match BPE::from_tokenizer_model(model_dir.as_ref().join("tokenizer.model")) {
         Ok(_) => return Box::new(BPECommonNormalizer {}),
         Err(e) if e.kind() == NotFound => {}
         Err(e) => panic!("{e:?}"),
@@ -167,7 +167,7 @@ fn normalizer(model_dir: impl AsRef<Path>) -> Box<dyn Normalizer + Send + Sync> 
 
 fn tokenizer(model_dir: impl AsRef<Path>) -> Box<dyn Tokenizer + Send + Sync> {
     use std::io::ErrorKind::NotFound;
-    match BPE::from_model_file(model_dir.as_ref().join("tokenizer.model")) {
+    match BPE::from_tokenizer_model(model_dir.as_ref().join("tokenizer.model")) {
         Ok(bpe) => return Box::new(bpe),
         Err(e) if e.kind() == NotFound => {}
         Err(e) => panic!("{e:?}"),

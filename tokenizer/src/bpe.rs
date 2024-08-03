@@ -1,87 +1,127 @@
 ﻿use crate::{decode_with_ascii, utok, Tokenizer};
-use std::{io::Result, path::Path};
+use std::{io, iter::zip, ops::Deref, path::Path, pin::Pin, ptr::NonNull};
 
-/// 由 tokenizer.model 文件定义的 bpe 分词器。
-///
-/// 文件格式为 `[10, total_len, 10, str_len, [str;str_len], 21, [score;4], ..; vocab_size]`。
 pub struct BPE {
-    mmap: memmap2::Mmap,
-    /// 保存每个序号对应的对象在文件中的偏移，用于从序号查询 token 字符串。
-    offsets: Vec<usize>,
-    /// 保存根据 token 字符串字典序排序的序号，用于从 token 字符串查询序号。
-    sorted_indices: Vec<utok>,
+    _vocab: Pin<Box<[u8]>>,
+    tokens: Box<[Token]>,
+    sorted_pieces: Box<[utok]>,
+}
+
+struct Token {
+    /// 指向字符串内容的指针
+    ptr: NonNull<u8>,
+    /// 字符串长度
+    len: u32,
+    /// 字符串的合并排名，从 0 开始
+    rank: u32,
+}
+
+unsafe impl Send for Token {}
+unsafe impl Sync for Token {}
+
+impl Deref for Token {
+    type Target = str;
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        use std::{slice::from_raw_parts, str::from_utf8_unchecked};
+        unsafe { from_utf8_unchecked(from_raw_parts(self.ptr.as_ptr(), self.len as _)) }
+    }
 }
 
 impl BPE {
     /// 打开 tokenizer.model 文件并构造一个 bpe 分词器。
-    pub fn from_model_file(model_file: impl AsRef<Path>) -> Result<Self> {
+    pub fn from_tokenizer_model(model_file: impl AsRef<Path>) -> io::Result<Self> {
         // 打开文件
         let file = std::fs::File::open(model_file)?;
         let mmap = unsafe { memmap2::Mmap::map(&file) }?;
         // 遍历文件，标记所有词汇的位置并记录最大长度
-        let mut max_piece_len = 0usize;
         let offsets = (0..)
             .scan(0usize, |offset, _| match &mmap[*offset..] {
-                [10, total_len, 10, str_len, ..] => {
-                    max_piece_len = max_piece_len.max(*str_len as usize);
-                    let next = *offset + 3;
-                    *offset += 2 + *total_len as usize;
-                    Some(next)
+                [10, total_len, 10, content @ ..] => {
+                    let total_len = *total_len as usize;
+                    *offset += total_len + 2;
+                    Some(&content[..total_len - 2])
                 }
                 [..] => None,
             })
             .collect::<Vec<_>>();
-        // 对词汇表按字典序排序
-        let mut sorted_indices = (0..offsets.len() as utok).collect::<Vec<_>>();
-        sorted_indices.sort_by_key(|&i| {
-            let slice = &mmap[offsets[i as usize]..];
+        let vocabs = offsets.iter().map(|slice| {
             let len = slice[0] as usize;
             std::str::from_utf8(&slice[1..][..len]).unwrap()
         });
-        // 生成分词器
-        Ok(Self {
-            mmap,
-            offsets,
-            sorted_indices,
-        })
+        let scores = offsets.iter().map(|slice| {
+            let len = slice[0] as usize;
+            let ptr = slice[len + 2..].as_ptr().cast::<f32>();
+            unsafe { ptr.read_unaligned() }
+        });
+
+        Ok(Self::new(vocabs, scores, offsets.len()))
     }
 
-    /// 根据词汇查找代码。
+    pub fn new<'a>(
+        vocabs: impl IntoIterator<Item = &'a str>,
+        scores: impl Iterator<Item = f32>,
+        vocab_size_hint: usize,
+    ) -> Self {
+        let mut text_buf = Vec::with_capacity(vocab_size_hint * 4);
+        // 重新编排词表
+        // 将字符串的内容和元信息分离
+        // 内容全部保存到 text_buf 以实现缓存友好性
+        // 字符串起始位置在 text_buf 中的偏移量和字符串长度保存到 meta 中
+        let meta = vocabs
+            .into_iter()
+            .map(str::as_bytes)
+            .map(|vocab| {
+                let off = text_buf.len();
+                text_buf.extend_from_slice(vocab);
+                (off, vocab.len())
+            })
+            .collect::<Vec<_>>();
+        // 锁定字符串内容的位置，以实现安全的自引用
+        let _vocab = unsafe { Pin::new_unchecked(text_buf.into_boxed_slice()) };
+        // 对分词评分重新赋权，转换为整型
+        let rank = rank(&scores.collect::<Vec<_>>());
+        assert_eq!(
+            meta.len(),
+            rank.len(),
+            "scores size mismatch with vocab size"
+        );
+        // tokens 中直接引用字符串位置，绑定评分
+        let tokens = zip(meta, rank)
+            .map(|((off, len), rank)| Token {
+                ptr: unsafe { NonNull::new_unchecked(_vocab.as_ptr().add(off).cast_mut()) },
+                len: len as _,
+                rank,
+            })
+            .collect::<Box<[_]>>();
+        // 对 token 按字符串的字典序排序，用于从字符串二分查找 token
+        let mut sorted_pieces = (0..tokens.len() as utok).collect::<Box<[_]>>();
+        sorted_pieces.sort_by_key(|&i| &*tokens[i as usize]);
+
+        Self {
+            _vocab,
+            tokens,
+            sorted_pieces,
+        }
+    }
+
+    /// piece -> token
     #[inline]
     fn find_piece(&self, piece: &str) -> Option<utok> {
-        self.sorted_indices
-            .binary_search_by_key(&piece, |&i| self.get_piece(i))
+        self.sorted_pieces
+            .binary_search_by_key(&piece, |&i| &*self.tokens[i as usize])
             .ok()
-            .map(|i| self.sorted_indices[i])
-    }
-
-    /// 根据代码查找词汇。
-    #[inline]
-    fn get_piece(&self, i: utok) -> &str {
-        let offset = self.offsets[i as usize];
-        let slice = &self.mmap[offset..];
-        let len = slice[0] as usize;
-        std::str::from_utf8(&slice[1..][..len]).unwrap()
-    }
-
-    /// 根据代码查找合词评分。
-    #[inline]
-    fn get_score(&self, i: utok) -> f32 {
-        let offset = self.offsets[i as usize];
-        let slice = &self.mmap[offset..];
-        let len = slice[0] as usize;
-        let ptr = slice[len + 2..].as_ptr().cast::<f32>();
-        unsafe { ptr.read_unaligned() }
+            .map(|i| self.sorted_pieces[i])
     }
 }
 
 impl Tokenizer for BPE {
+    #[inline]
     fn vocab_size(&self) -> usize {
-        self.offsets.len()
+        self.tokens.len()
     }
 
     fn encode(&self, text: &str) -> Vec<utok> {
-        let text = text.replace(' ', "▁"); // FIXME: 从 tokenizer.json 读取 normalizer
         let mut tokens = Vec::new();
 
         text.chars().map(|c| c.to_string()).for_each(|c| {
@@ -92,13 +132,13 @@ impl Tokenizer for BPE {
             }
         });
 
-        fn map_pair(bpe: &BPE, tokens: &[utok], i: usize) -> Option<(utok, f32)> {
+        fn map_pair(bpe: &BPE, tokens: &[utok], i: usize) -> Option<(utok, u32)> {
             bpe.find_piece(&format!(
                 "{}{}",
-                bpe.get_piece(tokens[i]),
-                bpe.get_piece(tokens[i + 1])
+                &*bpe.tokens[tokens[i] as usize],
+                &*bpe.tokens[tokens[i + 1] as usize],
             ))
-            .map(|tok| (tok, bpe.get_score(tok)))
+            .map(|tok| (tok, bpe.tokens[tok as usize].rank))
         }
 
         let mut merges = (0..tokens.len() - 1)
@@ -108,7 +148,7 @@ impl Tokenizer for BPE {
             .iter()
             .enumerate()
             .filter_map(|(i, tok)| tok.map(|tok| (i, tok)))
-            .max_by(|(_, (_, a)), (_, (_, b))| a.total_cmp(b))
+            .min()
         {
             tokens[i] = tok;
             tokens.remove(i + 1);
@@ -126,41 +166,45 @@ impl Tokenizer for BPE {
 
     #[inline]
     fn decode(&self, token: utok) -> &str {
-        decode_with_ascii(self.get_piece(token))
+        decode_with_ascii(&*self.tokens[token as usize])
     }
 }
 
-// #[test]
-// fn read_tokenizer() {
-//     let Some(model_dir) = common::test_model::find() else {
-//         return;
-//     };
-//     println!("model_dir: {}", model_dir.display());
+/// 对一组评分排序、去重并重新赋权，转换为保持相同顺序的整型序列
+fn rank(scores: &[f32]) -> Vec<u32> {
+    use std::{
+        cmp::Ordering,
+        collections::{BTreeMap, BTreeSet},
+    };
 
-//     if let Ok(bpe) = BPE::from_model_file(model_dir.join("tokenizer.model")) {
-//         for i in 0..bpe.offsets.len() {
-//             println!("{}: {}", bpe.get_piece(i as utok), bpe.get_score(i as utok));
-//         }
-//     }
-// }
+    #[derive(PartialEq, Debug)]
+    struct FloatOrd(f32);
+    impl Eq for FloatOrd {}
+    impl PartialOrd for FloatOrd {
+        #[inline]
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+    impl Ord for FloatOrd {
+        #[inline]
+        fn cmp(&self, other: &Self) -> Ordering {
+            self.0.total_cmp(&other.0)
+        }
+    }
 
-// #[test]
-// fn once_upon_a_time() {
-//     let Some(model_dir) = common::test_model::find() else {
-//         return;
-//     };
-//     println!("model_dir: {}", model_dir.display());
+    let map = scores
+        // 排序 + 去重
+        .iter()
+        .copied()
+        .map(FloatOrd)
+        .collect::<BTreeSet<_>>()
+        // 重新赋权
+        .into_iter()
+        .rev()
+        .enumerate()
+        .map(|(i, f)| (f, i as u32))
+        .collect::<BTreeMap<_, _>>();
 
-//     use std::time::Instant;
-//     if let Ok(bpe) = BPE::from_model_file(model_dir.join("tokenizer.model")) {
-//         const PROMPT: &str = "▁Once▁upon▁a▁time,";
-//         let tokens = bpe.encode(PROMPT);
-//         let t0 = Instant::now();
-//         for _ in 0..10000 {
-//             let _tokens = bpe.encode(PROMPT);
-//         }
-//         let t1 = Instant::now();
-//         println!("{:?}", t1 - t0);
-//         assert_eq!(tokens, &[9038, 2501, 263, 931, 29892]);
-//     }
-// }
+    scores.iter().map(|f| map[&FloatOrd(*f)]).collect()
+}

@@ -1,5 +1,6 @@
+#![deny(warnings)]
+
 mod bpe;
-mod new_bpe;
 mod normalizer;
 mod vocab_txt;
 
