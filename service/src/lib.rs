@@ -2,15 +2,19 @@
 
 mod session;
 mod session_manager;
-mod template;
 
 use causal_lm::{CausalLM, SampleArgs};
+use chat_template::ChatTemplate;
 use session::{Dispatcher, Generator};
-use std::{fmt::Debug, path::Path, sync::Arc};
-use template::Template;
+use std::{
+    fmt::{self, Debug},
+    path::Path,
+    sync::Arc,
+};
 use tokenizer::{BPECommonNormalizer, Normalizer, Tokenizer, VocabTxt, BPE};
 use tokio::task::JoinHandle;
 
+pub use chat_template::Message;
 pub use session::{BusySession, ChatError, Session};
 pub use session_manager::{SessionError, SessionManager};
 
@@ -27,7 +31,10 @@ struct ServiceComponent<M: CausalLM> {
     handle: Arc<Dispatcher<M>>,
     tokenizer: Box<dyn Tokenizer + Send + Sync>,
     normalizer: Box<dyn Normalizer + Send + Sync>,
-    template: Box<dyn Template + Send + Sync>,
+    template: ChatTemplate,
+    bos: String,
+    #[allow(unused)]
+    eos: String,
 }
 
 impl<M: CausalLM> Drop for ServiceComponent<M> {
@@ -46,13 +53,18 @@ where
 {
     pub fn load(model_dir: impl AsRef<Path>, meta: M::Meta) -> (Self, JoinHandle<()>) {
         let handle = Arc::new(Dispatcher::from(M::load(&model_dir, meta).unwrap()));
+        let tokenizer = tokenizer(&model_dir);
+        let normalizer = normalizer(&model_dir);
+        let template = template(model_dir);
         (
             Self {
                 component: Arc::new(ServiceComponent {
                     handle: handle.clone(),
-                    tokenizer: tokenizer(&model_dir),
-                    normalizer: normalizer(&model_dir),
-                    template: template(model_dir),
+                    bos: tokenizer.decode(handle.model.bos_token()).into(),
+                    eos: tokenizer.decode(handle.model.eos_token()).into(),
+                    tokenizer,
+                    normalizer,
+                    template,
                 }),
                 default_sample: Default::default(),
             },
@@ -72,7 +84,7 @@ impl<M: CausalLM> Service<M> {
 
     /// 从对话服务启动一个文本生成器。
     #[inline]
-    pub fn generate(&self, prompt: impl AsRef<str>, sample: Option<SampleArgs>) -> Generator<M> {
+    pub fn generate(&self, prompt: impl fmt::Display, sample: Option<SampleArgs>) -> Generator<M> {
         let sample = sample.unwrap_or(self.default_sample);
         Generator::new(self.component.clone(), prompt, sample)
     }
@@ -105,7 +117,10 @@ fn test() {
 
     for ((prompt, color), mut session) in zip(tasks, sessions) {
         set.spawn(async move {
-            session.extend([prompt]);
+            session.extend(&[Message {
+                role: "user",
+                content: prompt,
+            }]);
             let mut busy = session.chat();
             while let Some(s) = busy.decode().await {
                 print!("{}", s.color(color));
@@ -118,19 +133,26 @@ fn test() {
     runtime.shutdown_background();
 }
 
-fn template(model_dir: impl AsRef<Path>) -> Box<dyn Template + Send + Sync> {
-    let path: String = model_dir.as_ref().display().to_string();
-    let path = path.to_ascii_lowercase();
-    if path.contains("tinyllama") {
-        Box::new(template::ChatTinyLlama)
+fn template(model_dir: impl AsRef<Path>) -> ChatTemplate {
+    let template = if model_dir
+        .as_ref()
+        .display()
+        .to_string()
+        .to_ascii_lowercase()
+        .contains("tinyllama")
+    {
+        const TEMPLATE: &str = "{% for message in messages %}\n{% if message['role'] == 'user' %}\n{{ '<|user|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'system' %}\n{{ '<|system|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'assistant' %}\n{{ '<|assistant|>\n'  + message['content'] + eos_token }}\n{% endif %}\n{% if loop.last and add_generation_prompt %}\n{{ '<|assistant|>' }}\n{% endif %}\n{% endfor %}";
+        TEMPLATE
     } else {
-        Box::new(template::ChatCPM)
-    }
+        const TEMPLATE: &str = "{% for message in messages %}{% if message['role'] == 'user' %}{{ bos_token + '<用户>' + message['content'].strip() + '<AI>'}}{% else %}{{message['content'].strip()}}{% endif %}{% endfor %}";
+        TEMPLATE
+    };
+    ChatTemplate::new(template.into())
 }
 
 fn normalizer(model_dir: impl AsRef<Path>) -> Box<dyn Normalizer + Send + Sync> {
     use std::io::ErrorKind::NotFound;
-    match BPE::from_model_file(model_dir.as_ref().join("tokenizer.model")) {
+    match BPE::from_tokenizer_model(model_dir.as_ref().join("tokenizer.model")) {
         Ok(_) => return Box::new(BPECommonNormalizer {}),
         Err(e) if e.kind() == NotFound => {}
         Err(e) => panic!("{e:?}"),
@@ -145,7 +167,7 @@ fn normalizer(model_dir: impl AsRef<Path>) -> Box<dyn Normalizer + Send + Sync> 
 
 fn tokenizer(model_dir: impl AsRef<Path>) -> Box<dyn Tokenizer + Send + Sync> {
     use std::io::ErrorKind::NotFound;
-    match BPE::from_model_file(model_dir.as_ref().join("tokenizer.model")) {
+    match BPE::from_tokenizer_model(model_dir.as_ref().join("tokenizer.model")) {
         Ok(bpe) => return Box::new(bpe),
         Err(e) if e.kind() == NotFound => {}
         Err(e) => panic!("{e:?}"),

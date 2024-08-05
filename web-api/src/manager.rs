@@ -3,7 +3,7 @@ use crate::schemas::{
 };
 use base64::{engine::general_purpose, Engine};
 use causal_lm::CausalLM;
-use service::{Service, Session, SessionManager};
+use service::{Message, Service, Session, SessionManager};
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 
@@ -73,7 +73,14 @@ where
                 session.sample.top_p = top_p;
             }
 
-            session.extend(messages.iter().map(|s| s.content.as_str()));
+            let messages = messages
+                .iter()
+                .map(|s| Message {
+                    role: &s.role,
+                    content: &s.content,
+                })
+                .collect::<Vec<_>>();
+            session.extend(&messages);
             if session.dialog_pos() % 2 == 1 {
                 info!("{session_id:?} inference started");
                 let mut busy = session.chat();

@@ -7,6 +7,7 @@ mod task;
 use crate::ServiceComponent;
 use cache::Cache;
 use causal_lm::{CausalLM, SampleArgs};
+use chat_template::Message;
 use dialog::Dialog;
 use dispatch::TaskHandle;
 use log::info;
@@ -97,30 +98,22 @@ impl<M: CausalLM> Session<M> {
     }
 
     /// 用 dialog 填充会话。
-    pub fn extend<'a>(&mut self, dialog: impl IntoIterator<Item = &'a str>) {
-        let eos = self.component.handle.model.eos_token();
+    pub fn extend(&mut self, messages: &[Message]) {
         let cache = self
             .cache
             .get_or_insert_with(|| Cache::new(&self.component.handle.model, vec![]));
-        // 填充对话
-        for s in dialog {
-            let prompt = self.dialog.num_sentences() % 2 == 0;
 
-            let s = if prompt {
-                self.component.template.apply_chat(s)
-            } else {
-                s.into()
-            };
-            let s = self.component.normalizer.encode(&s);
-            let mut s = self.component.tokenizer.encode(&s);
-            if !prompt {
-                s.push(eos);
-            }
+        let s = self
+            .component
+            .template
+            .render(messages, &self.component.bos, &self.component.eos, true)
+            .unwrap();
+        let s = self.component.normalizer.encode(&s);
+        let s = self.component.tokenizer.encode(&s);
 
-            cache.extend(&s);
-            self.dialog.push(s);
-            assert_eq!(cache.end(), self.dialog.num_tokens());
-        }
+        cache.extend(&s);
+        self.dialog.push(s);
+        assert_eq!(cache.end(), self.dialog.num_tokens());
     }
 
     /// 启动推理任务，返回忙会话。
@@ -177,10 +170,10 @@ pub struct Generator<M: CausalLM> {
 impl<M: CausalLM> Generator<M> {
     pub(crate) fn new(
         component: Arc<ServiceComponent<M>>,
-        prompt: impl AsRef<str>,
+        prompt: impl fmt::Display,
         sample: SampleArgs,
     ) -> Self {
-        let prompt = component.template.normalize(prompt.as_ref());
+        let prompt = format!("{}{}", component.bos, prompt);
         let prompt = component.normalizer.encode(&prompt);
         let tokens = component.tokenizer.encode(&prompt);
         let handle = component.infer(sample, Cache::new(&component.handle.model, tokens));

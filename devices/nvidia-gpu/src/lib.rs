@@ -11,11 +11,11 @@ use operators::{
     dyn_,
     fuesd_softmax::nvidia_gpu as softmax,
     mat_mul::nvidia_gpu as mat_mul,
+    mlp::nvidia_gpu as mlp,
     random_sample::{nvidia_gpu as random_sample, KVPair, RandomSample, SampleArgs},
     reform::nvidia_gpu as reform,
     rms_norm::nvidia_gpu as rms_norm,
     rope::nvidia_gpu as rope,
-    swiglu::nvidia_gpu as swiglu,
     Operator, QueueOf, TensorLayout, Workspace,
 };
 use std::{
@@ -39,20 +39,21 @@ struct Internal {
     rope: rope::Operator,
     reform: reform::Operator,
     softmax: softmax::Operator,
-    swiglu: swiglu::Operator,
+    mlp: mlp::Operator,
     random_sample: random_sample::Operator,
 }
 
 impl Internal {
     pub fn new(handle: &Gpu, d: usize, voc: usize) -> Self {
+        let hidden_layout = TensorLayout::new(F16, [dyn_(), d.into()], [dyn_(); 2]);
         let mat_mul = mat_mul::Operator::new(handle);
 
         let mut rms_norm = rms_norm::Operator::new(handle);
         rms_norm
             .scheme(&operators::rms_norm::Args {
-                y_layout: TensorLayout::new(F16, [dyn_(), d.into()], [dyn_(); 2]),
+                y_layout: hidden_layout.clone(),
                 y_base: null_mut(),
-                x_layout: TensorLayout::new(F16, [dyn_(), d.into()], [dyn_(); 2]),
+                x_layout: hidden_layout.clone(),
                 x_base: null(),
                 w_layout: TensorLayout::new(F16, [d.into()], [dyn_()]),
                 w_base: null(),
@@ -88,15 +89,22 @@ impl Internal {
             })
             .unwrap();
 
-        let mut swiglu = swiglu::Operator::new(handle);
-        swiglu
-            .scheme(&operators::swiglu::Args {
-                gate_layout: TensorLayout::new(F16, [dyn_(); 2], [dyn_(); 2]),
-                gate_base: null_mut(),
-                up_layout: TensorLayout::new(F16, [dyn_(); 2], [dyn_(); 2]),
-                up_base: null(),
-            })
-            .unwrap();
+        let mut mlp = mlp::Operator::new(handle);
+        mlp.scheme(&operators::mlp::Args {
+            y_layout: hidden_layout.clone(),
+            y_base: null_mut(),
+            x_layout: hidden_layout.clone(),
+            x_base: null(),
+            gate_up_layout: TensorLayout::new(F16, [dyn_(); 2], [dyn_(); 2]),
+            gate_up_base: null_mut(),
+            w_gate_up_layout: TensorLayout::new(F16, [dyn_(); 2], [dyn_(); 2]),
+            w_gate_up_base: null(),
+            w_down_layout: TensorLayout::new(F16, [dyn_(); 2], [dyn_(); 2]),
+            w_down_base: null(),
+            down_alpha: 1.,
+            down_bias: true,
+        })
+        .unwrap();
 
         let mut random_sample = random_sample::Operator::new(handle);
         random_sample
@@ -109,7 +117,7 @@ impl Internal {
             rope,
             reform,
             softmax,
-            swiglu,
+            mlp,
             random_sample,
         }
     }
@@ -135,13 +143,6 @@ impl NvidiaKernels {
     }
 
     pub fn sample_workspace<'ctx>(&self, queue: &QueueOf<'ctx, Gpu>) -> DevMem<'ctx> {
-        // let random_sample = &;
-        // let workspace_len = random_sample.workspace();
-        // let scheme_n = random_sample.scheme_n();
-        // let mut workspace = queue.malloc::<u8>(workspace_len);
-        // let host = (0..scheme_n).map(|i| i as u32).collect::<Vec<_>>();
-        // queue.memcpy_h2d(&mut workspace[..scheme_n * size_of::<u32>()], &host);
-        // workspace
         self.get(queue).random_sample.workspace(queue)
     }
 
@@ -217,11 +218,8 @@ impl Operators for NvidiaKernels {
         &self.get(queue).softmax
     }
 
-    fn swiglu_op(
-        &self,
-        queue: &QueueOf<Self::Handle>,
-    ) -> &impl operators::swiglu::Swiglu<Self::Handle> {
-        &self.get(queue).swiglu
+    fn mlp_op(&self, queue: &QueueOf<Self::Handle>) -> &impl operators::mlp::Mlp<Self::Handle> {
+        &self.get(queue).mlp
     }
 }
 

@@ -15,7 +15,6 @@ pub(crate) struct Infer {
 
 #[derive(serde::Deserialize)]
 pub(crate) struct Sentence {
-    #[allow(unused)]
     pub role: String,
     pub content: String,
 }

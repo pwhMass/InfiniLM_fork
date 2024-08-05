@@ -83,8 +83,15 @@ impl Model for Transformer {
         info!("load host: {:?}", time.elapsed());
         let load_layers = (load_layers as udim).min(host.config.nlayers);
 
-        device.set_mempool_threshold(u64::MAX);
         let resource = Arc::new(Resource::new(&device));
+        device.set_mempool_threshold(u64::MAX);
+
+        // 异步编译 CUDA
+        let kernels = std::thread::spawn(move || {
+            info!("compile CUDA kernels");
+            NvidiaKernels::new(&[device], host.config.d as _, host.config.voc as _)
+        });
+
         resource.apply(|compute| {
             let ctx = compute.ctx();
             let transfer = ctx.stream();
@@ -106,27 +113,30 @@ impl Model for Transformer {
                 .take(load_layers as usize)
                 .map(|l| (l.map(from_host), transfer.record().sporulate()))
                 .collect();
+            let embed_tokens = host.embed_tokens.as_ref().map_physical(page_lock);
+            let lm_layernorm = host
+                .lm_layernorm
+                .map_physical(|u| transfer.from_host(&u).sporulate());
+            let lm_head = host
+                .lm_head
+                .map_physical(|u| transfer.from_host(&u).sporulate());
 
-            let kernels = NvidiaKernels::new(&[device], host.config.d as _, host.config.voc as _);
+            let kernels = kernels.join().unwrap();
             let sample_workspace = kernels.sample_workspace(compute).sporulate();
 
             Ok(Self(ManuallyDrop::new(Internal {
-                kernels,
-                sample_workspace,
-
-                embed_tokens: host.embed_tokens.as_ref().map_physical(page_lock),
+                embed_tokens,
                 layers,
-                lm_layernorm: host
-                    .lm_layernorm
-                    .map_physical(|u| transfer.from_host(&u).sporulate()),
-                lm_head: host
-                    .lm_head
-                    .map_physical(|u| transfer.from_host(&u).sporulate()),
+                lm_layernorm,
+                lm_head,
                 pool: Mutex::new(pool),
 
                 config: host.config,
                 resource: resource.clone(),
                 transfer: transfer.sporulate(),
+
+                kernels,
+                sample_workspace,
             })))
         })
     }
@@ -150,6 +160,10 @@ impl CausalLM for Transformer {
     #[inline]
     fn max_seq_len(&self) -> upos {
         self.0.config.max_seq_len
+    }
+    #[inline]
+    fn bos_token(&self) -> utok {
+        self.0.config.bos_token
     }
     #[inline]
     fn eos_token(&self) -> utok {

@@ -1,12 +1,15 @@
+#![deny(warnings)]
+
 mod bpe;
 mod normalizer;
 mod vocab_txt;
 
-use common::utok;
+/// `utok` for token id.
+#[allow(non_camel_case_types)]
+pub type utok = u32;
 
 pub trait Tokenizer {
     fn vocab_size(&self) -> usize;
-    fn max_piece_len(&self) -> usize;
     fn encode(&self, text: &str) -> Vec<utok>;
     fn decode(&self, token: utok) -> &str;
 }
@@ -15,24 +18,57 @@ pub use bpe::BPE;
 pub use normalizer::{BPECommonNormalizer, Normalizer};
 pub use vocab_txt::VocabTxt;
 
-struct ByteDecoder([u8; 256]);
+const fn as_byte_token(piece: &[u8]) -> Option<u8> {
+    // 按结构分解并转换
+    match piece {
+        &[b'<', b'0', b'x', a, b, b'>'] if a.is_ascii_hexdigit() && b.is_ascii_hexdigit() => {
+            // ascii 转数字
+            const fn to_num(c: u8) -> u8 {
+                match c {
+                    b'0'..=b'9' => c - b'0',
+                    b'a'..=b'f' => c - b'a' + 10,
+                    b'A'..=b'F' => c - b'A' + 10,
+                    _ => unreachable!(),
+                }
+            }
 
-impl ByteDecoder {
-    fn new() -> Self {
-        let mut ans = Self([0; 256]);
-        for (i, b) in ans.0.iter_mut().enumerate() {
-            *b = i as _;
+            Some(to_num(a) * 16 + to_num(b))
         }
-        ans
+        _ => None,
     }
+}
 
-    fn decode<'a>(&'a self, piece: &'a str) -> &'a str {
-        if let Some(byte) = piece.strip_prefix("<0x").and_then(|s| s.strip_suffix('>')) {
-            let byte = u8::from_str_radix(byte, 16).unwrap();
-            let byte = std::slice::from_ref(&self.0[byte as usize]);
-            unsafe { std::str::from_utf8_unchecked(byte) }
-        } else {
-            piece
+const fn decode_with_ascii(piece: &str) -> &str {
+    match as_byte_token(piece.as_bytes()) {
+        Some(b) => {
+            // 预填充 ASCII 码表的所有字符
+            const BYTES: [u8; 256] = {
+                let mut ans = [0; 256];
+                let mut i = 0;
+                while i < 256 {
+                    ans[i] = i as _;
+                    i += 1;
+                }
+                ans
+            };
+
+            use std::{slice::from_ref, str::from_utf8_unchecked};
+            let byte = from_ref(&BYTES[b as usize]);
+            unsafe { from_utf8_unchecked(byte) }
         }
+        None => piece,
     }
+}
+
+#[test]
+fn test_decode_with_byte() {
+    assert_eq!(decode_with_ascii("<0x0A>"), "\n");
+    assert_eq!(decode_with_ascii("<0x20>"), " ");
+    assert_eq!(decode_with_ascii("<0x2E>"), ".");
+    assert_eq!(decode_with_ascii("<0x30>"), "0");
+    assert_eq!(decode_with_ascii("<0x39>"), "9");
+    assert_eq!(decode_with_ascii("<0x41>"), "A");
+    assert_eq!(decode_with_ascii("<0x5A>"), "Z");
+    assert_eq!(decode_with_ascii("<0x61>"), "a");
+    assert_eq!(decode_with_ascii("<0x7A>"), "z");
 }
