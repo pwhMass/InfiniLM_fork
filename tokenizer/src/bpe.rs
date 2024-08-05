@@ -202,7 +202,7 @@ impl Tokenizer for BPE {
     fn encode(&self, text: &str) -> Vec<utok> {
         let mut tokenizer = self.build_tokenizer(text);
         while tokenizer.merge() {}
-        tokenizer.into_vec()
+        tokenizer.iter().collect()
     }
 
     #[inline]
@@ -267,6 +267,11 @@ mod algorithm {
         merges: BinaryHeap<Merge>,
     }
 
+    pub struct Iter<'a> {
+        bpe: &'a BPE,
+        slice: &'a [Mark],
+    }
+
     impl BPE {
         pub fn build_tokenizer<'a>(&'a self, text: &'a str) -> BpeTokenizer<'_> {
             let mut marks = vec![Mark::unk(self.unk); text.len()];
@@ -314,7 +319,7 @@ mod algorithm {
             self.find_piece(&text[range.clone()]).map(|merged| Merge {
                 pos: range.start,
                 pair,
-                merged,
+                merge: merged,
                 rank: self.token(merged).rank,
             })
         }
@@ -340,14 +345,14 @@ mod algorithm {
     struct Merge {
         pos: usize,
         pair: (utok, utok),
-        merged: utok,
+        merge: utok,
         rank: u32,
     }
     impl Ord for Merge {
         fn cmp(&self, other: &Self) -> Ordering {
             // 比较顺序：rank -> merged -> pos -> pair
             match self.rank.cmp(&other.rank) {
-                Equal => match self.merged.cmp(&other.merged) {
+                Equal => match self.merge.cmp(&other.merge) {
                     Equal => match self.pos.cmp(&other.pos) {
                         Equal => self.pair.cmp(&other.pair),
                         other => other,
@@ -367,76 +372,87 @@ mod algorithm {
     }
 
     impl BpeTokenizer<'_> {
+        /// 尝试执行一次合并，返回是否成功执行了一次合并。
         pub fn merge(&mut self) -> bool {
+            // 一次合并将涉及至多 4 个 token：
+            //
+            // t0 t1 t2 t3
+            // -- -- -- --
+            //      ↓
+            // t0 merge t3
+            // -- ----- --
+            //
+            // 成功的合并将至少消费合并队列中的 1 个项，
+            // 同时至多向合并队列添加 2 个项：
+            //
+            // t0 merge t3
+            //    --------
+            // --------
+
+            // 从合并队列消费
             while let Some(Merge {
-                pos, pair, merged, ..
+                pos: p1,
+                pair: (t1, t2),
+                merge,
+                ..
             }) = self.merges.pop()
             {
-                let mark0 = self.marks[pos];
-                let len0 = self.bpe.token(mark0.token).len as usize;
-                let Some(&mark1) = self.marks.get(pos + len0) else {
-                    continue;
-                };
-                if pair != (mark0.token, mark1.token) {
+                // 确认合并项有效性
+                if self.marks[p1].token != t1 {
                     continue;
                 }
+                let l1 = self.bpe.token(t1).len();
+                let p2 = p1 + l1;
+                if self.marks[p2].token != t2 {
+                    continue;
+                }
+                // 合并
+                self.marks[p1].token = merge;
+                self.marks[p2].token = self.bpe.unk;
 
-                self.marks[pos].token = merged;
-                self.marks[pos + len0].token = self.bpe.unk;
-
-                let len1 = self.bpe.token(mark1.token).len as usize;
-                match self.marks.get_mut(pos + len0 + len1) {
+                let l2 = self.bpe.token(t2).len();
+                let p3 = p2 + l2;
+                // 创建 merge + t3 合并项
+                match self.marks.get_mut(p3) {
                     None => {}
-                    Some(next) => {
-                        next.back_distance = (len0 + len1) as _;
+                    Some(Mark {
+                        token,
+                        back_distance,
+                    }) => {
+                        *back_distance = (l1 + l2) as _;
 
-                        let next = next.token;
-                        let len2 = self.bpe.token(next).len as usize;
-                        if let Some(merge) = self.bpe.build_merge(
-                            self.text,
-                            pos..pos + len0 + len1 + len2,
-                            (merged, next),
-                        ) {
+                        let t3 = *token;
+                        let l3 = self.bpe.token(t3).len();
+                        let p4 = p3 + l3;
+                        if let Some(merge) = self.bpe.build_merge(self.text, p1..p4, (merge, t3)) {
                             self.merges.push(merge);
                         }
                     }
                 }
-
-                match self.marks[pos].back_distance as usize {
+                // 创建 t0 + merge 合并项
+                match self.marks[p1].back_distance as usize {
                     0 => {}
-                    back => {
-                        if let Some(merge) = self.bpe.build_merge(
-                            self.text,
-                            pos - back..pos + len0 + len1,
-                            (self.marks[pos - back].token, merged),
-                        ) {
+                    l0 => {
+                        let p0 = p1 - l0;
+                        let t0 = self.marks[p0].token;
+                        if let Some(merge) = self.bpe.build_merge(self.text, p0..p3, (t0, merge)) {
                             self.merges.push(merge);
                         }
                     }
                 }
-
+                // 成功合并
                 return true;
             }
             false
         }
 
         #[inline]
-        pub fn into_vec(self) -> Vec<utok> {
-            self.iter().collect()
-        }
-
-        #[inline]
-        fn iter(&self) -> Iter {
+        pub fn iter(&self) -> Iter {
             Iter {
                 bpe: self.bpe,
                 slice: &self.marks,
             }
         }
-    }
-
-    struct Iter<'a> {
-        bpe: &'a BPE,
-        slice: &'a [Mark],
     }
 
     impl Iterator for Iter<'_> {
@@ -487,7 +503,12 @@ mod algorithm {
             {
                 writeln!(f, "merges:")?;
                 let mut merges = self.merges.clone();
-                while let Some(Merge { rank, merged, .. }) = merges.pop() {
+                while let Some(Merge {
+                    rank,
+                    merge: merged,
+                    ..
+                }) = merges.pop()
+                {
                     let text = unsafe { from_utf8_unchecked(self.bpe.token(merged)) };
                     writeln!(f, "  {rank:>6} | {text}")?;
                 }
