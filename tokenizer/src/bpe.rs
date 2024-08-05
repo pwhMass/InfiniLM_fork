@@ -1,11 +1,19 @@
 ﻿use crate::{as_byte_token, utok, Tokenizer};
-use std::{collections::HashSet, io, iter::zip, ops::Deref, path::Path, pin::Pin, ptr::NonNull};
+use std::{
+    collections::{HashMap, HashSet},
+    io,
+    iter::zip,
+    ops::Deref,
+    path::Path,
+    pin::Pin,
+    ptr::NonNull,
+};
 
 pub struct BPE {
     /// 保存所有词的字符串内容，以 u8 为单位所以不需要对齐，占用空间少
     _vocab: Pin<Box<[u8]>>,
     /// 按 token 顺序保存元信息
-    tokens: Box<[Token]>,
+    tokens: Box<[TokenMeta]>,
     /// 按字符串的字典序排序的 token 索引，用于从字符串二分查找 token。
     /// 建立索引时直接剔除了不可能从 piece 构造的所有单字节
     sorted_pieces: Box<[utok]>,
@@ -15,7 +23,7 @@ pub struct BPE {
     unk: utok,
 }
 
-struct Token {
+struct TokenMeta {
     /// 指向字符串内容的指针
     ptr: NonNull<u8>,
     /// 字符串长度
@@ -24,10 +32,10 @@ struct Token {
     rank: u32,
 }
 
-unsafe impl Send for Token {}
-unsafe impl Sync for Token {}
+unsafe impl Send for TokenMeta {}
+unsafe impl Sync for TokenMeta {}
 
-impl Deref for Token {
+impl Deref for TokenMeta {
     type Target = [u8];
     #[inline]
     fn deref(&self) -> &Self::Target {
@@ -124,7 +132,7 @@ impl BPE {
         // tokens 中直接引用字符串位置，绑定评分
         let ptr = NonNull::new(_vocab.as_ptr().cast_mut()).unwrap();
         let tokens = zip(meta, rank)
-            .map(|((off, len), rank)| Token {
+            .map(|((off, len), rank)| TokenMeta {
                 ptr: unsafe { ptr.add(off) },
                 len: len as _,
                 rank,
@@ -147,6 +155,21 @@ impl BPE {
         }
     }
 
+    /// BPE 词表中，并非所有词都是合词规则可达的。此算法可识别“内部不可达”的 token。
+    pub fn inaccessible(&self) -> HashMap<&str, utok> {
+        self.sorted_pieces
+            .iter()
+            .filter_map(|&t| {
+                let s = unsafe { std::str::from_utf8_unchecked(self.token(t)) };
+                if self.encode(s).len() > 1 {
+                    Some((s, t))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// piece -> token
     #[inline]
     fn find_piece(&self, piece: &[u8]) -> Option<utok> {
@@ -162,8 +185,9 @@ impl BPE {
         }
     }
 
+    /// token id -> token meta
     #[inline(always)]
-    fn token(&self, token: utok) -> &Token {
+    fn token(&self, token: utok) -> &TokenMeta {
         &self.tokens[token as usize]
     }
 }
