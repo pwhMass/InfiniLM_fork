@@ -1,4 +1,4 @@
-﻿use crate::{decode_with_ascii, utok, Tokenizer};
+﻿use crate::{decode_with_ascii, utok, Tokenize};
 use memmap2::Mmap;
 use patricia_tree::PatriciaMap;
 use std::{fs::File, io::Result, path::Path};
@@ -28,7 +28,7 @@ impl VocabTxt {
     }
 }
 
-impl Tokenizer for VocabTxt {
+impl Tokenize for VocabTxt {
     fn vocab_size(&self) -> usize {
         self.words.len()
     }

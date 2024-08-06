@@ -2,20 +2,30 @@
 
 mod bpe;
 mod normalizer;
+mod special;
 mod vocab_txt;
 
 /// `utok` for token id.
 #[allow(non_camel_case_types)]
 pub type utok = u32;
 
-pub trait Tokenizer {
+pub trait Tokenize {
     fn vocab_size(&self) -> usize;
     fn encode(&self, text: &str) -> Vec<utok>;
     fn decode(&self, token: utok) -> &str;
 }
 
+pub trait Method {
+    fn unk_token(&self) -> utok;
+    fn vocab_size(&self) -> usize;
+    fn internal_special(&self) -> impl IntoIterator<Item = (&str, utok)>;
+    fn encode<'a>(&'a self, text: &'a str) -> impl IntoIterator<Item = utok> + 'a;
+    fn decode(&self, token: utok) -> &[u8];
+}
+
 pub use bpe::BPE;
 pub use normalizer::{BPECommonNormalizer, Normalizer};
+pub use special::Tokenizer;
 pub use vocab_txt::VocabTxt;
 
 const fn as_byte_token(piece: &[u8]) -> Option<u8> {
@@ -23,6 +33,7 @@ const fn as_byte_token(piece: &[u8]) -> Option<u8> {
     match piece {
         &[b'<', b'0', b'x', a, b, b'>'] if a.is_ascii_hexdigit() && b.is_ascii_hexdigit() => {
             // ascii 转数字
+            #[inline(always)]
             const fn to_num(c: u8) -> u8 {
                 match c {
                     b'0'..=b'9' => c - b'0',

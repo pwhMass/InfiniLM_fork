@@ -1,4 +1,4 @@
-﻿use crate::{as_byte_token, utok, Tokenizer};
+﻿use crate::{as_byte_token, utok, Method};
 use std::{
     collections::{HashMap, HashSet},
     io,
@@ -161,7 +161,7 @@ impl BPE {
             .iter()
             .filter_map(|&t| {
                 let s = unsafe { std::str::from_utf8_unchecked(self.token(t)) };
-                if self.encode(s).len() > 1 {
+                if self.encode(s).into_iter().nth(1).is_some() {
                     Some((s, t))
                 } else {
                     None
@@ -192,22 +192,28 @@ impl BPE {
     }
 }
 
-impl Tokenizer for BPE {
+impl Method for BPE {
+    #[inline]
+    fn unk_token(&self) -> utok {
+        self.unk
+    }
     #[inline]
     fn vocab_size(&self) -> usize {
         self.tokens.len()
     }
-
     #[inline]
-    fn encode(&self, text: &str) -> Vec<utok> {
+    fn internal_special(&self) -> impl IntoIterator<Item = (&str, utok)> {
+        self.inaccessible()
+    }
+    #[inline]
+    fn encode<'a>(&'a self, text: &'a str) -> impl IntoIterator<Item = utok> + 'a {
         let mut tokenizer = self.build_tokenizer(text);
         while tokenizer.merge() {}
-        tokenizer.iter().collect()
+        tokenizer
     }
-
     #[inline]
-    fn decode(&self, token: utok) -> &str {
-        unsafe { std::str::from_utf8_unchecked(self.token(token)) }
+    fn decode(&self, token: utok) -> &[u8] {
+        self.token(token)
     }
 }
 
@@ -267,9 +273,15 @@ mod algorithm {
         merges: BinaryHeap<Merge>,
     }
 
+    pub struct IntoIter<'a> {
+        bpe: &'a BPE,
+        marks: Vec<Mark>,
+        i: usize,
+    }
+
     pub struct Iter<'a> {
         bpe: &'a BPE,
-        slice: &'a [Mark],
+        marks: &'a [Mark],
     }
 
     impl BPE {
@@ -450,7 +462,34 @@ mod algorithm {
         pub fn iter(&self) -> Iter {
             Iter {
                 bpe: self.bpe,
-                slice: &self.marks,
+                marks: &self.marks,
+            }
+        }
+    }
+
+    impl<'a> IntoIterator for BpeTokenizer<'a> {
+        type Item = utok;
+        type IntoIter = IntoIter<'a>;
+        #[inline]
+        fn into_iter(self) -> Self::IntoIter {
+            Self::IntoIter {
+                bpe: self.bpe,
+                marks: self.marks,
+                i: 0,
+            }
+        }
+    }
+
+    impl Iterator for IntoIter<'_> {
+        type Item = utok;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            match &self.marks[self.i..] {
+                &[Mark { token, .. }, ..] => {
+                    self.i += self.bpe.token(token).len();
+                    Some(token)
+                }
+                [] => None,
             }
         }
     }
@@ -459,9 +498,9 @@ mod algorithm {
         type Item = utok;
 
         fn next(&mut self) -> Option<Self::Item> {
-            match self.slice {
+            match self.marks {
                 &[Mark { token, .. }, ref tail @ ..] => {
-                    self.slice = &tail[self.bpe.token(token).len() - 1..];
+                    self.marks = &tail[self.bpe.token(token).len() - 1..];
                     Some(token)
                 }
                 [] => None,
