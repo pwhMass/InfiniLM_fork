@@ -1210,9 +1210,9 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.36.2"
+version = "0.36.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f203fa8daa7bb185f760ae12bd8e097f63d17041dcdcaf675ac54cdf863170e"
+checksum = "27b64972346851a39438c60b341ebc01bba47464ae329e55cf343eb93964efd9"
 dependencies = [
  "memchr",
 ]
@@ -1577,7 +1577,7 @@ dependencies = [
  "memmap2",
  "rangemap",
  "tensor",
- "tokenizer",
+ "tokeneer",
  "tokio",
 ]
 
@@ -1727,19 +1727,12 @@ dependencies = [
 [[package]]
 name = "tokeneer"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/tokeneer?rev=4d151ad#4d151ad25ff116cb47b83a5a83610a81ec14e114"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e826bad83400ba4403634a42dfa28bc2240255d6cb3945fbcc72391ccaba2ac4"
 dependencies = [
  "memchr",
- "regex",
-]
-
-[[package]]
-name = "tokenizer"
-version = "0.0.0"
-dependencies = [
- "memmap2",
  "patricia_tree",
- "tokeneer",
+ "regex",
 ]
 
 [[package]]
