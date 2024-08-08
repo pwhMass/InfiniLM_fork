@@ -2,16 +2,19 @@
 
 mod session;
 mod session_manager;
+mod tokenizer;
 
 use causal_lm::{CausalLM, SampleArgs};
 use chat_template::ChatTemplate;
 use session::{Dispatcher, Generator};
 use std::{
     fmt::{self, Debug},
+    fs::File,
     path::Path,
     sync::Arc,
 };
-use tokenizer::{BPECommonNormalizer, Normalizer, Tokenizer, VocabTxt, BPE};
+use tokeneer::{Bpe, Lpe, Tokeneer};
+use tokenizer::{BPECommonNormalizer, Normalizer, Tokenize};
 use tokio::task::JoinHandle;
 
 pub use chat_template::Message;
@@ -29,7 +32,7 @@ pub struct Service<M: CausalLM> {
 /// 推理线程的生命周期与这个组件绑定。
 struct ServiceComponent<M: CausalLM> {
     handle: Arc<Dispatcher<M>>,
-    tokenizer: Box<dyn Tokenizer + Send + Sync>,
+    tokenizer: Box<dyn Tokenize + Send + Sync>,
     normalizer: Box<dyn Normalizer + Send + Sync>,
     template: ChatTemplate,
     bos: String,
@@ -151,29 +154,29 @@ fn template(model_dir: impl AsRef<Path>) -> ChatTemplate {
 }
 
 fn normalizer(model_dir: impl AsRef<Path>) -> Box<dyn Normalizer + Send + Sync> {
-    use std::io::ErrorKind::NotFound;
-    match BPE::from_tokenizer_model(model_dir.as_ref().join("tokenizer.model")) {
-        Ok(_) => return Box::new(BPECommonNormalizer {}),
-        Err(e) if e.kind() == NotFound => {}
-        Err(e) => panic!("{e:?}"),
+    if model_dir.as_ref().join("tokenizer.model").is_file() {
+        return Box::new(BPECommonNormalizer {});
     }
-    match VocabTxt::from_txt_file(model_dir.as_ref().join("vocabs.txt")) {
-        Ok(_) => return Box::new(()),
-        Err(e) if e.kind() == NotFound => {}
-        Err(e) => panic!("{e:?}"),
+    if model_dir.as_ref().join("vocabs.txt").is_file() {
+        return Box::new(());
     }
     panic!("Tokenizer file not found");
 }
 
-fn tokenizer(model_dir: impl AsRef<Path>) -> Box<dyn Tokenizer + Send + Sync> {
+fn tokenizer(model_dir: impl AsRef<Path>) -> Box<dyn Tokenize + Send + Sync> {
     use std::io::ErrorKind::NotFound;
-    match BPE::from_tokenizer_model(model_dir.as_ref().join("tokenizer.model")) {
-        Ok(bpe) => return Box::new(bpe),
+
+    let mmap = |name: &str| {
+        File::open(model_dir.as_ref().join(name)).and_then(|f| unsafe { memmap2::Mmap::map(&f) })
+    };
+
+    match mmap("tokenizer.model") {
+        Ok(f) => return Box::new(Tokeneer::new(Bpe::from_tokenizer_model(&f))),
         Err(e) if e.kind() == NotFound => {}
         Err(e) => panic!("{e:?}"),
     }
-    match VocabTxt::from_txt_file(model_dir.as_ref().join("vocabs.txt")) {
-        Ok(voc) => return Box::new(voc),
+    match mmap("vocabs.txt") {
+        Ok(f) => return Box::new(Tokeneer::new(Lpe::from_vocabs_txt(&f))),
         Err(e) if e.kind() == NotFound => {}
         Err(e) => panic!("{e:?}"),
     }
