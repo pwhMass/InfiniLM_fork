@@ -1,1 +1,33 @@
 ﻿# android 对话实现
+
+使用 [cargo-ndk](https://crates.io/crates/cargo-ndk) 编译：
+
+```shell
+cargo ndk -t armeabi-v7a -t arm64-v8a -t x86_64 -o jniLibs build --package android --release
+```
+
+> **NOTICE** 需要按 cargo-ndk 描述配置 NDK 和 Android 工具链。
+
+将在项目目录生成 jniLibs 目录，将这个目录拷贝到 android 项目的 *app/src/main* 目录中。并添加这个 Java 源文件：
+
+```java
+package org.infinitensor.lm;
+
+public class Native {
+    public native static void init(String model_path);
+    public native static void start(String prompt);
+    public native static String decode();
+}
+```
+
+调用这些代码后：
+
+```kotlin
+try {
+    System.loadLibrary("android")
+} catch (e: UnsatisfiedLinkError) {
+    throw RuntimeException("Native library not found", e)
+}
+```
+
+即可使用 `Native` 类。
