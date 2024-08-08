@@ -1,0 +1,14 @@
+[package]
+name = "android"
+version = "0.0.0"
+edition = "2021"
+authors = ["YdrMaster <ydrml@hotmail.com>"]
+
+[dependencies]
+service = { path = "../service" }
+llama-cpu = { path = "../models/llama/common-cpu" }
+tokio.workspace = true
+jni = "0.21"
+
+[lib]
+crate-type = ["cdylib"]
