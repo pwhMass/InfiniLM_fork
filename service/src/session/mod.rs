@@ -103,16 +103,24 @@ impl<M: CausalLM> Session<M> {
             .cache
             .get_or_insert_with(|| Cache::new(&self.component.handle.model, vec![]));
 
-        let s = self
-            .component
-            .template
-            .render(messages, &self.component.bos, &self.component.eos, true)
-            .unwrap();
-        let s = self.component.normalizer.encode(&s);
-        let s = self.component.tokenizer.encode(&s);
+        for msg in messages {
+            let s = self
+                .component
+                .template
+                .render(
+                    std::slice::from_ref(msg),
+                    &self.component.bos,
+                    &self.component.eos,
+                    true,
+                )
+                .unwrap();
+            let s = self.component.normalizer.encode(&s);
+            let s = self.component.tokenizer.encode(&s);
 
-        cache.extend(&s);
-        self.dialog.push(s);
+            cache.extend(&s);
+            self.dialog.push(s);
+        }
+
         assert_eq!(cache.end(), self.dialog.num_tokens());
     }
 
