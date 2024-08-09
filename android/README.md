@@ -6,7 +6,11 @@
 cargo ndk -t armeabi-v7a -t arm64-v8a -t x86_64 -o jniLibs build --package android --release
 ```
 
-> **NOTICE** 需要按 cargo-ndk 描述配置 NDK 和 Android 工具链。
+> **NOTICE** 需要按安装 cargo-ndk 并按文档描述配置 NDK 和 Android 工具链。
+
+> **NOTICE** 如果需要支持的目标硬件较少，可以减少 `-t xxx` 选项。
+
+> **NOTICE** 必须使用 `--release` 编译。gemm simd 内联汇编在 debug 模式下无法编译。
 
 将在项目目录生成 jniLibs 目录，将这个目录拷贝到 android 项目的 *app/src/main* 目录中。并添加这个 Java 源文件：
 
@@ -30,4 +34,4 @@ try {
 }
 ```
 
-即可使用 `Native` 类。
+即可使用 `Native` 类进行推理。

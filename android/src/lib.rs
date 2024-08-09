@@ -1,8 +1,10 @@
+use android_logger::Config;
 use jni::{
     objects::{JClass, JString},
     sys::jstring,
     JNIEnv,
 };
+use log::LevelFilter;
 use service::Message;
 use std::{
     path::PathBuf,
@@ -10,6 +12,7 @@ use std::{
         mpsc::{Receiver, RecvError, Sender, TryRecvError},
         Mutex, Once, OnceLock,
     },
+    time::Duration,
 };
 use tokio::sync::mpsc::{self, UnboundedSender};
 
@@ -25,6 +28,12 @@ pub extern "system" fn Java_org_infinitensor_lm_Native_init(
     _: JClass,
     model_path: JString,
 ) {
+    android_logger::init_once(
+        Config::default()
+            .with_max_level(LevelFilter::Trace)
+            .with_tag("Rust"),
+    );
+
     static ONCE: Once = Once::new();
     if ONCE.is_completed() {
         panic!("Native library already initialized");
@@ -56,6 +65,9 @@ pub extern "system" fn Java_org_infinitensor_lm_Native_start(
         .expect("Couldn't get java string!")
         .into();
     let (sender, receiver) = std::sync::mpsc::channel();
+    while COMMAND.get().is_none() {
+        std::thread::sleep(Duration::from_millis(100));
+    }
     COMMAND
         .get()
         .expect("Sender not initialized")
@@ -75,7 +87,7 @@ pub extern "system" fn Java_org_infinitensor_lm_Native_decode(
 ) -> jstring {
     let mut ans = String::new();
     let mut lock = DIALOG.get_or_init(Default::default).lock().unwrap();
-    if let Some(receiver) = &mut *lock {
+    if let Some(receiver) = lock.as_mut() {
         loop {
             match receiver.try_recv() {
                 Ok(s) => ans.push_str(&s),
@@ -85,11 +97,13 @@ pub extern "system" fn Java_org_infinitensor_lm_Native_decode(
                         break;
                     }
                     Err(RecvError) => {
+                        log::error!("Receive disconnected");
                         lock.take();
                         break;
                     }
                 },
                 Err(TryRecvError::Disconnected) => {
+                    log::error!("Try receive disconnected");
                     lock.take();
                     break;
                 }
@@ -110,17 +124,22 @@ fn dispatch(model_dir: PathBuf) {
         COMMAND.get_or_init(move || sender);
 
         let mut session = service.launch();
+        log::info!("session launched");
         while let Some((content, answer)) = receiver.recv().await {
+            log::info!("chat: {content}");
             session.extend(&[Message {
                 role: "user",
                 content: &content,
             }]);
             let mut chat = session.chat();
             while let Some(piece) = chat.decode().await {
+                log::info!("piece = {piece}");
                 if answer.send(piece).is_err() {
+                    log::warn!("send error");
                     break;
                 }
             }
+            log::info!("chat finished");
         }
     });
     // 关闭 tokio 运行时
