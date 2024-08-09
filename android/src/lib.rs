@@ -1,3 +1,5 @@
+mod channels;
+
 use android_logger::Config;
 use jni::{
     objects::{JClass, JString},
@@ -9,19 +11,16 @@ use service::Message;
 use std::{
     path::PathBuf,
     sync::{
-        mpsc::{Receiver, RecvError, Sender, TryRecvError},
-        Mutex, Once, OnceLock,
+        mpsc::{channel as thread_mpsc, RecvError, Sender, TryRecvError},
+        Once,
     },
-    time::Duration,
 };
-use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::sync::mpsc::UnboundedReceiver;
 
 type Service = service::Service<llama_cpu::Transformer>;
 type Chat = (String, Sender<String>);
 
-static COMMAND: OnceLock<UnboundedSender<Chat>> = OnceLock::new();
-static DIALOG: OnceLock<Mutex<Option<Receiver<String>>>> = OnceLock::new();
-
+/// 加载模型并启动推理服务。
 #[no_mangle]
 pub extern "system" fn Java_org_infinitensor_lm_Native_init(
     mut env: JNIEnv,
@@ -47,46 +46,44 @@ pub extern "system" fn Java_org_infinitensor_lm_Native_init(
 
     if model_dir.is_dir() {
         ONCE.call_once(move || {
-            std::thread::spawn(move || dispatch(model_dir));
+            let receiver = channels::init();
+            std::thread::spawn(move || dispatch(model_dir, receiver));
         });
     } else {
         panic!("Model directory not found");
     }
 }
 
+/// 启动聊天会话。
 #[no_mangle]
 pub extern "system" fn Java_org_infinitensor_lm_Native_start(
     mut env: JNIEnv,
     _class: JClass,
     prompt: JString,
 ) {
-    let prompt: String = env
+    let prompt = env
         .get_string(&prompt)
         .expect("Couldn't get java string!")
         .into();
-    let (sender, receiver) = std::sync::mpsc::channel();
-    while COMMAND.get().is_none() {
-        std::thread::sleep(Duration::from_millis(100));
-    }
-    COMMAND
-        .get()
-        .expect("Sender not initialized")
-        .send((prompt, sender))
-        .unwrap();
-    DIALOG
-        .get_or_init(Default::default)
-        .lock()
-        .unwrap()
-        .replace(receiver);
+    let (sender, receiver) = thread_mpsc();
+    channels::chat(prompt, sender);
+    channels::dialog().lock().unwrap().replace(receiver);
 }
 
+/// 终止生成。
+#[no_mangle]
+pub extern "system" fn Java_org_infinitensor_lm_Native_abort(_env: JNIEnv, _class: JClass) {
+    let _ = channels::dialog().lock().unwrap().take();
+}
+
+/// 解码模型反馈。
 #[no_mangle]
 pub extern "system" fn Java_org_infinitensor_lm_Native_decode(
     env: JNIEnv,
     _class: JClass,
 ) -> jstring {
+    let mut lock = channels::dialog().lock().unwrap();
     let mut ans = String::new();
-    let mut lock = DIALOG.get_or_init(Default::default).lock().unwrap();
     if let Some(receiver) = lock.as_mut() {
         loop {
             match receiver.try_recv() {
@@ -97,13 +94,13 @@ pub extern "system" fn Java_org_infinitensor_lm_Native_decode(
                         break;
                     }
                     Err(RecvError) => {
-                        log::error!("Receive disconnected");
+                        log::warn!("Receive disconnected");
                         lock.take();
                         break;
                     }
                 },
                 Err(TryRecvError::Disconnected) => {
-                    log::error!("Try receive disconnected");
+                    log::warn!("Try receive disconnected");
                     lock.take();
                     break;
                 }
@@ -115,17 +112,14 @@ pub extern "system" fn Java_org_infinitensor_lm_Native_decode(
         .into_raw()
 }
 
-fn dispatch(model_dir: PathBuf) {
+fn dispatch(model_dir: PathBuf, mut chat: UnboundedReceiver<Chat>) {
     // 启动 tokio 运行时
     let runtime = tokio::runtime::Runtime::new().unwrap();
     runtime.block_on(async move {
         let (service, _handle) = Service::load(model_dir, ());
-        let (sender, mut receiver) = mpsc::unbounded_channel();
-        COMMAND.get_or_init(move || sender);
-
         let mut session = service.launch();
         log::info!("session launched");
-        while let Some((content, answer)) = receiver.recv().await {
+        while let Some((content, answer)) = chat.recv().await {
             log::info!("chat: {content}");
             session.extend(&[Message {
                 role: "user",
@@ -133,7 +127,7 @@ fn dispatch(model_dir: PathBuf) {
             }]);
             let mut chat = session.chat();
             while let Some(piece) = chat.decode().await {
-                log::info!("piece = {piece}");
+                log::debug!("piece = {piece}");
                 if answer.send(piece).is_err() {
                     log::warn!("send error");
                     break;

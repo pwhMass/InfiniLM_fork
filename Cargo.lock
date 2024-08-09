@@ -1804,7 +1804,7 @@ dependencies = [
 [[package]]
 name = "tokeneer"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/tokeneer?rev=633b0fd#633b0fdd691b2c85832ad9c416c588356e2d3992"
+source = "git+https://github.com/YdrMaster/tokeneer?rev=751f2f8#751f2f80b0bdb19dcd35c8e5db1a10d63ba861d0"
 dependencies = [
  "memchr",
  "patricia_tree",
