@@ -159,7 +159,6 @@ fn dispatch(model_dir: PathBuf, mut requests_receiver: UnboundedReceiver<TaskReq
                         }
                     }
                     log::info!("chat finished");
-                    // }
                 }
                 TaskRequest::Generate(content, answer, max_steps) => {
                     if generator.is_none() {
