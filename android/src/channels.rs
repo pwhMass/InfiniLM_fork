@@ -6,7 +6,7 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 pub enum TaskRequest {
     Chat(String, Sender<String>),
-    Generate(String, Sender<String>, usize),
+    Generate(String, Sender<String>),
 }
 static COMMAND: OnceLock<UnboundedSender<TaskRequest>> = OnceLock::new();
 static DIALOG: OnceLock<Mutex<Option<Receiver<String>>>> = OnceLock::new();
@@ -18,22 +18,21 @@ pub fn init() -> UnboundedReceiver<TaskRequest> {
     receiver
 }
 
-pub fn chat(prompt: String, sender: Sender<String>) {
+fn send_request(request: TaskRequest) {
     if let Some(command) = COMMAND.get() {
-        command.send(TaskRequest::Chat(prompt, sender)).unwrap();
-    } else {
-        log::error!("Command channel not initialized");
-        panic!();
-    };
-}
-
-pub fn generate(prompt: String, sender: Sender<String>, max_steps: usize) {
-    if let Some(command) = COMMAND.get() {
-        command.send(TaskRequest::Generate(prompt, sender, max_steps)).unwrap();
+        command.send(request).unwrap();
     } else {
         log::error!("Command channel not initialized");
         panic!();
     }
+}
+
+pub fn chat(prompt: String, sender: Sender<String>) {
+    send_request(TaskRequest::Chat(prompt, sender));
+}
+
+pub fn generate(prompt: String, sender: Sender<String>) {
+    send_request(TaskRequest::Generate(prompt, sender));
 }
 
 pub fn dialog() -> &'static Mutex<Option<Receiver<String>>> {
