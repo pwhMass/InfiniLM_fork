@@ -22,7 +22,9 @@ public class Native {
     public native static void init(String model_path);
     // 开始对话。
     public native static void start(String prompt);
-    // 终止对话。
+    // 启动文本生成。
+    public native static void startGenerate(String prompt);
+    // 终止对话/文本生成。
     public native static void abort();
     // 解码模型反馈。
     public native static String decode();

@@ -1,6 +1,7 @@
 mod channels;
 
 use android_logger::Config;
+use channels::TaskRequest;
 use jni::{
     objects::{JClass, JString},
     sys::jstring,
@@ -11,14 +12,13 @@ use service::Message;
 use std::{
     path::PathBuf,
     sync::{
-        mpsc::{channel as thread_mpsc, RecvError, Sender, TryRecvError},
+        mpsc::{channel as thread_mpsc, RecvError, TryRecvError},
         Once,
     },
 };
 use tokio::sync::mpsc::UnboundedReceiver;
 
 type Service = service::Service<llama_cpu::Transformer>;
-type Chat = (String, Sender<String>);
 
 /// 加载模型并启动推理服务。
 #[no_mangle]
@@ -29,7 +29,7 @@ pub extern "system" fn Java_org_infinitensor_lm_Native_init(
 ) {
     android_logger::init_once(
         Config::default()
-            .with_max_level(LevelFilter::Trace)
+            .with_max_level(LevelFilter::Info)
             .with_tag("Rust"),
     );
 
@@ -67,6 +67,22 @@ pub extern "system" fn Java_org_infinitensor_lm_Native_start(
         .into();
     let (sender, receiver) = thread_mpsc();
     channels::chat(prompt, sender);
+    channels::dialog().lock().unwrap().replace(receiver);
+}
+
+///启动文本生成。
+#[no_mangle]
+pub extern "system" fn Java_org_infinitensor_lm_Native_startGenerate(
+    mut env: JNIEnv,
+    _class: JClass,
+    prompt: JString,
+) {
+    let prompt = env
+        .get_string(&prompt)
+        .expect("Couldn't get java string!")
+        .into();
+    let (sender, receiver) = thread_mpsc();
+    channels::generate(prompt, sender);
     channels::dialog().lock().unwrap().replace(receiver);
 }
 
@@ -112,28 +128,45 @@ pub extern "system" fn Java_org_infinitensor_lm_Native_decode(
         .into_raw()
 }
 
-fn dispatch(model_dir: PathBuf, mut chat: UnboundedReceiver<Chat>) {
+fn dispatch(model_dir: PathBuf, mut requests: UnboundedReceiver<TaskRequest>) {
     // 启动 tokio 运行时
     let runtime = tokio::runtime::Runtime::new().unwrap();
     runtime.block_on(async move {
         let (service, _handle) = Service::load(model_dir, ());
-        let mut session = service.launch();
-        log::info!("session launched");
-        while let Some((content, answer)) = chat.recv().await {
-            log::info!("chat: {content}");
-            session.extend(&[Message {
-                role: "user",
-                content: &content,
-            }]);
-            let mut chat = session.chat();
-            while let Some(piece) = chat.decode().await {
-                log::debug!("piece = {piece}");
-                if answer.send(piece).is_err() {
-                    log::warn!("send error");
-                    break;
+        let mut session = None;
+        while let Some(request) = requests.recv().await {
+            match request {
+                TaskRequest::Chat(content, answer) => {
+                    log::info!("chat: {content}");
+                    let session = session.get_or_insert_with(|| {
+                        log::info!("new session");
+                        service.launch()
+                    });
+                    session.extend(&[Message {
+                        role: "user",
+                        content: &content,
+                    }]);
+                    let mut chat = session.chat();
+                    while let Some(piece) = chat.decode().await {
+                        if answer.send(piece).is_err() {
+                            log::warn!("send error");
+                            break;
+                        }
+                    }
+                    log::info!("chat finished");
+                }
+                TaskRequest::Generate(content, answer) => {
+                    log::info!("generate: {content}");
+                    let mut generator = service.generate(content, None);
+                    while let Some(piece) = generator.decode().await {
+                        if answer.send(piece).is_err() {
+                            log::warn!("send error");
+                            break;
+                        }
+                    }
+                    log::info!("generation finished");
                 }
             }
-            log::info!("chat finished");
         }
     });
     // 关闭 tokio 运行时
