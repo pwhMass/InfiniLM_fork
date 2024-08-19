@@ -4,7 +4,10 @@ use common_cpu::{
     tensor::{reslice, slice, udim, Tensor},
     CpuKernels, Kernels, KernelsA, KernelsB, ThisThread,
 };
-use llama::{ComputeConst, ComputeStream, Handle, LayerStorage, QueueOf, SliceOn, Storage, Weight};
+use llama::{
+    ComputeConst, ComputeStream, Handle, InferenceConfig, LayerStorage, QueueOf, SliceOn, Storage,
+    Weight,
+};
 use std::{iter::repeat, ops::Deref, path::Path, slice::from_raw_parts};
 
 pub struct Transformer {
@@ -133,12 +136,10 @@ impl CausalLM for Transformer {
     }
     #[inline]
     fn duplicate_cache(&self, cache: &Tensor<Self::Storage>, pos: upos) -> Tensor<Self::Storage> {
-        self.s
-            .config
-            .duplicate_cache(cache, pos, Blob::new, |dst, src| {
-                src.map_physical(|u| &**u)
-                    .reform_to(&mut dst.map_physical(|u| &mut **u))
-            })
+        InferenceConfig::duplicate_cache(cache, pos, Blob::new, |dst, src| {
+            src.map_physical(|u| &**u)
+                .reform_to(&mut dst.map_physical(|u| &mut **u))
+        })
     }
 
     fn token_embed(&self, queries: impl IntoIterator<Item = utok>) -> Tensor<Self::Storage> {

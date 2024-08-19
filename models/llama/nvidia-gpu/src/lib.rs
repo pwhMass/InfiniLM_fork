@@ -175,7 +175,7 @@ impl CausalLM for Transformer {
     }
 
     fn duplicate_cache(&self, cache: &Tensor<Self::Storage>, pos: upos) -> Tensor<Self::Storage> {
-        self.0.config.duplicate_cache(
+        InferenceConfig::duplicate_cache(
             cache,
             pos,
             |len| self.cache(len),
