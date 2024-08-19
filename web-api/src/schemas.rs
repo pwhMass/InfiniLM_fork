@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(serde::Deserialize)]
 pub(crate) struct Infer {
-    pub inputs: Vec<Sentence>,
+    pub messages: Vec<Sentence>,
     pub encoding: Option<String>,
     pub session_id: Option<String>,
     pub dialog_pos: Option<usize>,

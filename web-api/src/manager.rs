@@ -30,7 +30,7 @@ where
     pub fn infer(
         self: &Arc<Self>,
         Infer {
-            inputs: mut messages,
+            mut messages,
             encoding,
             session_id,
             dialog_pos,
