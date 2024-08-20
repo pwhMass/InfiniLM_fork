@@ -4,15 +4,32 @@ use common_cpu::{
     tensor::{reslice, slice, udim, Tensor},
     CpuKernels, Kernels, KernelsA, KernelsB, ThisThread,
 };
+use digit_layout::types::{F16, F32};
+use ggus::GGuf;
 use llama::{
-    ComputeConst, ComputeStream, Handle, InferenceConfig, LayerStorage, QueueOf, SliceOn, Storage,
-    Weight,
+    new::{duplicate_cache, LlamaMeta, LlamaModel},
+    ComputeConst, ComputeStream, Handle, QueueOf, SliceOn,
 };
-use std::{iter::repeat, ops::Deref, path::Path, slice::from_raw_parts};
+use memmap2::Mmap;
+use std::{fs::File, iter::repeat, ops::Deref, path::Path, slice::from_raw_parts, sync::Arc};
 
 pub struct Transformer {
-    s: Storage,
+    model: LlamaModel<OwnedSlice>,
     kernels: CpuKernels,
+}
+
+#[derive(Clone)]
+struct OwnedSlice {
+    _map: Arc<[Mmap]>,
+    slice: &'static [u8],
+}
+
+impl Deref for OwnedSlice {
+    type Target = [u8];
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        self.slice
+    }
 }
 
 impl Model for Transformer {
@@ -20,9 +37,17 @@ impl Model for Transformer {
     type Error = FileLoadError;
 
     #[inline]
-    fn load(model_dir: impl AsRef<Path>, _meta: Self::Meta) -> Result<Self, Self::Error> {
+    fn load(gguf: impl AsRef<Path>, _meta: Self::Meta) -> Result<Self, Self::Error> {
+        let file = File::open(gguf).unwrap();
+        let mmap: Arc<[Mmap]> =
+            Arc::from(vec![unsafe { Mmap::map(&file).unwrap() }].into_boxed_slice());
+        let gguf = GGuf::new(&mmap[0]).unwrap();
+
         Ok(Self {
-            s: llama::Storage::load_safetensors(model_dir)?,
+            model: LlamaModel::from_gguf(&gguf, |s| OwnedSlice {
+                _map: mmap.clone(),
+                slice: unsafe { from_raw_parts(s.as_ptr(), s.len()) },
+            }),
             kernels: Default::default(),
         })
     }
@@ -59,12 +84,13 @@ impl ComputeStream for Transformer {
     }
     #[inline]
     fn constant(&self) -> ComputeConst {
+        let meta = &self.model.meta;
         ComputeConst {
-            nh: self.s.config.nh,
-            nkvh: self.s.config.nkvh,
-            di: self.s.config.di,
-            epsilon: self.s.config.epsilon,
-            theta: self.s.config.theta,
+            nh: meta.nh as _,
+            nkvh: meta.nkvh as _,
+            di: meta.di as _,
+            epsilon: meta.epsilon,
+            theta: meta.theta,
         }
     }
 
@@ -79,39 +105,65 @@ impl ComputeStream for Transformer {
     fn layers(
         &self,
     ) -> impl Iterator<Item = impl llama::LLamaLayer<Byte = <Self::Handle as Handle>::Byte>> {
-        self.s.layers.iter().map(LlamaLayer)
+        (0..self.model.meta.nblk).map(|i| LlamaLayer(&self.model, i))
     }
 }
 
-struct LlamaLayer<'a>(&'a LayerStorage<Weight>);
+struct LlamaLayer<'a>(&'a LlamaModel<OwnedSlice>, usize);
 
 impl<'a> llama::LLamaLayer for LlamaLayer<'a> {
     type Byte = u8;
-    type Storage<'m> = Weight where Self: 'm;
+    type Storage<'m> = &'m [u8] where Self: 'm;
 
     #[inline]
     fn att_layernorm(&self) -> Tensor<Self::Storage<'_>> {
-        self.0.att_layernorm.clone()
+        let LlamaMeta { nh, dh, .. } = self.0.meta;
+        Tensor::new(F32, &[(nh * dh) as _], &self.0.blocks[self.1].attn_norm)
     }
     #[inline]
     fn att_qkv(&self) -> Tensor<Self::Storage<'_>> {
-        self.0.att_qkv.clone()
+        let LlamaMeta { nh, nkvh, dh, .. } = self.0.meta;
+        Tensor::new(
+            F16,
+            &[((nh + nkvh + nkvh) * dh) as _, (nh * dh) as _],
+            &*self.0.blocks[self.1].attn_qkv,
+        )
+        .transpose(&[1, 0])
     }
     #[inline]
     fn att_o(&self) -> Tensor<Self::Storage<'_>> {
-        self.0.att_o.clone()
+        let LlamaMeta { nh, dh, .. } = self.0.meta;
+        Tensor::new(
+            F16,
+            &[(nh * dh) as _, (nh * dh) as _],
+            &*self.0.blocks[self.1].attn_o,
+        )
+        .transpose(&[1, 0])
     }
     #[inline]
     fn mlp_layernorm(&self) -> Tensor<Self::Storage<'_>> {
-        self.0.mlp_layernorm.clone()
+        let LlamaMeta { nh, dh, .. } = self.0.meta;
+        Tensor::new(F32, &[(nh * dh) as _], &self.0.blocks[self.1].ffn_norm)
     }
     #[inline]
     fn mlp_gate_up(&self) -> Tensor<Self::Storage<'_>> {
-        self.0.mlp_gate_up.clone()
+        let LlamaMeta { nh, dh, di, .. } = self.0.meta;
+        Tensor::new(
+            F16,
+            &[(di + di) as _, (nh * dh) as _],
+            &*self.0.blocks[self.1].ffn_gate_up,
+        )
+        .transpose(&[1, 0])
     }
     #[inline]
     fn mlp_down(&self) -> Tensor<Self::Storage<'_>> {
-        self.0.mlp_down.clone()
+        let LlamaMeta { nh, dh, di, .. } = self.0.meta;
+        Tensor::new(
+            F16,
+            &[(nh * dh) as _, di as _],
+            &*self.0.blocks[self.1].ffn_down,
+        )
+        .transpose(&[1, 0])
     }
 }
 
@@ -120,38 +172,39 @@ impl CausalLM for Transformer {
 
     #[inline]
     fn max_seq_len(&self) -> upos {
-        self.s.config.max_seq_len
+        self.model.meta.dctx as _
     }
     #[inline]
     fn bos_token(&self) -> utok {
-        self.s.config.bos_token
+        1
     }
     #[inline]
     fn eos_token(&self) -> utok {
-        self.s.config.eos_token
+        2
     }
     #[inline]
     fn new_cache(&self) -> Tensor<Self::Storage> {
-        self.s.config.new_cache(Blob::new)
+        self.model.meta.new_cache(Blob::new)
     }
     #[inline]
     fn duplicate_cache(&self, cache: &Tensor<Self::Storage>, pos: upos) -> Tensor<Self::Storage> {
-        InferenceConfig::duplicate_cache(cache, pos, Blob::new, |dst, src| {
+        duplicate_cache(cache, pos, Blob::new, |dst, src| {
             src.map_physical(|u| &**u)
                 .reform_to(&mut dst.map_physical(|u| &mut **u))
         })
     }
 
     fn token_embed(&self, queries: impl IntoIterator<Item = utok>) -> Tensor<Self::Storage> {
-        let dt = self.s.config.dt;
-        let d = self.s.config.d;
+        let LlamaMeta { nh, dh, dvoc, .. } = self.model.meta;
+        let d = (nh * dh) as udim;
 
         let tokens = queries.into_iter().collect::<Vec<_>>();
         let nt = tokens.len() as udim;
 
-        let mut x = Tensor::alloc(dt, &[nt, d], Blob::new);
+        let mut x = Tensor::alloc(F16, &[nt, d], Blob::new);
+        let token_embed = Tensor::new(F16, &[dvoc as _, d], &*self.model.token_embed);
         self.kernels
-            .gather(&mut x, &self.s.embed_tokens, tokens, &ThisThread);
+            .gather(&mut x, &token_embed, tokens, &ThisThread);
         x
     }
 
@@ -168,30 +221,35 @@ impl CausalLM for Transformer {
         decoding: impl IntoIterator<Item = DecodingMeta>,
         hidden_state: Tensor<Self::Storage>,
     ) -> Tensor<Self::Storage> {
-        let dt = self.s.config.dt;
-        let d = self.s.config.d;
-        let epsilon = self.s.config.epsilon;
+        let LlamaMeta {
+            nh,
+            dh,
+            dvoc,
+            epsilon,
+            ..
+        } = self.model.meta;
+        let d = (nh * dh) as udim;
 
         let mut x = hidden_state;
         let range = DecodingMeta::select(&mut x, decoding, |dst, src| dst.copy_from_slice(src));
 
         if range.is_empty() {
-            return Tensor::alloc(dt, &[0, d as _], Blob::new);
+            return Tensor::alloc(F16, &[0, d as _], Blob::new);
         }
 
-        let lm_layernorm = &self.s.lm_layernorm;
-        let lm_head = &self.s.lm_head;
+        let lm_layernorm = Tensor::new(F32, &[d], &*self.model.output_norm);
+        let lm_head = Tensor::new(F16, &[dvoc as _, d], &*self.model.output).transpose(&[1, 0]);
         let mut x = x.slice(&[slice![range.start => range.end], slice![=>]]);
-        let mut logits = Tensor::alloc(dt, &[x.shape()[0], lm_head.shape()[1]], Blob::new);
+        let mut logits = Tensor::alloc(F16, &[x.shape()[0], lm_head.shape()[1]], Blob::new);
 
         // 复制一个 x 以实现原地归一化
         let x_ = x
             .as_ref()
             .map_physical(|u| unsafe { from_raw_parts(u.as_ptr(), u.len()) });
         self.kernels()
-            .rms_norm(&mut x, &x_, lm_layernorm, epsilon, self.queue());
+            .rms_norm(&mut x, &x_, &lm_layernorm, epsilon, self.queue());
         self.kernels()
-            .mat_mul(&mut logits, 0., &x, lm_head, 1., self.queue());
+            .mat_mul(&mut logits, 0., &x, &lm_head, 1., self.queue());
 
         logits
     }

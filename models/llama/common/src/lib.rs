@@ -2,12 +2,13 @@ mod cast;
 mod compute;
 mod json;
 mod load;
+pub mod new;
 mod save;
 
 use common::{safe_tensors::SharedTensor, upos, utok, Blob};
 use digit_layout::DigitLayout;
 use std::{ops::Deref, sync::Arc};
-use tensor::{slice, udim, Tensor};
+use tensor::{udim, Tensor};
 
 pub use common_devices::SliceOn;
 pub use compute::{ComputeConst, ComputeStream, LLamaLayer};
@@ -89,22 +90,7 @@ impl InferenceConfig {
         malloc: impl FnOnce(usize) -> S,
         reform: impl FnOnce(Tensor<&mut S>, Tensor<&S>),
     ) -> Tensor<S> {
-        let mut ans = Tensor::alloc(cache.data_layout(), cache.shape(), malloc);
-        if pos > 0 {
-            let &[_nlayers, 2, _nkvh, max_seq_len, _dh] = cache.shape() else {
-                panic!()
-            };
-            assert!(pos <= max_seq_len);
-            let slice = [
-                slice![=>],
-                slice![=>],
-                slice![=>],
-                slice![=>pos],
-                slice![=>],
-            ];
-            reform(ans.as_mut().slice(&slice), cache.as_ref().slice(&slice));
-        }
-        ans
+        new::duplicate_cache(cache, pos, malloc, reform)
     }
 }
 

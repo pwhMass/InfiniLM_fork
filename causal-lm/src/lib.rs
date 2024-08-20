@@ -115,7 +115,7 @@ where
     let Some(model_dir) = common::test_model::find() else {
         return;
     };
-    println!("model_dir: {}", model_dir.display());
+    println!("model: {}", model_dir.display());
 
     let t0 = Instant::now();
     let model = M::load(model_dir, meta).unwrap();

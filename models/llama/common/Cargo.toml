@@ -16,4 +16,5 @@ digit-layout.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 operators.workspace = true
+ggus = "0.2"
 rayon = "1.10"
