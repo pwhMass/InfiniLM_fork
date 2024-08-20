@@ -45,7 +45,8 @@ struct Internal {
 
 impl Internal {
     pub fn new(handle: &Gpu, d: usize, voc: usize) -> Self {
-        let hidden_layout = TensorLayout::new(F16, [dyn_(), d.into()], [dyn_(); 2]);
+        let d = d as u64;
+        let hidden_layout = TensorLayout::init(F16, [dyn_(), d.into()], [dyn_(); 2]);
         let mat_mul = mat_mul::Operator::new(handle);
 
         let mut rms_norm = rms_norm::Operator::new(handle);
@@ -55,7 +56,7 @@ impl Internal {
                 y_base: null_mut(),
                 x_layout: hidden_layout.clone(),
                 x_base: null(),
-                w_layout: TensorLayout::new(F16, [d.into()], [dyn_()]),
+                w_layout: TensorLayout::init(F16, [d.into()], [dyn_()]),
                 w_base: null(),
                 epsilon: 0.,
             })
@@ -63,9 +64,9 @@ impl Internal {
 
         let mut rope = rope::Operator::new(handle);
         rope.scheme(&operators::rope::Args {
-            t_layout: TensorLayout::new(F16, [dyn_(); 3], [dyn_(); 3]),
+            t_layout: TensorLayout::dyn_(F16, 3),
             t_base: null_mut(),
-            p_layout: TensorLayout::new(U32, [dyn_()], [dyn_()]),
+            p_layout: TensorLayout::dyn_(U32, 1),
             p_base: null(),
             theta: 0.,
         })
@@ -74,9 +75,9 @@ impl Internal {
         let mut reform = reform::Operator::new(handle);
         reform
             .scheme(&operators::reform::Args {
-                dst_layout: TensorLayout::new(F16, [dyn_(); 2], [dyn_(); 2]),
+                dst_layout: TensorLayout::dyn_(F16, 2),
                 dst_base: null_mut(),
-                src_layout: TensorLayout::new(F16, [dyn_(); 2], [dyn_(); 2]),
+                src_layout: TensorLayout::dyn_(F16, 2),
                 src_base: null(),
             })
             .unwrap();
@@ -84,7 +85,7 @@ impl Internal {
         let mut softmax = softmax::Operator::new(handle);
         softmax
             .scheme(&operators::fuesd_softmax::Args {
-                att_layout: TensorLayout::new(F16, [dyn_(); 3], [dyn_(); 3]),
+                att_layout: TensorLayout::dyn_(F16, 3),
                 att_base: null_mut(),
             })
             .unwrap();
@@ -95,11 +96,11 @@ impl Internal {
             y_base: null_mut(),
             x_layout: hidden_layout.clone(),
             x_base: null(),
-            gate_up_layout: TensorLayout::new(F16, [dyn_(); 2], [dyn_(); 2]),
+            gate_up_layout: TensorLayout::dyn_(F16, 2),
             gate_up_base: null_mut(),
-            w_gate_up_layout: TensorLayout::new(F16, [dyn_(); 2], [dyn_(); 2]),
+            w_gate_up_layout: TensorLayout::dyn_(F16, 2),
             w_gate_up_base: null(),
-            w_down_layout: TensorLayout::new(F16, [dyn_(); 2], [dyn_(); 2]),
+            w_down_layout: TensorLayout::dyn_(F16, 2),
             w_down_base: null(),
             down_alpha: 1.,
             down_bias: true,

@@ -250,7 +250,7 @@ dependencies = [
  "common 0.0.0",
  "digit-layout",
  "operators",
- "tensor",
+ "tensor 0.0.0",
 ]
 
 [[package]]
@@ -405,11 +405,8 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.1.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=4db3c62#4db3c62a70ca2dc9a91c0c491fee5fcb88d2c994"
-dependencies = [
- "digit-layout",
-]
+version = "0.0.0"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=29b950c#29b950c1902bafd0a3ecfddd2deee0a87ca44ef1"
 
 [[package]]
 name = "common-acl"
@@ -420,7 +417,7 @@ dependencies = [
  "common-devices",
  "operators",
  "search-ascend-tools",
- "tensor",
+ "tensor 0.0.0",
 ]
 
 [[package]]
@@ -432,7 +429,7 @@ dependencies = [
  "common-devices",
  "operators",
  "search-neuware-tools 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "tensor",
+ "tensor 0.0.0",
 ]
 
 [[package]]
@@ -443,7 +440,7 @@ dependencies = [
  "common-devices",
  "digit-layout",
  "operators",
- "tensor",
+ "tensor 0.0.0",
 ]
 
 [[package]]
@@ -453,7 +450,7 @@ dependencies = [
  "common 0.0.0",
  "digit-layout",
  "operators",
- "tensor",
+ "tensor 0.0.0",
 ]
 
 [[package]]
@@ -467,7 +464,7 @@ dependencies = [
  "operators",
  "rand",
  "search-cuda-tools",
- "tensor",
+ "tensor 0.0.0",
 ]
 
 [[package]]
@@ -1021,7 +1018,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
- "tensor",
+ "tensor 0.0.0",
 ]
 
 [[package]]
@@ -1169,7 +1166,7 @@ dependencies = [
  "digit-layout",
  "serde",
  "serde_json",
- "tensor",
+ "tensor 0.0.0",
 ]
 
 [[package]]
@@ -1182,7 +1179,7 @@ dependencies = [
  "digit-layout",
  "itertools 0.13.0",
  "mixtral",
- "tensor",
+ "tensor 0.0.0",
 ]
 
 [[package]]
@@ -1306,13 +1303,13 @@ checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 [[package]]
 name = "operators"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/operators-rs?rev=4db3c62#4db3c62a70ca2dc9a91c0c491fee5fcb88d2c994"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=29b950c#29b950c1902bafd0a3ecfddd2deee0a87ca44ef1"
 dependencies = [
  "ascendcl",
  "build-script-cfg",
  "cndrv",
  "cnnl",
- "common 0.1.0",
+ "common 0.0.0 (git+https://github.com/YdrMaster/operators-rs?rev=29b950c)",
  "cublas",
  "cuda",
  "digit-layout",
@@ -1326,6 +1323,7 @@ dependencies = [
  "search-ascend-tools",
  "search-cuda-tools",
  "search-neuware-tools 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tensor 0.0.0 (git+https://github.com/YdrMaster/operators-rs?rev=29b950c)",
 ]
 
 [[package]]
@@ -1656,7 +1654,7 @@ dependencies = [
  "lru",
  "memmap2",
  "rangemap",
- "tensor",
+ "tensor 0.0.0",
  "tokeneer",
  "tokio",
 ]
@@ -1749,6 +1747,14 @@ dependencies = [
  "operators",
  "serde",
  "smallvec",
+]
+
+[[package]]
+name = "tensor"
+version = "0.0.0"
+source = "git+https://github.com/YdrMaster/operators-rs?rev=29b950c#29b950c1902bafd0a3ecfddd2deee0a87ca44ef1"
+dependencies = [
+ "digit-layout",
 ]
 
 [[package]]
@@ -2166,7 +2172,7 @@ dependencies = [
  "search-neuware-tools 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "service",
  "simple_logger",
- "tensor",
+ "tensor 0.0.0",
  "time",
  "tokio",
  "web-api",
