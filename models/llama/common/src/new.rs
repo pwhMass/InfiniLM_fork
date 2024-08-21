@@ -1,11 +1,6 @@
-﻿//! TODO: 顺序扫描多个文件中的元信息键值对和张量，用收集器模式构造 [LlamaModel]。
-
-use common::upos;
-use digit_layout::{
-    types::{F16, F32},
-    DigitLayout,
-};
-use ggus::{GGmlType, GGuf, GGufMetaDataValueType};
+﻿use common::{upos, GGufModel};
+use digit_layout::{types::F16, DigitLayout};
+use ggus::GGufMetaDataValueType;
 use tensor::{slice, Tensor};
 
 pub struct LlamaModel<T> {
@@ -17,7 +12,7 @@ pub struct LlamaModel<T> {
 }
 
 impl<T> LlamaModel<T> {
-    pub fn from_gguf<'a>(gguf: &GGuf<'a>, mut f: impl FnMut(&'a [u8]) -> T) -> LlamaModel<T> {
+    pub fn from_gguf<'a>(gguf: &GGufModel<'a>, mut f: impl FnMut(&'a [u8]) -> T) -> LlamaModel<T> {
         use GGufMetaDataValueType as T;
 
         let mut meta = LlamaMeta {
@@ -33,16 +28,8 @@ impl<T> LlamaModel<T> {
             epsilon: 1e-5,
             theta: 1e4,
         };
-        meta.dt_norm = match gguf.tensors["output_norm.weight"].to_info().ty() {
-            GGmlType::F16 => F16,
-            GGmlType::F32 => F32,
-            ty => panic!("unsupported data type: {ty:?}"),
-        };
-        meta.dt_norm = match gguf.tensors["token_embd.weight"].to_info().ty() {
-            GGmlType::F16 => F16,
-            GGmlType::F32 => F32,
-            ty => panic!("unsupported data type: {ty:?}"),
-        };
+        meta.dt_norm = gguf.tensors["output_norm.weight"].ty;
+        meta.dt_norm = gguf.tensors["token_embd.weight"].ty;
         meta.nblk = {
             let kv = &gguf.meta_kvs["llama.block_count"];
             assert_eq!(kv.ty(), T::U32);
@@ -95,10 +82,7 @@ impl<T> LlamaModel<T> {
             meta.theta = kv.value_reader().read().unwrap();
         };
 
-        let mut data = |name: &str| {
-            let tensor = &gguf.tensors[&*name].to_info();
-            f(&gguf.data[tensor.offset()..][..tensor.nbytes()])
-        };
+        let mut data = |name: &str| f(gguf.tensors[&*name].data);
         #[rustfmt::skip]
         let blocks = (0..meta.nblk)
             .map(|i| LlamaBlk {

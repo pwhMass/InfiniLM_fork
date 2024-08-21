@@ -194,6 +194,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "bit-set"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0700ddab506f33b20a03b13996eccd309a48e5ff77d0d95926aa0210fb4e95f1"
+dependencies = [
+ "bit-vec",
+]
+
+[[package]]
+name = "bit-vec"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
+
+[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -396,6 +411,8 @@ dependencies = [
 name = "common"
 version = "0.0.0"
 dependencies = [
+ "digit-layout",
+ "ggus",
  "half",
  "memmap2",
  "safetensors",
@@ -602,6 +619,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fancy-regex"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "531e46835a22af56d1e3b66f04844bed63158bc094a628bec1d321d9b4c44bf2"
+dependencies = [
+ "bit-set",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
 name = "find_cuda_helper"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -781,9 +809,9 @@ dependencies = [
 [[package]]
 name = "ggus"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06b70f82b62039f7f121a63bc965dc57af11dddfa690b3109566c56e22642281"
+source = "git+https://github.com/YdrMaster/gguf?rev=3c456a1#3c456a1ce2577a250a6141a21b222b096e3388d2"
 dependencies = [
+ "fancy-regex",
  "indexmap",
 ]
 

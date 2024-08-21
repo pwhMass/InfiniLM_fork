@@ -11,10 +11,12 @@ pub type utok = u32;
 pub type upos = u32;
 
 mod blob;
+mod gguf;
 pub mod safe_tensors;
 pub mod test_model;
 
 pub use blob::Blob;
+pub use gguf::{map_files, GGufModel, GGufTensor};
 pub use half::{bf16, f16};
 
 /// 加载 safetensors 文件可能产生的错误。

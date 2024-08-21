@@ -1,17 +1,16 @@
 use causal_lm::{CausalLM, DecodingMeta, Model, QueryContext, SampleMeta};
-use common::{f16, upos, utok, Blob, FileLoadError};
+use common::{f16, map_files, upos, utok, Blob, FileLoadError, GGufModel};
 use common_cpu::{
     tensor::{reslice, slice, udim, Tensor},
     CpuKernels, Kernels, KernelsA, KernelsB, ThisThread,
 };
 use digit_layout::types::{F16, F32};
-use ggus::GGuf;
 use llama::{
     new::{duplicate_cache, LlamaMeta, LlamaModel},
     ComputeConst, ComputeStream, Handle, QueueOf, SliceOn,
 };
 use memmap2::Mmap;
-use std::{fs::File, iter::repeat, ops::Deref, path::Path, slice::from_raw_parts, sync::Arc};
+use std::{iter::repeat, ops::Deref, path::Path, slice::from_raw_parts, sync::Arc};
 
 pub struct Transformer {
     model: LlamaModel<OwnedSlice>,
@@ -38,14 +37,12 @@ impl Model for Transformer {
 
     #[inline]
     fn load(gguf: impl AsRef<Path>, _meta: Self::Meta) -> Result<Self, Self::Error> {
-        let file = File::open(gguf).unwrap();
-        let mmap: Arc<[Mmap]> =
-            Arc::from(vec![unsafe { Mmap::map(&file).unwrap() }].into_boxed_slice());
-        let gguf = GGuf::new(&mmap[0]).unwrap();
+        let files: Arc<[Mmap]> = Arc::from(map_files(gguf));
+        let gguf = GGufModel::read(files.iter().map(|f| &**f));
 
         Ok(Self {
             model: LlamaModel::from_gguf(&gguf, |s| OwnedSlice {
-                _map: mmap.clone(),
+                _map: files.clone(),
                 slice: unsafe { from_raw_parts(s.as_ptr(), s.len()) },
             }),
             kernels: Default::default(),

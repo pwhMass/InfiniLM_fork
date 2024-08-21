@@ -13,4 +13,4 @@ causal-lm = { path = "../../../causal-lm" }
 llama = { path = "../common" }
 digit-layout.workspace = true
 memmap2.workspace = true
-ggus = "0.2"
+ggus.workspace = true
