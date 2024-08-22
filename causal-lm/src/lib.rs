@@ -3,6 +3,8 @@
 
 mod decoding;
 mod query_context;
+mod render;
+mod tokenize;
 
 use common::{upos, utok};
 use digit_layout::types::U32;
@@ -12,15 +14,27 @@ use tensor::{udim, Tensor};
 pub use decoding::DecodingMeta;
 pub use operators::random_sample::SampleArgs;
 pub use query_context::QueryContext;
+pub use render::{build_render, ChatTemplate};
+pub use tokenize::{build_tokenize, Tokenize};
 
 /// 从文件系统加载的模型。
 pub trait Model: Sized {
     /// 用于模型加载的元数据。
-    type Meta;
+    type Config;
     /// 模型加载中可能的错误。
     type Error;
     /// 从文件系统加载模型。
-    fn load(model_dir: impl AsRef<Path>, meta: Self::Meta) -> Result<Self, Self::Error>;
+    fn load(gguf: impl AsRef<Path>, meta: Self::Config) -> Result<FromGGuf<Self>, Self::Error>;
+}
+
+/// 从 GGuf 文件加载模型、分词器和渲染模板。
+pub struct FromGGuf<M: Model> {
+    /// 模型。
+    pub model: M,
+    /// 分词器。
+    pub tokenize: Box<dyn Tokenize>,
+    /// 渲染模板。
+    pub render: Option<ChatTemplate>,
 }
 
 /// 因果语言模型。
@@ -105,20 +119,20 @@ pub fn pos<'a, S: 'a>(
 }
 
 /// 测试模型实现。
-pub fn test_impl<M>(meta: M::Meta, prompt: &[utok])
+pub fn test_impl<M>(meta: M::Config, prompt: &[utok])
 where
     M: CausalLM,
     M::Error: std::fmt::Debug,
 {
     use std::time::Instant;
 
-    let Some(model_dir) = common::test_model::find() else {
+    let Some(gguf) = common::test_model::find() else {
         return;
     };
-    println!("model: {}", model_dir.display());
+    println!("model: {}", gguf.display());
 
     let t0 = Instant::now();
-    let model = M::load(model_dir, meta).unwrap();
+    let FromGGuf { model, .. } = M::load(gguf, meta).unwrap();
     let t1 = Instant::now();
     println!("load {:?}", t1 - t0);
 

@@ -1,5 +1,4 @@
-#![deny(warnings)]
-
+﻿use common::GGufModel;
 use minijinja::Environment;
 use serde::Serialize;
 use std::sync::{
@@ -7,6 +6,7 @@ use std::sync::{
     OnceLock, RwLock,
 };
 
+/// A template for rendering chat messages.
 #[repr(transparent)]
 pub struct ChatTemplate(String);
 
@@ -16,7 +16,20 @@ pub struct Message<'a> {
     pub content: &'a str,
 }
 
+/// Build a chat template from the GGuf model.
+pub fn build_render(gguf: &GGufModel) -> Option<ChatTemplate> {
+    let template = gguf
+        .meta_kvs
+        .get("tokenizer.chat_template")?
+        .value_reader()
+        .read_str()
+        .unwrap()
+        .into();
+    Some(ChatTemplate::new(template))
+}
+
 impl ChatTemplate {
+    /// Create a new chat template.
     pub fn new(template: String) -> Self {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let id = NEXT.fetch_add(1, Relaxed).to_string();
@@ -30,9 +43,10 @@ impl ChatTemplate {
         Self(id)
     }
 
+    /// Render the chat template with the given messages.
     pub fn render(
         &self,
-        messages: &[Message<'_>],
+        messages: &[Message],
         bos_token: &str,
         eos_token: &str,
         add_generation_prompt: bool,

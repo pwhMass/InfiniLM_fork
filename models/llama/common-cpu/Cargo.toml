@@ -11,6 +11,5 @@ common = { path = "../../../common" }
 common-cpu = { path = "../../../devices/common-cpu" }
 causal-lm = { path = "../../../causal-lm" }
 llama = { path = "../common" }
-digit-layout.workspace = true
 memmap2.workspace = true
-ggus.workspace = true
+half.workspace = true
