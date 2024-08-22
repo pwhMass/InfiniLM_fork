@@ -3,16 +3,16 @@ use digit_layout::{types::F16, DigitLayout};
 use ggus::GGufMetaDataValueType;
 use tensor::{slice, Tensor};
 
-pub struct LlamaModel<T> {
+pub struct LlamaModel<'a> {
     pub meta: LlamaMeta,
-    pub token_embed: T,
-    pub output_norm: T,
-    pub output: T,
-    pub blocks: Box<[LlamaBlk<T>]>,
+    pub token_embed: &'a [u8],
+    pub output_norm: &'a [u8],
+    pub output: &'a [u8],
+    pub blocks: Box<[LlamaBlk<&'a [u8]>]>,
 }
 
-impl<T> LlamaModel<T> {
-    pub fn from_gguf<'a>(gguf: &GGufModel<'a>, mut f: impl FnMut(&'a [u8]) -> T) -> LlamaModel<T> {
+impl<'a> LlamaModel<'a> {
+    pub fn from_gguf(gguf: &GGufModel<'a>) -> Self {
         use GGufMetaDataValueType as T;
 
         let mut meta = LlamaMeta {
@@ -82,29 +82,29 @@ impl<T> LlamaModel<T> {
             meta.theta = kv.value_reader().read().unwrap();
         };
 
-        let mut data = |name: &str| f(gguf.tensors[&*name].data);
         #[rustfmt::skip]
         let blocks = (0..meta.nblk)
             .map(|i| LlamaBlk {
-                attn_norm:   data(&format!("blk.{i}.attn_norm.weight")),
-                attn_qkv:    data(&format!("blk.{i}.attn_qkv.weight")),
-                attn_o:      data(&format!("blk.{i}.attn_output.weight")),
-                ffn_norm:    data(&format!("blk.{i}.ffn_norm.weight")),
-                ffn_gate_up: data(&format!("blk.{i}.ffn_gate_up.weight")),
-                ffn_down:    data(&format!("blk.{i}.ffn_down.weight")),
+                attn_norm:   gguf.tensors[&*format!("blk.{i}.attn_norm.weight"  )].data,
+                attn_qkv:    gguf.tensors[&*format!("blk.{i}.attn_qkv.weight"   )].data,
+                attn_o:      gguf.tensors[&*format!("blk.{i}.attn_output.weight")].data,
+                ffn_norm:    gguf.tensors[&*format!("blk.{i}.ffn_norm.weight"   )].data,
+                ffn_gate_up: gguf.tensors[&*format!("blk.{i}.ffn_gate_up.weight")].data,
+                ffn_down:    gguf.tensors[&*format!("blk.{i}.ffn_down.weight"   )].data,
             })
             .collect();
 
         Self {
             meta,
-            token_embed: data("token_embd.weight"),
-            output_norm: data("output_norm.weight"),
-            output: data("output.weight"),
+            token_embed: gguf.tensors["token_embd.weight"].data,
+            output_norm: gguf.tensors["output_norm.weight"].data,
+            output: gguf.tensors["output.weight"].data,
             blocks,
         }
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct LlamaMeta {
     pub dt_norm: DigitLayout,
     pub dt_mat: DigitLayout,
@@ -169,7 +169,7 @@ pub struct LlamaBlk<T> {
 }
 
 impl<T> LlamaBlk<T> {
-    pub fn as_ref<U>(&self) -> LlamaBlk<&T> {
+    pub fn as_ref(&self) -> LlamaBlk<&T> {
         macro_rules! map {
             ($($ident:ident)+) => {
                 LlamaBlk {$(
