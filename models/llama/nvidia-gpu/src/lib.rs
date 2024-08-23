@@ -6,7 +6,7 @@ mod resource;
 extern crate log;
 
 use causal_lm::{
-    build_render, build_tokenize, CausalLM, DecodingMeta, FromGGuf, Model, QueryContext, SampleMeta,
+    CausalLM, ChatTemplate, DecodingMeta, FromGGuf, Model, QueryContext, SampleMeta, Tokenizer,
 };
 use common::{map_files, upos, utok, Blob, GGufModel};
 use common_nv::{
@@ -82,8 +82,8 @@ impl Model for Transformer {
         let _files = map_files(gguf);
         let gguf = GGufModel::read(_files.iter().map(|f| &**f));
 
-        let tokenize = build_tokenize(&gguf);
-        let render = build_render(&gguf, &*tokenize);
+        let tokenizer = Tokenizer::from_gguf(&gguf);
+        let chat_template = ChatTemplate::from_gguf(&gguf, &tokenizer);
         let llama = LlamaModel::from_gguf(&gguf);
         let LlamaMeta {
             dt_norm,
@@ -157,8 +157,8 @@ impl Model for Transformer {
 
         Ok(FromGGuf {
             model,
-            tokenize,
-            render,
+            tokenizer,
+            chat_template,
         })
     }
 }
@@ -627,9 +627,7 @@ fn test_infer() {
             device,
             load_layers: 20,
         },
-        &[
-            29966, 29989, 1792, 29989, 29958, 13, 29903, 388, 376, 18567, 29908, 304, 592, 21106,
-            29879, 5299, 29989, 465, 22137, 29989, 29958, 13,
-        ],
+        100,
+        "Once upon a time,",
     );
 }

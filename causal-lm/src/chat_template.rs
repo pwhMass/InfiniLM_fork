@@ -1,4 +1,4 @@
-﻿use crate::Tokenize;
+﻿use crate::Tokenizer;
 use common::GGufModel;
 use minijinja::Environment;
 use serde::Serialize;
@@ -21,39 +21,38 @@ pub struct Message<'a> {
     pub content: &'a str,
 }
 
-/// Build a chat template from the GGuf model.
-pub fn build_render(gguf: &GGufModel, tokenize: &dyn Tokenize) -> Option<ChatTemplate> {
-    let template = gguf
-        .meta_kvs
-        .get("tokenizer.chat_template")?
-        .value_reader()
-        .read_str()
-        .unwrap()
-        .into();
-
-    let bos = gguf.meta_kvs["tokenizer.ggml.bos_token_id"]
-        .value_reader()
-        .read::<utok>()
-        .unwrap();
-    let eos = gguf.meta_kvs["tokenizer.ggml.eos_token_id"]
-        .value_reader()
-        .read::<utok>()
-        .unwrap();
-
-    Some(ChatTemplate::new(
-        template,
-        tokenize.decode(bos).into(),
-        tokenize.decode(eos).into(),
-    ))
-}
-
 impl ChatTemplate {
+    pub fn from_gguf(gguf: &GGufModel, tokenize: &Tokenizer) -> Option<ChatTemplate> {
+        let template = gguf
+            .meta_kvs
+            .get("tokenizer.chat_template")?
+            .value_reader()
+            .read_str()
+            .unwrap()
+            .into();
+
+        let bos = gguf.meta_kvs["tokenizer.ggml.bos_token_id"]
+            .value_reader()
+            .read::<utok>()
+            .unwrap();
+        let eos = gguf.meta_kvs["tokenizer.ggml.eos_token_id"]
+            .value_reader()
+            .read::<utok>()
+            .unwrap();
+
+        Some(ChatTemplate::new(
+            template,
+            tokenize.decode(bos).into(),
+            tokenize.decode(eos).into(),
+        ))
+    }
+
     /// Create a new chat template.
     pub fn new(template: String, bos: String, eos: String) -> Self {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let id = NEXT.fetch_add(1, Relaxed).to_string();
 
-        jinja()
+        JINJA_ENV
             .write()
             .unwrap()
             .add_template_owned(id.clone(), template)
@@ -76,7 +75,7 @@ impl ChatTemplate {
             add_generation_prompt: bool,
         }
 
-        jinja()
+        JINJA_ENV
             .read()
             .unwrap()
             .get_template(&self.id)
@@ -92,26 +91,23 @@ impl ChatTemplate {
 
 impl Drop for ChatTemplate {
     fn drop(&mut self) {
-        jinja().write().unwrap().remove_template(&self.id);
+        JINJA_ENV.write().unwrap().remove_template(&self.id);
     }
 }
 
-fn jinja() -> &'static RwLock<Environment<'static>> {
-    static ENV: LazyLock<RwLock<Environment<'_>>> = LazyLock::new(|| {
-        let mut env = Environment::empty();
-        env.set_unknown_method_callback(|_, value, method, args| {
-            use minijinja::{value::ValueKind as ThisType, ErrorKind::UnknownMethod, Value};
-            match (method, value.kind(), args) {
-                ("strip", ThisType::String, []) => Ok(Value::from_safe_string(
-                    value.to_str().unwrap().trim().into(),
-                )),
-                _ => Err(UnknownMethod.into()),
-            }
-        });
-        RwLock::new(env)
+static JINJA_ENV: LazyLock<RwLock<Environment<'_>>> = LazyLock::new(|| {
+    let mut env = Environment::empty();
+    env.set_unknown_method_callback(|_, value, method, args| {
+        use minijinja::{value::ValueKind as ThisType, ErrorKind::UnknownMethod, Value};
+        match (method, value.kind(), args) {
+            ("strip", ThisType::String, []) => Ok(Value::from_safe_string(
+                value.to_str().unwrap().trim().into(),
+            )),
+            _ => Err(UnknownMethod.into()),
+        }
     });
-    &ENV
-}
+    RwLock::new(env)
+});
 
 #[test]
 fn test() {

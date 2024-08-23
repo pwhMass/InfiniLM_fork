@@ -1,5 +1,5 @@
 use causal_lm::{
-    build_render, build_tokenize, CausalLM, DecodingMeta, FromGGuf, Model, QueryContext, SampleMeta,
+    CausalLM, ChatTemplate, DecodingMeta, FromGGuf, Model, QueryContext, SampleMeta, Tokenizer,
 };
 use common::{map_files, upos, utok, Blob, GGufModel};
 use common_cpu::{
@@ -32,9 +32,9 @@ impl Model for Transformer {
         let _files = map_files(gguf);
         let gguf = GGufModel::read(_files.iter().map(|f| &**f));
 
-        let tokenize = build_tokenize(&gguf);
-        let render = build_render(&gguf, &*tokenize);
-        let model = LlamaModel::from_gguf(&gguf);
+        let tokenizer = Tokenizer::from_gguf(&gguf);
+        let chat_template = ChatTemplate::from_gguf(&gguf, &tokenizer);
+        let llama = LlamaModel::from_gguf(&gguf);
 
         #[inline(always)]
         const fn keep_lifetime(data: &[u8]) -> &'static [u8] {
@@ -42,11 +42,11 @@ impl Model for Transformer {
         }
 
         let model = Self {
-            meta: model.meta.clone(),
-            token_embed: keep_lifetime(model.token_embed),
-            output_norm: keep_lifetime(model.output_norm),
-            output: keep_lifetime(model.output),
-            blocks: model
+            meta: llama.meta.clone(),
+            token_embed: keep_lifetime(llama.token_embed),
+            output_norm: keep_lifetime(llama.output_norm),
+            output: keep_lifetime(llama.output),
+            blocks: llama
                 .blocks
                 .iter()
                 .map(|blk| blk.as_ref().map(|s| keep_lifetime(s)))
@@ -57,8 +57,8 @@ impl Model for Transformer {
 
         Ok(FromGGuf {
             model,
-            tokenize,
-            render,
+            tokenizer,
+            chat_template,
         })
     }
 }
@@ -293,11 +293,5 @@ impl CausalLM for Transformer {
 
 #[test]
 fn test_infer() {
-    causal_lm::test_impl::<Transformer>(
-        (),
-        &[
-            29966, 29989, 1792, 29989, 29958, 13, 29903, 388, 376, 18567, 29908, 304, 592, 21106,
-            29879, 5299, 29989, 465, 22137, 29989, 29958, 13,
-        ],
-    );
+    causal_lm::test_impl::<Transformer>((), 100, "Once upon a time,");
 }
