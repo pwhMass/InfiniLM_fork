@@ -35,7 +35,7 @@ tokio = { version = "1.38", features = ["rt-multi-thread", "sync"] }
 digit-layout = "0.0"
 build-script-cfg = "0.0"
 
-ggus = { git = "https://github.com/YdrMaster/gguf", rev = "aa1281a" }
+ggus = { git = "https://github.com/YdrMaster/gguf", rev = "1f4a7ba" }
 operators = { git = "https://github.com/YdrMaster/operators-rs", rev = "29b950c", default-features = false }
 search-cuda-tools = { git = "https://github.com/YdrMaster/cuda-driver", rev = "d089ada" }
 search-neuware-tools = "0.0"

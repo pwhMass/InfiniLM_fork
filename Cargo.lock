@@ -525,7 +525,7 @@ dependencies = [
 [[package]]
 name = "ggus"
 version = "0.2.0"
-source = "git+https://github.com/YdrMaster/gguf?rev=aa1281a#aa1281a937e970ed2a5b3ba67a32329adca9dafe"
+source = "git+https://github.com/YdrMaster/gguf?rev=1f4a7ba#1f4a7ba1f2c3c30c8881e697c718787d29ab294a"
 dependencies = [
  "fancy-regex",
  "indexmap",
@@ -909,9 +909,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.36"
+version = "1.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fa76aaf39101c457836aec0ce2316dbdc3ab723cdda1c6bd4e6ad4208acaca7"
+checksum = "b5b9d34b8991d19d98081b46eacdd8eb58c6f2b201139f7c5f643cc155a633af"
 dependencies = [
  "proc-macro2",
 ]

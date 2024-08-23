@@ -33,7 +33,7 @@ impl Model for Transformer {
         let gguf = GGufModel::read(_files.iter().map(|f| &**f));
 
         let tokenize = build_tokenize(&gguf);
-        let render = build_render(&gguf);
+        let render = build_render(&gguf, &*tokenize);
         let model = LlamaModel::from_gguf(&gguf);
 
         #[inline(always)]
