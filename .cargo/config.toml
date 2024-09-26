@@ -1,8 +1,0 @@
-﻿[alias]
-xtask = "run --package xtask --release --"
-debug = "run --package xtask --"
-list-turbo = "xtask list-turbo"
-deploy = "xtask deploy"
-generate = "xtask generate"
-chat = "xtask chat"
-service = "xtask service"

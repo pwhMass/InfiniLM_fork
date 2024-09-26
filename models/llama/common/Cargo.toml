@@ -7,11 +7,11 @@ authors = ["YdrMaster <ydrml@hotmail.com>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-common = { path = "../../../common" }
-common-devices = { path = "../../../devices/common" }
-tensor = { path = "../../../tensor" }
-causal-lm = { path = "../../../causal-lm" }
-itertools.workspace = true
-digit-layout.workspace = true
-operators.workspace = true
 ggus.workspace = true
+gguf.workspace = true
+operators.workspace = true
+tensor.workspace = true
+itertools = "0.13"
+
+[dev-dependencies]
+test-utils.workspace = true

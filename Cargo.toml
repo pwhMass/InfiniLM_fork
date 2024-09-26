@@ -1,42 +1,16 @@
 [workspace]
-members = [
-    "common",
-    "tensor",
-    "causal-lm",
-    # "service",
-    # "web-api",
-    # "android",
-    # "xtask",
-
-    "devices/common",
-    "devices/common-cpu",
-    "devices/nvidia-gpu",
-    "devices/cambricon-mlu",
-    "devices/ascend-card",
-
-    "models/llama/common",
-    "models/llama/common-cpu",
-    "models/llama/nvidia-gpu",
-    # "models/llama/nvidia-gpu-distributed",
-    # "models/llama/cambricon-mlu",
-    # "models/mixtral/common",
-    # "models/mixtral/cpu",
-]
+members = ["gguf", "tensor", "causal-lm", "models/llama/common", "test-utils"]
 resolver = "2"
 
 [workspace.dependencies]
-half = "2.4"
-log = "0.4"
-itertools = "0.13"
-serde = "1.0"
-serde_json = "1.0"
-memmap2 = "0.9"
-tokio = { version = "1.38", features = ["rt-multi-thread", "sync"] }
-digit-layout = "0.0"
-build-script-cfg = "0.0"
+gguf.path = "gguf"
+tensor.path = "tensor"
+causal-lm.path = "causal-lm"
+test-utils.path = "test-utils"
 
-ggus = { git = "https://github.com/YdrMaster/gguf", rev = "1f4a7ba" }
-operators = { git = "https://github.com/YdrMaster/operators-rs", rev = "29b950c", default-features = false }
-search-cuda-tools = { git = "https://github.com/YdrMaster/cuda-driver", rev = "d089ada" }
-search-neuware-tools = "0.0"
-search-ascend-tools = { git = "https://github.com/InfiniTensor/ascendcl", rev = "1e7a696" }
+ggus = { git = "https://github.com/YdrMaster/gguf", rev = "e64d758" }
+ggml-quants = { git = "https://github.com/YdrMaster/gguf", rev = "e64d758" }
+ndarray-layout = { git = "https://github.com/YdrMaster/ndarray-layout", rev = "5c6b969" }
+operators = { git = "https://github.com/YdrMaster/operators-rs", rev = "9b5c6b9", default-features = false }
+
+memmap2 = "0.9"

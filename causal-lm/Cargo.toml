@@ -4,14 +4,5 @@ version = "0.0.0"
 edition = "2021"
 authors = ["YdrMaster <ydrml@hotmail.com>"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-common = { path = "../common" }
-tensor = { path = "../tensor" }
-digit-layout.workspace = true
-operators.workspace = true
-ggus.workspace = true
-serde = { workspace = true, features = ["derive"] }
-minijinja = { version = "2.1", default-features = false, features = ["loader"] }
-tokeneer = "0.0"
+[build-dependencies]
+bindgen = "0.69"

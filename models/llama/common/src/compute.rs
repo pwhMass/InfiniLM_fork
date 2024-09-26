@@ -1,195 +1,439 @@
-﻿use crate::LlamaMeta;
-use causal_lm::QueryContext;
-use common_devices::{Kernels, KernelsA, SliceOn};
+﻿use super::{args::Args, LlamaMeta};
+use ggus::ggml_quants::digit_layout::types as ty;
 use itertools::izip;
-use operators::{Handle, QueueOf};
+use operators::{
+    attention_kv_cached::AttnKVCached,
+    mat_mul::MatMul,
+    mlp::Mlp,
+    rearrange::Rearrange,
+    rms_norm::RmsNorm,
+    rope::{Rope, Seq},
+    ByteOf, Hardware, LaunchError, Operator, QueueAlloc, QueueOf, Workspace,
+};
 use std::ops::{Deref, DerefMut};
-use tensor::{slice, split, LocalSplitable, Tensor};
+use tensor::{split, Tensor};
 
-pub trait ComputeStream {
-    type Handle: Handle;
-    type Storage;
-    type Buf<'m>: DerefMut<Target = SliceOn<Self::Handle>>;
-    type Pos<'m>: Deref<Target = SliceOn<Self::Handle>>;
+pub struct LlamaBlks<H, W, Ops>
+where
+    H: Hardware,
+    Ops: Operators<Hardware = H>,
+{
+    meta: LlamaMeta,
+    weights: W,
+    rms_norm: Ops::RmsNorm,
+    mat_mul: Ops::MatMul,
+    rope: Ops::Rope,
+    attn_kv_cached: Ops::AttnKVCached,
+    mlp: Ops::Mlp,
+    rearrange: Ops::Rearrange,
+}
 
-    fn malloc(&self, len: usize) -> Self::Buf<'_>;
-    fn free(&self, _mem: Self::Buf<'_>) {}
-    fn map_pos<'p>(&self, pos: &'p [u32]) -> Self::Pos<'p>
-    where
-        Self: 'p;
-    fn free_pos(&self, _mem: Self::Pos<'_>) {}
-    fn map_storage<'a>(&'a self, storage: &'a mut Self::Storage) -> &'a mut SliceOn<Self::Handle>;
+pub enum BlkWeight {
+    AttnNorm,
+    AttnQKV,
+    AttnO,
+    FfnNorm,
+    FfnGateUp,
+    FfnDown,
+}
 
-    fn meta(&self) -> &LlamaMeta;
-    fn kernels(&self) -> &impl Kernels<Self::Handle>;
-    fn queue(&self) -> &QueueOf<Self::Handle>;
+pub trait Weights {
+    type Hardware: Hardware;
+    type Memory: Deref<Target = [ByteOf<Self::Hardware>]>;
 
-    fn debug<T>(tensor: &Tensor<T>)
-    where
-        T: Deref<Target = SliceOn<Self::Handle>>;
-
-    fn layers(
+    fn load_blk(
         &self,
-    ) -> impl Iterator<Item = impl LLamaLayer<Byte = <Self::Handle as Handle>::Byte>>;
+        which: BlkWeight,
+        iblk: usize,
+        queue: &QueueOf<Self::Hardware>,
+    ) -> Tensor<Self::Memory>;
 
-    fn forward<'q>(
+    fn output_norm(&self, queue: &QueueOf<Self::Hardware>) -> Tensor<Self::Memory>;
+    fn output(&self, queue: &QueueOf<Self::Hardware>) -> Tensor<Self::Memory>;
+}
+
+pub trait Operators {
+    type Hardware: Hardware;
+    type RmsNorm: RmsNorm<Self::Hardware>;
+    type MatMul: MatMul<Self::Hardware>;
+    type Rope: Rope<Self::Hardware>;
+    type AttnKVCached: AttnKVCached<Self::Hardware>;
+    type Mlp: Mlp<Self::Hardware>;
+    type Rearrange: Rearrange<Self::Hardware>;
+}
+
+impl<H, W, Ops> LlamaBlks<H, W, Ops>
+where
+    H: Hardware,
+    H::Byte: 'static,
+    W: Weights<Hardware = H>,
+    Ops: Operators<Hardware = H>,
+{
+    pub fn launch<QA>(
         &self,
-        queries: impl IntoIterator<Item = QueryContext<'q, Self::Storage>>,
-        mut token_embedded: Tensor<Self::Storage>,
-    ) -> Tensor<Self::Storage>
+        args: Args<H>,
+        workspace: &mut [ByteOf<H>],
+        queue_alloc: &QA,
+    ) -> Result<(), LaunchError>
     where
-        Self::Storage: 'q,
+        QA: QueueAlloc<Hardware = H>,
     {
-        let mut queries = queries.into_iter().collect::<Vec<_>>();
-        let mut nt = 0;
-        let mut max_seq_len = 0;
-        let mut max_att_len = 0;
-        let seq_len = queries
-            .iter()
-            .map(|q| {
-                let seq = q.seq_len();
-                let att = q.att_len();
-                nt += seq;
-                max_seq_len = max_seq_len.max(seq);
-                max_att_len = max_att_len.max(att);
-                seq
-            })
-            .collect::<Vec<_>>();
-
-        let &LlamaMeta {
+        let Args {
+            embd,
+            sin,
+            cos,
+            mut logits,
+            mut requests,
+            num_tokens: nt,
+            max_seq_len,
+            max_att_len,
+            mlp_alpha,
+            residual,
+        } = args;
+        let LlamaMeta {
+            dt_mat,
+            nblk,
             nh,
             nkvh,
             dh,
             di,
-            epsilon,
-            theta,
+            distribute,
             ..
-        } = self.meta();
-        let dt = token_embedded.data_layout();
-        let d = nh * dh;
-        let dkv = nkvh * dh;
-        let head_group = nh / nkvh;
-        let head_div = (dh as f32).sqrt().recip();
-        let queue = self.queue();
+        } = self.meta;
+        let nh = nh / distribute;
+        let nkvh = nkvh / distribute;
+        let di = di / distribute;
 
-        let mut x = token_embedded
-            .as_mut()
-            .map_physical(|u| self.map_storage(u));
-        let reusing = (d + dkv + dkv).max(di + di);
-        let mut state_buf = Tensor::alloc(dt, &[nt, (d + reusing) as _], |len| self.malloc(len));
+        let ele = dt_mat.nbytes().unwrap();
+        let embd_size = nt * nh * dh * ele;
+        let qkv_size = nt * (nh + nkvh + nkvh) * dh * ele;
+        let gate_up_size = nt * di * 2 * ele;
+        let q_size = max_seq_len * nh * dh * ele;
+        let att_size = nkvh * max_seq_len * max_att_len * ele;
+        let workspace_size = embd_size + qkv_size.max(gate_up_size) + q_size + att_size;
 
-        let mut q_buf = self.malloc(nh * max_seq_len as usize * dh * dt.nbytes());
-        let mut att_buf =
-            self.malloc(nh * max_seq_len as usize * max_att_len as usize * dt.nbytes());
-        let pos = causal_lm::pos(&queries, nt);
-        let pos = pos.as_ref().map_physical(|u| self.map_pos(u));
+        let mut workspace = Workspace::new(queue_alloc, workspace, workspace_size);
 
-        for (layer, params) in self.layers().enumerate() {
-            let (mut x1, qkv) = split!(state_buf.as_mut().map_physical(|u| LocalSplitable::from(&mut **u)); [1]: d, reusing);
-            let mut qkv = qkv.slice(&[slice![=>], slice![=> d + dkv + dkv]]);
+        let mut x = embd;
+        let (x1, workspace) = workspace.split_at_mut(embd_size);
+        let mut x1 = Tensor::new(dt_mat, x.shape(), x1);
 
-            self.kernels()
-                .rms_norm(&mut x1, &x, &params.att_layernorm(), epsilon, queue);
-            self.kernels()
-                .mat_mul(&mut qkv, 0., &x1, &params.att_qkv(), 1., queue);
+        let pos = Tensor::new(
+            ty::U32,
+            &[nt],
+            Ops::Rope::build_pos(
+                nt,
+                requests.iter().map(|req| Seq {
+                    pos: req.pos,
+                    len: req.seq_len,
+                }),
+                queue_alloc,
+            ),
+        );
 
-            let (q, k, v) = split!(qkv; [1]: d, dkv, dkv);
-            let mut q = q.reshape(&[nt, nh as _, dh as _]);
-            let mut k = k.reshape(&[nt, nkvh as _, dh as _]);
-            let v = v.reshape(&[nt, nkvh as _, dh as _]);
-            let o = x1.reshape(&[nt, nh as _, dh as _]);
+        let req_split = requests.iter().map(|req| req.seq_len).collect::<Vec<_>>();
 
-            self.kernels().rope(&mut q, &pos, theta, queue);
-            self.kernels().rope(&mut k, &pos, theta, queue);
+        let queue = queue_alloc.queue();
+        for iblk in 0..nblk {
+            {
+                let w = self.weights.load_blk(BlkWeight::AttnNorm, iblk, queue);
+                self.rms_norm(&mut x1, &x, &w, workspace, queue_alloc)?;
 
-            let q = q.transpose(&[1, 0, 2]).split(1, &seq_len);
-            let k = k.transpose(&[1, 0, 2]).split(1, &seq_len);
-            let v = v.transpose(&[1, 0, 2]).split(1, &seq_len);
-            let o = o.transpose(&[1, 0, 2]).split(1, &seq_len);
+                let (qkv, workspace) = workspace.split_at_mut(qkv_size);
+                let mut qkv = Tensor::new(dt_mat, &[nt, (nh + nkvh + nkvh) * dh], qkv);
 
-            for (query, q, k, v, mut o) in izip!(&mut queries, q, k, v, o) {
-                let pos = query.pos();
-                let seq_len = query.seq_len();
-                let att_len = query.att_len();
-                let mut cache = query
-                    .cache
-                    .as_mut()
-                    .map(|t| t.as_mut().map_physical(|u| self.map_storage(u)));
-                let mut query = QueryContext {
-                    cache: cache.as_mut(),
-                    range: query.range.clone(),
-                };
-                let Some((mut k_cache, mut v_cache)) = query.cache(layer as _) else {
-                    continue;
-                };
+                let w = self.weights.load_blk(BlkWeight::AttnQKV, iblk, queue);
+                self.mat_mul(&mut qkv, 0., &x1, &w, 1., workspace, queue_alloc)?;
 
-                let slice_cat = &[slice![=>], slice![pos =>=> seq_len], slice![=>]];
-                let slice_att = &[slice![=>], slice![      => att_len], slice![=>]];
-                let shape_q0 = &[(nkvh * head_group) as u32, seq_len, dh as u32];
-                let shape_q1 = &[nkvh as u32, head_group as u32 * seq_len, dh as u32];
-                let shape_att0 = &[nkvh as u32, head_group as u32 * seq_len, att_len];
-                let shape_att1 = &[(nkvh * head_group) as u32, seq_len, att_len];
+                let qkv = qkv.tile(1, &[nh + nkvh + nkvh, dh]);
 
-                let mut q_att = Tensor::new(dt, shape_q0, &mut q_buf[..]);
-                let mut k_cat = k_cache.as_mut().slice(slice_cat).map_physical(|u| &mut **u);
-                let mut v_cat = v_cache.as_mut().slice(slice_cat).map_physical(|u| &mut **u);
-                self.kernels().reform(&mut q_att, &q, queue);
-                self.kernels().reform(&mut k_cat, &k, queue);
-                self.kernels().reform(&mut v_cat, &v, queue);
+                split!(qkv => q, k, v; [nh, nkvh, nkvh] @ 1);
+                let mut q = q;
+                let mut k = k;
+                let v = v;
+                let o = x1.as_mut().map(|t| &mut t[..]);
 
-                let q_att = q_att.reshape(shape_q1);
-                let k_att = k_cache.slice(slice_att).transpose(&[0, 2, 1]);
-                let v_att = v_cache.slice(slice_att);
+                self.rope(&mut q, &pos, &sin, &cos, workspace, queue_alloc)?;
+                self.rope(&mut k, &pos, &sin, &cos, workspace, queue_alloc)?;
 
-                let mut att = Tensor::new(dt, shape_att0, &mut att_buf[..]);
-                self.kernels()
-                    .mat_mul(&mut att, 0., &q_att, &k_att, head_div, queue);
-                let mut att = att.reshape(shape_att1);
-                self.kernels().softmax(&mut att, queue);
-                let mut x2 = q_att;
-                self.kernels()
-                    .mat_mul(&mut x2, 0., &att.reshape(shape_att0), &v_att, 1., queue);
+                let q = q.transpose(&[1, 0]);
+                let k = k.transpose(&[1, 0]);
+                let v = v.transpose(&[1, 0]);
+                let o = o.transpose(&[1, 0]);
+                let q = q.split(1, &req_split);
+                let k = k.split(1, &req_split);
+                let v = v.split(1, &req_split);
+                let o = o.split(1, &req_split);
 
-                self.kernels().reform(&mut o, &x2.reshape(shape_q0), queue);
+                for (mut q, k, v, mut o, req) in izip!(q, k, v, o, &mut requests) {
+                    let cache = req
+                        .cache
+                        .as_mut() // [buf, nblk, 2, nkvh, dh]
+                        .index(1, iblk) // [buf, 2, nkvh, dh]
+                        .transpose(&[2, 0]) // [nkvh, 2, buf, dh]
+                        .map(|t| &mut t[..]);
+
+                    split!(cache => kc, vc; [1, 1] @ 1);
+                    self.attn_kv_cached(
+                        &mut q,
+                        &k,
+                        &v,
+                        &mut o,
+                        &mut kc.index(1, 0),
+                        &mut vc.index(1, 0),
+                        req.pos,
+                        workspace,
+                        queue_alloc,
+                    )?;
+                }
             }
 
-            let (mut x1, gate_up) = split!(state_buf.as_mut().map_physical(|u| LocalSplitable::from(&mut **u)); [1]: d, reusing);
-            let mut gate_up = gate_up.slice(&[slice![=>], slice![=> di + di]]);
+            let w = self.weights.load_blk(BlkWeight::AttnO, iblk, queue);
+            self.mat_mul(&mut x, 1., &x1, &w, 1., workspace, queue_alloc)?;
 
-            self.kernels()
-                .mat_mul(&mut x, 1., &x1, &params.att_o(), 1., queue);
-            self.kernels()
-                .rms_norm(&mut x1, &x, &params.mlp_layernorm(), epsilon, queue);
-            self.kernels().mlp(
-                &mut x,
-                &x1,
-                &mut gate_up,
-                &params.mlp_gate_up(),
-                &params.mlp_down(),
-                1.,
-                true,
-                queue,
-            );
+            if distribute > 1 {
+                todo!("all reduce")
+            }
+
+            let w = self.weights.load_blk(BlkWeight::FfnNorm, iblk, queue);
+            self.rms_norm(&mut x1, &x, &w, workspace, queue_alloc)?;
+
+            #[rustfmt::skip]
+            self.mlp(&mut x, &x1, iblk, mlp_alpha, residual, workspace, queue_alloc)?;
+
+            if distribute > 1 {
+                todo!("all reduce")
+            }
         }
-        self.free_pos(pos.take_physical());
-        self.free(state_buf.take_physical());
-        self.free(q_buf);
-        self.free(att_buf);
-        drop(x);
-        token_embedded
+
+        // 集中要采样的 token
+        // NOTICE: 输入之前将请求按 seq len 升序排列可降低移动开销
+        let mut dst = 0;
+        let mut src = 0;
+        for req in &requests {
+            src += req.seq_len;
+            for src in src - req.out_len..src {
+                if src != dst {
+                    let src = unsafe { x.borrow_raw() }.index(0, src);
+                    let mut dst = x.map_slice_mut().index(0, dst);
+                    self.rearrange(&mut dst, &src, workspace, queue_alloc)?;
+                }
+                dst += 1;
+            }
+        }
+        assert_eq!(dst, logits.shape()[0]);
+
+        let w = self.weights.output_norm(queue);
+        let x_ = unsafe { x.borrow_raw() };
+        let mut x = x.map_slice_mut().slice(0, 0, 1, dst);
+        self.rms_norm(&mut x, &x_, &w, workspace, queue_alloc)?;
+
+        let lm_head = self.weights.output(queue);
+        self.mat_mul(&mut logits, 0., &x, &lm_head, 1., workspace, queue_alloc)
     }
 }
 
-pub trait LLamaLayer {
-    type Byte;
-    type Storage<'m>: Deref<Target = [Self::Byte]>
+#[allow(clippy::too_many_arguments)]
+impl<H, W, Ops> LlamaBlks<H, W, Ops>
+where
+    H: Hardware,
+    W: Weights<Hardware = H>,
+    Ops: Operators<Hardware = H>,
+{
+    fn rms_norm<Y, X, W_, QA>(
+        &self,
+        y: &mut Tensor<Y>,
+        x: &Tensor<X>,
+        w: &Tensor<W_>,
+        workspace: &mut [H::Byte],
+        queue_alloc: &QA,
+    ) -> Result<(), LaunchError>
     where
-        Self: 'm;
+        Y: DerefMut<Target = [H::Byte]>,
+        X: Deref<Target = [H::Byte]>,
+        W_: Deref<Target = [H::Byte]>,
+        QA: QueueAlloc<Hardware = H>,
+    {
+        self.rms_norm.launch(
+            &operators::rms_norm::Args {
+                y_layout: y.layout(),
+                y_base: y.base_mut(),
+                x_layout: x.layout(),
+                x_base: x.base(),
+                w_layout: w.layout(),
+                w_base: w.base(),
+                epsilon: self.meta.epsilon,
+            },
+            workspace,
+            queue_alloc,
+        )
+    }
 
-    fn att_layernorm(&self) -> Tensor<Self::Storage<'_>>;
-    fn att_qkv(&self) -> Tensor<Self::Storage<'_>>;
-    fn att_o(&self) -> Tensor<Self::Storage<'_>>;
-    fn mlp_layernorm(&self) -> Tensor<Self::Storage<'_>>;
-    fn mlp_gate_up(&self) -> Tensor<Self::Storage<'_>>;
-    fn mlp_down(&self) -> Tensor<Self::Storage<'_>>;
+    fn mat_mul<C, A, B, QA>(
+        &self,
+        c: &mut Tensor<C>,
+        beta: f32,
+        a: &Tensor<A>,
+        b: &Tensor<B>,
+        alpha: f32,
+        workspace: &mut [H::Byte],
+        queue_alloc: &QA,
+    ) -> Result<(), LaunchError>
+    where
+        C: DerefMut<Target = [H::Byte]>,
+        A: Deref<Target = [H::Byte]>,
+        B: Deref<Target = [H::Byte]>,
+        QA: QueueAlloc<Hardware = H>,
+    {
+        self.mat_mul.launch(
+            &operators::mat_mul::Args {
+                c_layout: c.layout(),
+                c_base: c.base_mut(),
+                beta,
+                a_layout: a.layout(),
+                a_base: a.base(),
+                b_layout: b.layout(),
+                b_base: b.base(),
+                alpha,
+            },
+            workspace,
+            queue_alloc,
+        )
+    }
+
+    fn rope<T, P, Sin, Cos, QA>(
+        &self,
+        t: &mut Tensor<T>,
+        p: &Tensor<P>,
+        sin: &Tensor<Sin>,
+        cos: &Tensor<Cos>,
+        workspace: &mut [H::Byte],
+        queue_alloc: &QA,
+    ) -> Result<(), LaunchError>
+    where
+        T: DerefMut<Target = [H::Byte]>,
+        P: Deref<Target = [H::Byte]>,
+        Sin: Deref<Target = [H::Byte]>,
+        Cos: Deref<Target = [H::Byte]>,
+        QA: QueueAlloc<Hardware = H>,
+    {
+        self.rope.launch(
+            &operators::rope::Args {
+                t_layout: t.layout(),
+                t_base: t.base_mut(),
+                p_layout: p.layout(),
+                p_base: p.base(),
+                sin_layout: sin.layout(),
+                sin_base: sin.base(),
+                cos_layout: cos.layout(),
+                cos_base: cos.base(),
+                theta: self.meta.theta,
+            },
+            workspace,
+            queue_alloc,
+        )
+    }
+
+    fn attn_kv_cached<Q, K, V, O, KC, VC, QA>(
+        &self,
+        q: &mut Tensor<Q>,
+        k: &Tensor<K>,
+        v: &Tensor<V>,
+        o: &mut Tensor<O>,
+        kc: &mut Tensor<KC>,
+        vc: &mut Tensor<VC>,
+        pos: usize,
+        workspace: &mut [H::Byte],
+        queue_alloc: &QA,
+    ) -> Result<(), LaunchError>
+    where
+        Q: DerefMut<Target = [H::Byte]>,
+        K: Deref<Target = [H::Byte]>,
+        V: Deref<Target = [H::Byte]>,
+        O: DerefMut<Target = [H::Byte]>,
+        KC: DerefMut<Target = [H::Byte]>,
+        VC: DerefMut<Target = [H::Byte]>,
+        QA: QueueAlloc<Hardware = H>,
+    {
+        self.attn_kv_cached.launch(
+            &operators::attention_kv_cached::Args {
+                q_layout: q.layout(),
+                q_base: q.base_mut(),
+                k_layout: k.layout(),
+                k_base: k.base(),
+                v_layout: v.layout(),
+                v_base: v.base(),
+                o_layout: o.layout(),
+                o_base: o.base_mut(),
+                k_cache_layout: kc.layout(),
+                k_cache_base: kc.base_mut(),
+                v_cache_layout: vc.layout(),
+                v_cache_base: vc.base_mut(),
+                pos: pos.into(),
+            },
+            workspace,
+            queue_alloc,
+        )
+    }
+
+    fn mlp<Y, X, QA>(
+        &self,
+        y: &mut Tensor<Y>,
+        x: &Tensor<X>,
+        iblk: usize,
+        down_alpha: f32,
+        residual: bool,
+        workspace: &mut [H::Byte],
+        queue_alloc: &QA,
+    ) -> Result<(), LaunchError>
+    where
+        Y: DerefMut<Target = [H::Byte]>,
+        X: Deref<Target = [H::Byte]>,
+        QA: QueueAlloc<Hardware = H>,
+    {
+        let queue = queue_alloc.queue();
+        let w_gate_up = self.weights.load_blk(BlkWeight::FfnGateUp, iblk, queue);
+        let w_down = self.weights.load_blk(BlkWeight::FfnDown, iblk, queue);
+
+        self.mlp.launch(
+            &operators::mlp::Args {
+                y_layout: y.layout(),
+                y_base: y.base_mut(),
+                x_layout: x.layout(),
+                x_base: x.base(),
+                w_gate_up_layout: w_gate_up.layout(),
+                w_gate_up_base: w_gate_up.base(),
+                w_down_layout: w_down.layout(),
+                w_down_base: w_down.base(),
+                down_alpha,
+                residual,
+            },
+            workspace,
+            queue_alloc,
+        )
+    }
+
+    fn rearrange<Y, X, QA>(
+        &self,
+        dst: &mut Tensor<Y>,
+        src: &Tensor<X>,
+        workspace: &mut [H::Byte],
+        queue_alloc: &QA,
+    ) -> Result<(), LaunchError>
+    where
+        Y: DerefMut<Target = [H::Byte]>,
+        X: Deref<Target = [H::Byte]>,
+        QA: QueueAlloc<Hardware = H>,
+    {
+        self.rearrange.launch(
+            &operators::rearrange::Args {
+                dst_layout: dst.layout(),
+                dst_base: dst.base_mut(),
+                src_layout: src.layout(),
+                src_base: src.base(),
+            },
+            workspace,
+            queue_alloc,
+        )
+    }
 }
