@@ -1,5 +1,12 @@
 [workspace]
-members = ["gguf", "tensor", "causal-lm", "models/llama/common", "test-utils"]
+members = [
+    "gguf",
+    "tensor",
+    "causal-lm",
+    "models/llama/common",
+    "models/llama/common-cpu",
+    "test-utils",
+]
 resolver = "2"
 
 [workspace.dependencies]

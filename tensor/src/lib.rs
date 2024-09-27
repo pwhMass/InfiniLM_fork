@@ -1,13 +1,13 @@
 mod split;
 
 use ggml_quants::{digit_layout::DigitLayout, DataBlock};
-use ndarray_layout::{ArrayLayout, Endian::BigEndian};
 use operators::TensorLayout;
 use std::{
     ops::{Deref, DerefMut, Range},
     slice::from_raw_parts,
 };
 
+pub use ndarray_layout::{ArrayLayout, Endian::BigEndian};
 pub use split::{LocalSplitable, Splitable};
 
 #[derive(Clone)]
@@ -18,6 +18,19 @@ pub struct Tensor<T> {
 }
 
 impl<T> Tensor<T> {
+    #[inline]
+    pub const unsafe fn from_raw_parts(
+        element: DigitLayout,
+        layout: ArrayLayout<5>,
+        physical: T,
+    ) -> Self {
+        Self {
+            element,
+            layout,
+            physical,
+        }
+    }
+
     pub fn new(element: DigitLayout, shape: &[usize], physical: T) -> Self {
         Self {
             element,
@@ -104,8 +117,11 @@ impl<T, B> Tensor<T>
 where
     T: Deref<Target = [B]>,
 {
+    /// # Safety
+    ///
+    /// 这个函数将在移除生命周期约束的情况下引用原始数据，对这块存储空间进行读写的安全性由开发者保证。
     #[inline]
-    pub unsafe fn borrow_raw(&self) -> Tensor<&'static [B]> {
+    pub unsafe fn map_slice_static(&self) -> Tensor<&'static [B]> {
         self.as_ref()
             .map(|x| unsafe { from_raw_parts(x.as_ptr(), x.len()) })
     }

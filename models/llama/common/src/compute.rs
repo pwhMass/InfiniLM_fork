@@ -79,6 +79,11 @@ where
             rearrange: Ops::Rearrange::new(processor),
         }
     }
+
+    #[inline]
+    pub const fn meta(&self) -> &LlamaMeta {
+        &self.meta
+    }
 }
 
 impl<H, W, Ops> LlamaBlks<H, W, Ops>
@@ -107,7 +112,6 @@ where
             max_seq_len,
             max_att_len,
             mlp_alpha,
-            residual,
         } = args;
         let LlamaMeta {
             dt_mat,
@@ -171,7 +175,10 @@ where
                 let mut q = q;
                 let mut k = k;
                 let v = v;
-                let o = x1.as_mut().map(|t| &mut t[..]);
+                let o = x1
+                    .as_mut()
+                    .tile(1, &[nh * distribute, dh])
+                    .map(|t| &mut t[..]);
 
                 self.rope(&mut q, &pos, &sin, &cos, workspace, queue_alloc)?;
                 self.rope(&mut k, &pos, &sin, &cos, workspace, queue_alloc)?;
@@ -219,7 +226,7 @@ where
             self.rms_norm(&mut x1, &x, &w, workspace, queue_alloc)?;
 
             #[rustfmt::skip]
-            self.mlp(&mut x, &x1, iblk, mlp_alpha, residual, workspace, queue_alloc)?;
+            self.mlp(&mut x, &x1, iblk, mlp_alpha, true, workspace, queue_alloc)?;
 
             if distribute > 1 {
                 todo!("all reduce")
@@ -234,7 +241,7 @@ where
             src += req.seq_len;
             for src in src - req.out_len..src {
                 if src != dst {
-                    let src = unsafe { x.borrow_raw() }.index(0, src);
+                    let src = unsafe { x.map_slice_static() }.index(0, src);
                     let mut dst = x.map_slice_mut().index(0, dst);
                     self.rearrange(&mut dst, &src, workspace, queue_alloc)?;
                 }
@@ -244,8 +251,8 @@ where
         assert_eq!(dst, logits.shape()[0]);
 
         let w = self.weights.output_norm(queue);
-        let x_ = unsafe { x.borrow_raw() };
         let mut x = x.map_slice_mut().slice(0, 0, 1, dst);
+        let x_ = unsafe { x.map_slice_static() };
         self.rms_norm(&mut x, &x_, &w, workspace, queue_alloc)?;
 
         let lm_head = self.weights.output(queue);

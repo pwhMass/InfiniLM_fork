@@ -1,11 +1,15 @@
 mod args;
 mod compute;
+mod random_sample;
 mod storage;
 
 use ggus::ggml_quants::digit_layout::DigitLayout;
 use tensor::Tensor;
 
+pub use args::{Args as LlamaArgs, Request as LlamaRequest};
 pub use compute::{BlkWeight, LlamaBlks, Operators, WeightLoader};
+pub use ggus::ggml_quants::digit_layout::types as primitive;
+pub use random_sample::RandomSample;
 pub use storage::{BlkStorage as LlamaBlkStorage, Storage as LlamaStorage};
 
 #[derive(Clone, Debug)]
@@ -37,9 +41,25 @@ impl LlamaMeta {
         Tensor::new(dt_mat, &[buf, nblk, 2, nkvh / distribute, dh], p)
     }
 
+    pub fn embd<T>(&self, nt: usize, p: T) -> Tensor<T> {
+        let &Self { dt_mat, nh, dh, .. } = self;
+        Tensor::new(dt_mat, &[nt, nh * dh], p)
+    }
+
+    pub fn logits<T>(&self, nt: usize, p: T) -> Tensor<T> {
+        let &Self { dt_mat, dvoc, .. } = self;
+        Tensor::new(dt_mat, &[nt, dvoc], p)
+    }
+
     pub fn token_embd<T>(&self, p: T) -> Tensor<T> {
-        let &Self { nh, dh, dvoc, .. } = self;
-        self.mat(p, dvoc, nh * dh, false)
+        let &Self {
+            dt_mat,
+            nh,
+            dh,
+            dvoc,
+            ..
+        } = self;
+        Tensor::new(dt_mat, &[dvoc, nh * dh], p)
     }
 
     pub fn attn_norm<T>(&self, p: T) -> Tensor<T> {
@@ -80,7 +100,7 @@ impl LlamaMeta {
             distribute,
             ..
         } = self;
-        let row = (di + di) / distribute * dh;
+        let row = (di + di) / distribute;
         let col = nh * dh;
         self.mat(p, row, col, distributed)
     }
@@ -94,7 +114,7 @@ impl LlamaMeta {
             ..
         } = self;
         let row = nh * dh;
-        let col = di / distribute * dh;
+        let col = di / distribute;
         self.mat(p, row, col, distributed)
     }
 
@@ -103,7 +123,7 @@ impl LlamaMeta {
     }
 
     pub fn output<T>(&self, p: T) -> Tensor<T> {
-        self.token_embd(p)
+        self.token_embd(p).transpose(&[1, 0])
     }
 
     fn norm<T>(&self, p: T) -> Tensor<T> {
