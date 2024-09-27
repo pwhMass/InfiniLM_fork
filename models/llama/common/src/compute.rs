@@ -13,19 +13,14 @@ use operators::{
 use std::ops::{Deref, DerefMut};
 use tensor::{split, Tensor};
 
-pub struct LlamaBlks<H, W, Ops>
-where
-    H: Hardware,
-    Ops: Operators<Hardware = H>,
-{
-    meta: LlamaMeta,
-    weights: W,
-    rms_norm: Ops::RmsNorm,
-    mat_mul: Ops::MatMul,
-    rope: Ops::Rope,
-    attn_kv_cached: Ops::AttnKVCached,
-    mlp: Ops::Mlp,
-    rearrange: Ops::Rearrange,
+pub trait Operators {
+    type Hardware: Hardware;
+    type RmsNorm: RmsNorm<Self::Hardware>;
+    type MatMul: MatMul<Self::Hardware>;
+    type Rope: Rope<Self::Hardware>;
+    type AttnKVCached: AttnKVCached<Self::Hardware>;
+    type Mlp: Mlp<Self::Hardware>;
+    type Rearrange: Rearrange<Self::Hardware>;
 }
 
 pub enum BlkWeight {
@@ -37,7 +32,7 @@ pub enum BlkWeight {
     FfnDown,
 }
 
-pub trait Weights {
+pub trait WeightLoader {
     type Hardware: Hardware;
     type Memory: Deref<Target = [ByteOf<Self::Hardware>]>;
 
@@ -46,27 +41,51 @@ pub trait Weights {
         which: BlkWeight,
         iblk: usize,
         queue: &QueueOf<Self::Hardware>,
-    ) -> Tensor<Self::Memory>;
+    ) -> Self::Memory;
 
-    fn output_norm(&self, queue: &QueueOf<Self::Hardware>) -> Tensor<Self::Memory>;
-    fn output(&self, queue: &QueueOf<Self::Hardware>) -> Tensor<Self::Memory>;
+    fn output_norm(&self, queue: &QueueOf<Self::Hardware>) -> Self::Memory;
+    fn output(&self, queue: &QueueOf<Self::Hardware>) -> Self::Memory;
 }
 
-pub trait Operators {
-    type Hardware: Hardware;
-    type RmsNorm: RmsNorm<Self::Hardware>;
-    type MatMul: MatMul<Self::Hardware>;
-    type Rope: Rope<Self::Hardware>;
-    type AttnKVCached: AttnKVCached<Self::Hardware>;
-    type Mlp: Mlp<Self::Hardware>;
-    type Rearrange: Rearrange<Self::Hardware>;
+pub struct LlamaBlks<H, W, Ops>
+where
+    H: Hardware,
+    Ops: Operators<Hardware = H>,
+{
+    meta: LlamaMeta,
+    weights: WeightDecorator<W>,
+    rms_norm: Ops::RmsNorm,
+    mat_mul: Ops::MatMul,
+    rope: Ops::Rope,
+    attn_kv_cached: Ops::AttnKVCached,
+    mlp: Ops::Mlp,
+    rearrange: Ops::Rearrange,
+}
+
+impl<H, W, Ops> LlamaBlks<H, W, Ops>
+where
+    H: Hardware,
+    Ops: Operators<Hardware = H>,
+{
+    pub fn new(processor: &H, meta: LlamaMeta, weights: W) -> Self {
+        Self {
+            weights: meta.decorator(weights),
+            meta,
+            rms_norm: Ops::RmsNorm::new(processor),
+            mat_mul: Ops::MatMul::new(processor),
+            rope: Ops::Rope::new(processor),
+            attn_kv_cached: Ops::AttnKVCached::new(processor),
+            mlp: Ops::Mlp::new(processor),
+            rearrange: Ops::Rearrange::new(processor),
+        }
+    }
 }
 
 impl<H, W, Ops> LlamaBlks<H, W, Ops>
 where
     H: Hardware,
     H::Byte: 'static,
-    W: Weights<Hardware = H>,
+    W: WeightLoader<Hardware = H>,
     Ops: Operators<Hardware = H>,
 {
     pub fn launch<QA>(
@@ -100,12 +119,13 @@ where
             distribute,
             ..
         } = self.meta;
+        let d = nh * dh;
         let nh = nh / distribute;
         let nkvh = nkvh / distribute;
         let di = di / distribute;
 
         let ele = dt_mat.nbytes().unwrap();
-        let embd_size = nt * nh * dh * ele;
+        let embd_size = nt * d * ele;
         let qkv_size = nt * (nh + nkvh + nkvh) * dh * ele;
         let gate_up_size = nt * di * 2 * ele;
         let q_size = max_seq_len * nh * dh * ele;
@@ -136,13 +156,13 @@ where
         let queue = queue_alloc.queue();
         for iblk in 0..nblk {
             {
-                let w = self.weights.load_blk(BlkWeight::AttnNorm, iblk, queue);
+                let w = self.weights.attn_norm(iblk, queue);
                 self.rms_norm(&mut x1, &x, &w, workspace, queue_alloc)?;
 
                 let (qkv, workspace) = workspace.split_at_mut(qkv_size);
                 let mut qkv = Tensor::new(dt_mat, &[nt, (nh + nkvh + nkvh) * dh], qkv);
 
-                let w = self.weights.load_blk(BlkWeight::AttnQKV, iblk, queue);
+                let w = self.weights.attn_qkv(iblk, queue);
                 self.mat_mul(&mut qkv, 0., &x1, &w, 1., workspace, queue_alloc)?;
 
                 let qkv = qkv.tile(1, &[nh + nkvh + nkvh, dh]);
@@ -188,14 +208,14 @@ where
                 }
             }
 
-            let w = self.weights.load_blk(BlkWeight::AttnO, iblk, queue);
+            let w = self.weights.attn_o(iblk, queue);
             self.mat_mul(&mut x, 1., &x1, &w, 1., workspace, queue_alloc)?;
 
             if distribute > 1 {
                 todo!("all reduce")
             }
 
-            let w = self.weights.load_blk(BlkWeight::FfnNorm, iblk, queue);
+            let w = self.weights.ffn_norm(iblk, queue);
             self.rms_norm(&mut x1, &x, &w, workspace, queue_alloc)?;
 
             #[rustfmt::skip]
@@ -237,7 +257,7 @@ where
 impl<H, W, Ops> LlamaBlks<H, W, Ops>
 where
     H: Hardware,
-    W: Weights<Hardware = H>,
+    W: WeightLoader<Hardware = H>,
     Ops: Operators<Hardware = H>,
 {
     fn rms_norm<Y, X, W_, QA>(
@@ -392,8 +412,8 @@ where
         QA: QueueAlloc<Hardware = H>,
     {
         let queue = queue_alloc.queue();
-        let w_gate_up = self.weights.load_blk(BlkWeight::FfnGateUp, iblk, queue);
-        let w_down = self.weights.load_blk(BlkWeight::FfnDown, iblk, queue);
+        let w_gate_up = self.weights.ffn_gate_up(iblk, queue);
+        let w_down = self.weights.ffn_down(iblk, queue);
 
         self.mlp.launch(
             &operators::mlp::Args {
@@ -436,4 +456,97 @@ where
             queue_alloc,
         )
     }
+}
+
+struct WeightDecorator<W> {
+    attn_norm: Tensor<()>,
+    attn_qkv: Tensor<()>,
+    attn_o: Tensor<()>,
+    ffn_norm: Tensor<()>,
+    ffn_gate_up: Tensor<()>,
+    ffn_down: Tensor<()>,
+    output_norm: Tensor<()>,
+    output: Tensor<()>,
+    weights: W,
+}
+
+impl LlamaMeta {
+    fn decorator<W>(&self, weights: W) -> WeightDecorator<W> {
+        WeightDecorator {
+            attn_norm: self.attn_norm(()),
+            attn_qkv: self.attn_qkv((), true),
+            attn_o: self.attn_o((), true),
+            ffn_norm: self.ffn_norm(()),
+            ffn_gate_up: self.ffn_gate_up((), true),
+            ffn_down: self.ffn_down((), true),
+            output_norm: self.output_norm(()),
+            output: self.output(()),
+            weights,
+        }
+    }
+}
+
+impl<W: WeightLoader> WeightDecorator<W> {
+    #[inline]
+    pub fn attn_norm(&self, iblk: usize, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory> {
+        combine(
+            &self.attn_norm,
+            self.weights.load_blk(BlkWeight::AttnNorm, iblk, queue),
+        )
+    }
+
+    #[inline]
+    pub fn attn_qkv(&self, iblk: usize, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory> {
+        combine(
+            &self.attn_qkv,
+            self.weights.load_blk(BlkWeight::AttnQKV, iblk, queue),
+        )
+    }
+
+    #[inline]
+    pub fn attn_o(&self, iblk: usize, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory> {
+        combine(
+            &self.attn_o,
+            self.weights.load_blk(BlkWeight::AttnO, iblk, queue),
+        )
+    }
+
+    #[inline]
+    pub fn ffn_norm(&self, iblk: usize, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory> {
+        combine(
+            &self.ffn_norm,
+            self.weights.load_blk(BlkWeight::FfnNorm, iblk, queue),
+        )
+    }
+
+    #[inline]
+    pub fn ffn_gate_up(&self, iblk: usize, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory> {
+        combine(
+            &self.ffn_gate_up,
+            self.weights.load_blk(BlkWeight::FfnGateUp, iblk, queue),
+        )
+    }
+
+    #[inline]
+    pub fn ffn_down(&self, iblk: usize, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory> {
+        combine(
+            &self.ffn_down,
+            self.weights.load_blk(BlkWeight::FfnDown, iblk, queue),
+        )
+    }
+
+    #[inline]
+    pub fn output_norm(&self, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory> {
+        combine(&self.output_norm, self.weights.output_norm(queue))
+    }
+
+    #[inline]
+    pub fn output(&self, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory> {
+        combine(&self.output, self.weights.output(queue))
+    }
+}
+
+#[inline]
+fn combine<T>(tensor: &Tensor<()>, p: T) -> Tensor<T> {
+    tensor.clone().map(|()| p)
 }

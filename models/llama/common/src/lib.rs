@@ -1,19 +1,12 @@
 mod args;
 mod compute;
+mod storage;
 
-use gguf::GGufModel;
-use ggus::{ggml_quants::digit_layout::DigitLayout, GGufMetaError, GGufMetaMapExt};
+use ggus::ggml_quants::digit_layout::DigitLayout;
+use tensor::Tensor;
 
-pub use compute::LlamaBlks;
-
-#[derive(Clone)]
-pub struct LlamaModel<T> {
-    pub meta: LlamaMeta,
-    pub token_embed: T,
-    pub output_norm: T,
-    pub output: T,
-    pub blocks: Box<[LlamaBlk<T>]>,
-}
+pub use compute::{BlkWeight, LlamaBlks, Operators, WeightLoader};
+pub use storage::{BlkStorage as LlamaBlkStorage, Storage as LlamaStorage};
 
 #[derive(Clone, Debug)]
 pub struct LlamaMeta {
@@ -31,75 +24,103 @@ pub struct LlamaMeta {
     pub distribute: usize,
 }
 
-#[derive(Clone)]
-pub struct LlamaBlk<T> {
-    pub attn_norm: T,
-    pub attn_qkv: T,
-    pub attn_o: T,
-    pub ffn_norm: T,
-    pub ffn_gate_up: T,
-    pub ffn_down: T,
-}
+impl LlamaMeta {
+    pub fn kv_cache<T>(&self, buf: usize, p: T) -> Tensor<T> {
+        let &Self {
+            dt_mat,
+            nblk,
+            nkvh,
+            dh,
+            distribute,
+            ..
+        } = self;
+        Tensor::new(dt_mat, &[buf, nblk, 2, nkvh / distribute, dh], p)
+    }
 
-impl<'a> LlamaModel<&'a [u8]> {
-    pub fn from_gguf(gguf: &GGufModel<'a>) -> Self {
-        #[rustfmt::skip]
-        let meta = LlamaMeta {
-            dt_norm: gguf.tensors["output_norm.weight"].ty,
-            dt_mat : gguf.tensors[ "token_embd.weight"].ty,
-            nblk   : gguf.llm_block_count().unwrap   (),
-            nh     : gguf.llm_attention_head_count   ().unwrap(),
-            nkvh   : gguf.llm_attention_head_count_kv().unwrap(),
-            dh     : gguf.llm_rope_dimension_count   ().unwrap(),
-            di     : gguf.llm_feed_forward_length    ().unwrap(),
-            dctx   : gguf.llm_context_length         ().unwrap(),
-            dvoc   : gguf.tokenizer_ggml_tokens      ().unwrap().len(),
-            epsilon: match gguf.llm_attention_layer_norm_rms_epsilon() {
-                Ok(val) => val,
-                Err(GGufMetaError::NotExist) => 1e-5,
-                Err(e) => panic!("failed to read meta: {e:?}"),
-            },
-            theta  : match gguf.llm_rope_freq_base() {
-                Ok(val) => val,
-                Err(GGufMetaError::NotExist) => 1e4,
-                Err(e) => panic!("failed to read meta: {e:?}"),
-            },
-            distribute: match gguf.get_usize("llama.distrubute") {
-                Ok(val) => val,
-                Err(GGufMetaError::NotExist) => 1,
-                Err(e) => panic!("failed to read meta: {e:?}"),
-            },
-        };
-        assert_eq!(meta.nh * meta.dh, gguf.llm_embedding_length().unwrap());
+    pub fn token_embd<T>(&self, p: T) -> Tensor<T> {
+        let &Self { nh, dh, dvoc, .. } = self;
+        self.mat(p, dvoc, nh * dh, false)
+    }
 
-        #[rustfmt::skip]
-        let blocks = (0..meta.nblk)
-            .map(|i| LlamaBlk {
-                attn_norm:   gguf.tensors[&*format!("blk.{i}.attn_norm.weight"  )].data,
-                attn_qkv:    gguf.tensors[&*format!("blk.{i}.attn_qkv.weight"   )].data,
-                attn_o:      gguf.tensors[&*format!("blk.{i}.attn_output.weight")].data,
-                ffn_norm:    gguf.tensors[&*format!("blk.{i}.ffn_norm.weight"   )].data,
-                ffn_gate_up: gguf.tensors[&*format!("blk.{i}.ffn_gate_up.weight")].data,
-                ffn_down:    gguf.tensors[&*format!("blk.{i}.ffn_down.weight"   )].data,
-            })
-            .collect();
+    pub fn attn_norm<T>(&self, p: T) -> Tensor<T> {
+        self.norm(p)
+    }
 
-        Self {
-            meta,
-            token_embed: gguf.tensors["token_embd.weight"].data,
-            output_norm: gguf.tensors["output_norm.weight"].data,
-            output: gguf.tensors["output.weight"].data,
-            blocks,
+    pub fn attn_qkv<T>(&self, p: T, distributed: bool) -> Tensor<T> {
+        let &Self {
+            nh,
+            nkvh,
+            dh,
+            distribute,
+            ..
+        } = self;
+        let row = (nh + nkvh + nkvh) / distribute * dh;
+        let col = nh * dh;
+        self.mat(p, row, col, distributed)
+    }
+
+    pub fn attn_o<T>(&self, p: T, distributed: bool) -> Tensor<T> {
+        let &Self {
+            nh, dh, distribute, ..
+        } = self;
+        let row = nh * dh;
+        let col = nh / distribute * dh;
+        self.mat(p, row, col, distributed)
+    }
+
+    pub fn ffn_norm<T>(&self, p: T) -> Tensor<T> {
+        self.norm(p)
+    }
+
+    pub fn ffn_gate_up<T>(&self, p: T, distributed: bool) -> Tensor<T> {
+        let &Self {
+            nh,
+            dh,
+            di,
+            distribute,
+            ..
+        } = self;
+        let row = (di + di) / distribute * dh;
+        let col = nh * dh;
+        self.mat(p, row, col, distributed)
+    }
+
+    pub fn ffn_down<T>(&self, p: T, distributed: bool) -> Tensor<T> {
+        let &Self {
+            nh,
+            dh,
+            di,
+            distribute,
+            ..
+        } = self;
+        let row = nh * dh;
+        let col = di / distribute * dh;
+        self.mat(p, row, col, distributed)
+    }
+
+    pub fn output_norm<T>(&self, p: T) -> Tensor<T> {
+        self.norm(p)
+    }
+
+    pub fn output<T>(&self, p: T) -> Tensor<T> {
+        self.token_embd(p)
+    }
+
+    fn norm<T>(&self, p: T) -> Tensor<T> {
+        let &Self {
+            dt_norm, nh, dh, ..
+        } = self;
+        Tensor::new(dt_norm, &[nh * dh], p)
+    }
+
+    fn mat<T>(&self, p: T, row: usize, col: usize, distributed: bool) -> Tensor<T> {
+        let &Self {
+            dt_mat, distribute, ..
+        } = self;
+        if distributed {
+            Tensor::new(dt_mat, &[row, col], p).transpose(&[1, 0])
+        } else {
+            Tensor::new(dt_mat, &[distribute, row, col], p).transpose(&[2, 1])
         }
     }
-}
-
-#[test]
-fn test_load() {
-    let Some(shards) = test_utils::map_gguf_files() else {
-        return;
-    };
-    let gguf = GGufModel::read(shards.iter().map(|s| &**s));
-    let llama = LlamaModel::from_gguf(&gguf);
-    println!("{:?}", llama.meta);
 }

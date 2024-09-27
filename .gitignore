@@ -5,3 +5,4 @@
 /causal-lm/c/build
 /target
 /deploy
+*.gguf
