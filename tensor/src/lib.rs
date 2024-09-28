@@ -1,3 +1,4 @@
+mod fmt;
 mod split;
 
 use ggml_quants::{digit_layout::DigitLayout, DataBlock};
