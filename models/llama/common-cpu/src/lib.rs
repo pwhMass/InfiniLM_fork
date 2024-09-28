@@ -1,16 +1,14 @@
-use half::f16;
 use llama::{
-    primitive, BlkWeight, LlamaArgs, LlamaBlkStorage, LlamaBlks, LlamaMeta, LlamaRequest,
-    LlamaStorage, RandomSample, WeightLoader,
+    ext::{f16, primitive, Mmap},
+    BlkWeight, LlamaArgs, LlamaBlkStorage, LlamaBlks, LlamaMeta, LlamaRequest, LlamaStorage,
+    RandomSample, Tensor, WeightLoader,
 };
-use memmap2::Mmap;
 use operators::{
     common_cpu::{Cpu, ThisThread},
     random_sample::{common_cpu::Operator as CpuOp, KVPair, SampleArgs},
     ByteOf, QueueOf,
 };
 use std::{ops::Deref, slice::from_raw_parts_mut};
-use tensor::{ArrayLayout, BigEndian, Tensor};
 
 pub struct Llama {
     _storage: Box<[Mmap]>,
@@ -93,13 +91,9 @@ impl Llama {
             .unwrap();
 
         let mut pair = KVPair::new(0, f16::ZERO);
-        let mut pairs = unsafe {
-            Tensor::from_raw_parts(
-                KVPair::<()>::LAYOUT,
-                ArrayLayout::new_contiguous(&[1], BigEndian, size_of_val(&pair)),
-                from_raw_parts_mut(&mut pair as *mut _ as *mut u8, size_of_val(&pair)),
-            )
-        };
+        let mut pairs = Tensor::kv_pair_vec(1, |_| unsafe {
+            from_raw_parts_mut(&mut pair as *mut _ as *mut u8, size_of_val(&pair))
+        });
 
         self.sample
             .launch(
@@ -248,7 +242,7 @@ fn test_infer() {
 
     fn print_time(name: &str, time: Duration, n: usize) {
         println!(
-            "{name} : {time:?} for {n} tokens, avg: {:?} per token",
+            "{name}: {time:?} for {n} tokens, avg: {:?} per token",
             time.div_f64(n as _)
         );
     }

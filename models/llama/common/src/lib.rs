@@ -3,18 +3,25 @@ mod compute;
 mod random_sample;
 mod storage;
 
-use tensor::Tensor;
-
 pub use args::{Args as LlamaArgs, Request as LlamaRequest};
 pub use compute::{BlkWeight, LlamaBlks, Operators, WeightLoader};
-pub use gguf::ggml_quants::digit_layout::{types as primitive, DigitLayout};
 pub use random_sample::RandomSample;
 pub use storage::{BlkStorage as LlamaBlkStorage, Storage as LlamaStorage};
+pub use tensor::Tensor;
+pub mod ext {
+    pub use gguf::{
+        ext::Mmap,
+        ggml_quants::{
+            digit_layout::{types as primitive, DigitLayout},
+            f16, types as quant,
+        },
+    };
+}
 
 #[derive(Clone, Debug)]
 pub struct LlamaMeta {
-    pub dt_norm: DigitLayout,
-    pub dt_mat: DigitLayout,
+    pub dt_norm: ext::DigitLayout,
+    pub dt_mat: ext::DigitLayout,
     pub nblk: usize,
     pub nh: usize,
     pub nkvh: usize,

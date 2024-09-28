@@ -6,4 +6,3 @@ authors = ["YdrMaster <ydrml@hotmail.com>"]
 
 [dependencies]
 gguf.workspace = true
-memmap2.workspace = true

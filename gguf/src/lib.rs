@@ -10,7 +10,9 @@ use memmap2::Mmap;
 use std::{collections::HashMap, fmt::Debug, fs::File, path::Path};
 
 pub use ggus::{ggml_quants, GGufMetaError, GGufMetaMapExt};
-pub use tokenizer::Tokenizer;
+pub mod ext {
+    pub use memmap2::Mmap;
+}
 
 /// 从指定文件的路径出发，映射所有分片文件。
 pub fn map_files(path: impl AsRef<Path>) -> Box<[Mmap]> {

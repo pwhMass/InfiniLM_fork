@@ -1,4 +1,4 @@
-﻿use super::{GGufModel, Tokenizer};
+﻿use super::{tokenizer::Tokenizer, GGufModel};
 use ggus::{GGufMetaError, GGufMetaMapExt};
 use minijinja::Environment;
 use serde::Serialize;

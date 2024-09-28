@@ -9,9 +9,6 @@ authors = ["YdrMaster <ydrml@hotmail.com>"]
 [dependencies]
 llama.path = "../common"
 operators = { workspace = true, features = ["common-cpu"] }
-memmap2.workspace = true
-tensor.workspace = true
-half = "2.4"
 
 [dev-dependencies]
 test-utils.workspace = true

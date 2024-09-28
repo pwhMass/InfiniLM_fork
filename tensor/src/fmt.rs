@@ -1,6 +1,5 @@
 ﻿use super::Tensor;
-use ggml_quants::digit_layout::types as primitive;
-use half::{bf16, f16};
+use ggus::ggml_quants::{bf16, digit_layout::types as primitive, f16};
 use std::{fmt, ops::Deref};
 
 pub trait DataFmt {

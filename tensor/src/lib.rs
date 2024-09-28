@@ -1,14 +1,15 @@
 mod fmt;
 mod split;
 
-use ggml_quants::{digit_layout::DigitLayout, DataBlock};
-use operators::TensorLayout;
+use ggus::ggml_quants::{digit_layout::DigitLayout, DataBlock};
+use ndarray_layout::{ArrayLayout, Endian::BigEndian};
+use operators::{random_sample::KVPair, TensorLayout};
 use std::{
+    alloc::Layout,
     ops::{Deref, DerefMut, Range},
     slice::from_raw_parts,
 };
 
-pub use ndarray_layout::{ArrayLayout, Endian::BigEndian};
 pub use split::{LocalSplitable, Splitable};
 
 #[derive(Clone)]
@@ -19,19 +20,6 @@ pub struct Tensor<T> {
 }
 
 impl<T> Tensor<T> {
-    #[inline]
-    pub const unsafe fn from_raw_parts(
-        element: DigitLayout,
-        layout: ArrayLayout<5>,
-        physical: T,
-    ) -> Self {
-        Self {
-            element,
-            layout,
-            physical,
-        }
-    }
-
     pub fn new(element: DigitLayout, shape: &[usize], physical: T) -> Self {
         Self {
             element,
@@ -107,11 +95,6 @@ impl<T> Tensor<T> {
             physical: f(self.physical),
         }
     }
-
-    #[inline]
-    pub fn layout(&self) -> TensorLayout {
-        TensorLayout::new(self.element, self.layout.shape(), self.layout.strides())
-    }
 }
 
 impl<T, B> Tensor<T>
@@ -150,6 +133,22 @@ where
     #[inline]
     pub fn base_mut(&mut self) -> *mut B {
         unsafe { self.physical.as_mut_ptr().byte_add(self.layout.offset()) }
+    }
+}
+
+/// operators
+impl<T> Tensor<T> {
+    pub fn kv_pair_vec(n: usize, f: impl FnOnce(usize) -> T) -> Self {
+        Self {
+            element: KVPair::<()>::LAYOUT,
+            layout: ArrayLayout::new_contiguous(&[n], BigEndian, size_of::<KVPair>()),
+            physical: f(Layout::array::<KVPair>(n).unwrap().size()),
+        }
+    }
+
+    #[inline]
+    pub fn layout(&self) -> TensorLayout {
+        TensorLayout::new(self.element, self.layout.shape(), self.layout.strides())
     }
 }
 

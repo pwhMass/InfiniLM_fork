@@ -1,5 +1,4 @@
-use gguf::map_files;
-use memmap2::Mmap;
+use gguf::{ext::Mmap, map_files};
 use std::path::Path;
 
 pub fn map_gguf_files() -> Option<Box<[Mmap]>> {
