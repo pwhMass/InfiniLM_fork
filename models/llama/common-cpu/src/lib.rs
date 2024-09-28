@@ -1,6 +1,6 @@
 use llama::{
     ext::{f16, primitive, Mmap},
-    BlkWeight, LlamaArgs, LlamaBlkStorage, LlamaBlks, LlamaMeta, LlamaRequest, LlamaStorage,
+    BlkWeight, LlamaArgs, LlamaBlkStorage, LlamaMeta, LlamaRequest, LlamaStorage, LlamaWorker,
     RandomSample, Tensor, WeightLoader,
 };
 use operators::{
@@ -13,7 +13,7 @@ use std::{ops::Deref, slice::from_raw_parts_mut};
 pub struct Llama {
     _storage: Box<[Mmap]>,
     token_embed: &'static [u8],
-    single: LlamaBlks<Cpu, Weights, Operators>,
+    single: LlamaWorker<Operators, Weights>,
     sample: RandomSample<Cpu, CpuOp>,
 }
 
@@ -31,7 +31,7 @@ impl Llama {
         Self {
             _storage,
             token_embed,
-            single: LlamaBlks::new(
+            single: LlamaWorker::new(
                 &Cpu,
                 meta,
                 Weights {
@@ -44,7 +44,7 @@ impl Llama {
         }
     }
 
-    pub fn infer(&self, input: &[u32], cache: &mut [u8], pos: usize) -> u32 {
+    pub fn infer(&mut self, input: &[u32], cache: &mut [u8], pos: usize) -> u32 {
         let meta = self.single.meta();
         let &LlamaMeta {
             dt_mat: element,
@@ -191,7 +191,7 @@ fn test_infer() {
     let tokenizer = gguf.tokenizer();
     let llama =
         LlamaStorage::from_gguf(&gguf).map(&mut |s| unsafe { from_raw_parts(s.as_ptr(), s.len()) });
-    let llama = Llama::new(shards, llama);
+    let mut llama = Llama::new(shards, llama);
 
     let meta = llama.single.meta();
     println!("{meta:?}");

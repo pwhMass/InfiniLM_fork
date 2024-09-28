@@ -51,11 +51,7 @@ pub trait WeightLoader {
     fn output(&self, queue: &QueueOf<Self::Hardware>) -> Self::Memory;
 }
 
-pub struct LlamaBlks<H, W, Ops>
-where
-    H: Hardware,
-    Ops: Operators<Hardware = H>,
-{
+pub struct LlamaWorker<Ops: Operators, W> {
     meta: LlamaMeta,
     weights: WeightDecorator<W>,
     rms_norm: Ops::RmsNorm,
@@ -66,12 +62,8 @@ where
     rearrange: Ops::Rearrange,
 }
 
-impl<H, W, Ops> LlamaBlks<H, W, Ops>
-where
-    H: Hardware,
-    Ops: Operators<Hardware = H>,
-{
-    pub fn new(processor: &H, meta: LlamaMeta, weights: W) -> Self {
+impl<Ops: Operators, W> LlamaWorker<Ops, W> {
+    pub fn new(processor: &Ops::Hardware, meta: LlamaMeta, weights: W) -> Self {
         Self {
             weights: meta.decorator(weights),
             meta,
@@ -90,21 +82,20 @@ where
     }
 }
 
-impl<H, W, Ops> LlamaBlks<H, W, Ops>
+impl<Ops, W> LlamaWorker<Ops, W>
 where
-    H: Hardware,
-    H::Byte: 'static,
-    W: WeightLoader<Hardware = H>,
-    Ops: Operators<Hardware = H>,
+    Ops: Operators,
+    W: WeightLoader<Hardware = Ops::Hardware>,
+    ByteOf<Ops::Hardware>: 'static,
 {
     pub fn launch<QA>(
-        &self,
-        args: Args<H>,
-        workspace: &mut [ByteOf<H>],
+        &mut self,
+        args: Args<Ops::Hardware>,
+        workspace: &mut [ByteOf<Ops::Hardware>],
         queue_alloc: &QA,
     ) -> Result<(), LaunchError>
     where
-        QA: QueueAlloc<Hardware = H>,
+        QA: QueueAlloc<Hardware = Ops::Hardware>,
     {
         let Args {
             embd,
@@ -265,25 +256,24 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-impl<H, W, Ops> LlamaBlks<H, W, Ops>
+impl<Ops, W> LlamaWorker<Ops, W>
 where
-    H: Hardware,
-    W: WeightLoader<Hardware = H>,
-    Ops: Operators<Hardware = H>,
+    Ops: Operators,
+    W: WeightLoader<Hardware = Ops::Hardware>,
 {
     fn rms_norm<Y, X, W_, QA>(
         &self,
         y: &mut Tensor<Y>,
         x: &Tensor<X>,
         w: &Tensor<W_>,
-        workspace: &mut [H::Byte],
+        workspace: &mut [ByteOf<Ops::Hardware>],
         queue_alloc: &QA,
     ) -> Result<(), LaunchError>
     where
-        Y: DerefMut<Target = [H::Byte]>,
-        X: Deref<Target = [H::Byte]>,
-        W_: Deref<Target = [H::Byte]>,
-        QA: QueueAlloc<Hardware = H>,
+        Y: DerefMut<Target = [ByteOf<Ops::Hardware>]>,
+        X: Deref<Target = [ByteOf<Ops::Hardware>]>,
+        W_: Deref<Target = [ByteOf<Ops::Hardware>]>,
+        QA: QueueAlloc<Hardware = Ops::Hardware>,
     {
         self.rms_norm.launch(
             &operators::rms_norm::Args {
@@ -307,14 +297,14 @@ where
         a: &Tensor<A>,
         b: &Tensor<B>,
         alpha: f32,
-        workspace: &mut [H::Byte],
+        workspace: &mut [ByteOf<Ops::Hardware>],
         queue_alloc: &QA,
     ) -> Result<(), LaunchError>
     where
-        C: DerefMut<Target = [H::Byte]>,
-        A: Deref<Target = [H::Byte]>,
-        B: Deref<Target = [H::Byte]>,
-        QA: QueueAlloc<Hardware = H>,
+        C: DerefMut<Target = [ByteOf<Ops::Hardware>]>,
+        A: Deref<Target = [ByteOf<Ops::Hardware>]>,
+        B: Deref<Target = [ByteOf<Ops::Hardware>]>,
+        QA: QueueAlloc<Hardware = Ops::Hardware>,
     {
         self.mat_mul.launch(
             &operators::mat_mul::Args {
@@ -338,15 +328,15 @@ where
         p: &Tensor<P>,
         sin: &Tensor<Sin>,
         cos: &Tensor<Cos>,
-        workspace: &mut [H::Byte],
+        workspace: &mut [ByteOf<Ops::Hardware>],
         queue_alloc: &QA,
     ) -> Result<(), LaunchError>
     where
-        T: DerefMut<Target = [H::Byte]>,
-        P: Deref<Target = [H::Byte]>,
-        Sin: Deref<Target = [H::Byte]>,
-        Cos: Deref<Target = [H::Byte]>,
-        QA: QueueAlloc<Hardware = H>,
+        T: DerefMut<Target = [ByteOf<Ops::Hardware>]>,
+        P: Deref<Target = [ByteOf<Ops::Hardware>]>,
+        Sin: Deref<Target = [ByteOf<Ops::Hardware>]>,
+        Cos: Deref<Target = [ByteOf<Ops::Hardware>]>,
+        QA: QueueAlloc<Hardware = Ops::Hardware>,
     {
         self.rope.launch(
             &operators::rope::Args {
@@ -374,17 +364,17 @@ where
         kc: &mut Tensor<KC>,
         vc: &mut Tensor<VC>,
         pos: usize,
-        workspace: &mut [H::Byte],
+        workspace: &mut [ByteOf<Ops::Hardware>],
         queue_alloc: &QA,
     ) -> Result<(), LaunchError>
     where
-        Q: DerefMut<Target = [H::Byte]>,
-        K: Deref<Target = [H::Byte]>,
-        V: Deref<Target = [H::Byte]>,
-        O: DerefMut<Target = [H::Byte]>,
-        KC: DerefMut<Target = [H::Byte]>,
-        VC: DerefMut<Target = [H::Byte]>,
-        QA: QueueAlloc<Hardware = H>,
+        Q: DerefMut<Target = [ByteOf<Ops::Hardware>]>,
+        K: Deref<Target = [ByteOf<Ops::Hardware>]>,
+        V: Deref<Target = [ByteOf<Ops::Hardware>]>,
+        O: DerefMut<Target = [ByteOf<Ops::Hardware>]>,
+        KC: DerefMut<Target = [ByteOf<Ops::Hardware>]>,
+        VC: DerefMut<Target = [ByteOf<Ops::Hardware>]>,
+        QA: QueueAlloc<Hardware = Ops::Hardware>,
     {
         self.attn_kv_cached.launch(
             &operators::attention_kv_cached::Args {
@@ -414,13 +404,13 @@ where
         iblk: usize,
         down_alpha: f32,
         residual: bool,
-        workspace: &mut [H::Byte],
+        workspace: &mut [ByteOf<Ops::Hardware>],
         queue_alloc: &QA,
     ) -> Result<(), LaunchError>
     where
-        Y: DerefMut<Target = [H::Byte]>,
-        X: Deref<Target = [H::Byte]>,
-        QA: QueueAlloc<Hardware = H>,
+        Y: DerefMut<Target = [ByteOf<Ops::Hardware>]>,
+        X: Deref<Target = [ByteOf<Ops::Hardware>]>,
+        QA: QueueAlloc<Hardware = Ops::Hardware>,
     {
         let queue = queue_alloc.queue();
         let w_gate_up = self.weights.ffn_gate_up(iblk, queue);
@@ -448,13 +438,13 @@ where
         &self,
         dst: &mut Tensor<Y>,
         src: &Tensor<X>,
-        workspace: &mut [H::Byte],
+        workspace: &mut [ByteOf<Ops::Hardware>],
         queue_alloc: &QA,
     ) -> Result<(), LaunchError>
     where
-        Y: DerefMut<Target = [H::Byte]>,
-        X: Deref<Target = [H::Byte]>,
-        QA: QueueAlloc<Hardware = H>,
+        Y: DerefMut<Target = [ByteOf<Ops::Hardware>]>,
+        X: Deref<Target = [ByteOf<Ops::Hardware>]>,
+        QA: QueueAlloc<Hardware = Ops::Hardware>,
     {
         self.rearrange.launch(
             &operators::rearrange::Args {

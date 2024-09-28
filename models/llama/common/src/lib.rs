@@ -4,7 +4,7 @@ mod random_sample;
 mod storage;
 
 pub use args::{Args as LlamaArgs, Request as LlamaRequest};
-pub use compute::{BlkWeight, LlamaBlks, Operators, WeightLoader};
+pub use compute::{BlkWeight, LlamaWorker, Operators, WeightLoader};
 pub use random_sample::RandomSample;
 pub use storage::{BlkStorage as LlamaBlkStorage, Storage as LlamaStorage};
 pub use tensor::Tensor;
