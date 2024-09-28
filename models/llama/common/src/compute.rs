@@ -1,5 +1,5 @@
 ﻿use super::{args::Args, LlamaMeta};
-use ggus::ggml_quants::digit_layout::types as ty;
+use gguf::ggml_quants::digit_layout::types as ty;
 use itertools::izip;
 use operators::{
     attention_kv_cached::AttnKVCached,
@@ -21,6 +21,10 @@ pub trait Operators {
     type AttnKVCached: AttnKVCached<Self::Hardware>;
     type Mlp: Mlp<Self::Hardware>;
     type Rearrange: Rearrange<Self::Hardware>;
+
+    fn debug<T>(tensor: &Tensor<T>)
+    where
+        T: Deref<Target = [ByteOf<Self::Hardware>]>;
 }
 
 pub enum BlkWeight {
@@ -255,8 +259,8 @@ where
         let x_ = unsafe { x.map_slice_static() };
         self.rms_norm(&mut x, &x_, &w, workspace, queue_alloc)?;
 
-        let lm_head = self.weights.output(queue);
-        self.mat_mul(&mut logits, 0., &x, &lm_head, 1., workspace, queue_alloc)
+        let output = self.weights.output(queue);
+        self.mat_mul(&mut logits, 0., &x, &output, 1., workspace, queue_alloc)
     }
 }
 

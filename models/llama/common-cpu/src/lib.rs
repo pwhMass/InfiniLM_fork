@@ -7,9 +7,9 @@ use memmap2::Mmap;
 use operators::{
     common_cpu::{Cpu, ThisThread},
     random_sample::{common_cpu::Operator as CpuOp, KVPair, SampleArgs},
-    QueueOf,
+    ByteOf, QueueOf,
 };
-use std::slice::from_raw_parts_mut;
+use std::{ops::Deref, slice::from_raw_parts_mut};
 use tensor::{ArrayLayout, BigEndian, Tensor};
 
 pub struct Llama {
@@ -62,7 +62,7 @@ impl Llama {
         let mut embd_buf = vec![0u8; embd.shape().iter().product::<usize>() * ele];
         let mut logits_buf = vec![0u8; logits.shape().iter().product::<usize>() * ele];
 
-        let d = embd.shape()[1];
+        let d = embd.shape()[1] * ele;
         for (i, &tok) in input.iter().enumerate() {
             embd_buf[i * d..][..d].copy_from_slice(&self.token_embed[tok as usize * d..][..d]);
         }
@@ -132,6 +132,13 @@ impl llama::Operators for Operators {
     type AttnKVCached = op!(attention_kv_cached);
     type Mlp = op!(mlp);
     type Rearrange = op!(rearrange);
+
+    fn debug<T>(tensor: &Tensor<T>)
+    where
+        T: Deref<Target = [ByteOf<Self::Hardware>]>,
+    {
+        println!("{tensor}");
+    }
 }
 
 struct Weights {
@@ -174,14 +181,19 @@ impl WeightLoader for Weights {
 }
 
 #[test]
-fn test_load() {
-    use gguf::GGufModel;
-    use std::{io::Write, slice::from_raw_parts};
+fn test_infer() {
+    use gguf::{GGufMetaMapExt, GGufModel};
+    use std::{
+        io::Write,
+        slice::from_raw_parts,
+        time::{Duration, Instant},
+    };
 
     let Some(shards) = test_utils::map_gguf_files() else {
         return;
     };
     let gguf = GGufModel::read(shards.iter().map(|s| &**s));
+    let eos = gguf.tokenizer_ggml_eos_token_id().unwrap();
     let tokenizer = gguf.tokenizer();
     let llama =
         LlamaStorage::from_gguf(&gguf).map(&mut |s| unsafe { from_raw_parts(s.as_ptr(), s.len()) });
@@ -194,14 +206,50 @@ fn test_load() {
     let mut cache_buf = vec![0u8; cache.shape().iter().product::<usize>() * size_of::<f16>()];
 
     let mut prompt = "Once upon a time,".to_string();
+
+    print!("{prompt}");
+    std::io::stdout().flush().unwrap();
+
     let mut tokens = tokenizer.encode(&prompt);
-    while !tokens.contains(&2) {
-        let next = llama.infer(&tokens, &mut cache_buf, 0);
-        tokens = vec![next];
+    let num_prompt_tokens = tokens.len();
+
+    let mut prefill = Duration::ZERO;
+    let mut decode = Duration::ZERO;
+
+    let mut pos = 0;
+    loop {
+        let time = Instant::now();
+        let next = llama.infer(&tokens, &mut cache_buf, pos);
+        let time = time.elapsed();
+
+        if prefill.is_zero() {
+            prefill = time;
+        } else {
+            decode += time;
+        }
+
+        pos += tokens.len();
+        if next == eos {
+            break;
+        }
 
         let piece = tokenizer.decode(next);
         print!("{piece}");
         std::io::stdout().flush().unwrap();
         prompt.push_str(&piece);
+        tokens = vec![next];
+    }
+
+    println!();
+    println!();
+    print_time("total", prefill + decode, pos);
+    print_time("prefill", prefill, num_prompt_tokens);
+    print_time("decode", decode, pos - num_prompt_tokens);
+
+    fn print_time(name: &str, time: Duration, n: usize) {
+        println!(
+            "{name} : {time:?} for {n} tokens, avg: {:?} per token",
+            time.div_f64(n as _)
+        );
     }
 }

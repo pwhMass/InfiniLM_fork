@@ -1,6 +1,5 @@
 ﻿use crate::LlamaMeta;
-use gguf::GGufModel;
-use ggus::{GGufMetaError, GGufMetaMapExt};
+use gguf::{GGufMetaError, GGufMetaMapExt, GGufModel};
 
 #[derive(Clone)]
 pub struct Storage<T> {

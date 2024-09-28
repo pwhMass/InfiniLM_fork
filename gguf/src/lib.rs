@@ -1,13 +1,15 @@
 mod chat_template;
 mod tokenizer;
 
+use ggml_quants::digit_layout::DigitLayout;
 use ggus::{
-    ggml_quants::digit_layout::DigitLayout, GGuf, GGufError, GGufFileName, GGufMetaDataValueType,
-    GGufMetaKV, GGufMetaMap, GGufReadError, GENERAL_ALIGNMENT,
+    GGuf, GGufError, GGufFileName, GGufMetaDataValueType, GGufMetaKV, GGufMetaMap, GGufReadError,
+    GENERAL_ALIGNMENT,
 };
 use memmap2::Mmap;
 use std::{collections::HashMap, fmt::Debug, fs::File, path::Path};
 
+pub use ggus::{ggml_quants, GGufMetaError, GGufMetaMapExt};
 pub use tokenizer::Tokenizer;
 
 /// 从指定文件的路径出发，映射所有分片文件。

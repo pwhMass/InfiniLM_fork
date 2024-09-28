@@ -5,4 +5,5 @@
 /causal-lm/c/build
 /target
 /deploy
+/Cargo.lock
 *.gguf

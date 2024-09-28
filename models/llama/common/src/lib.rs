@@ -3,12 +3,11 @@ mod compute;
 mod random_sample;
 mod storage;
 
-use ggus::ggml_quants::digit_layout::DigitLayout;
 use tensor::Tensor;
 
 pub use args::{Args as LlamaArgs, Request as LlamaRequest};
 pub use compute::{BlkWeight, LlamaBlks, Operators, WeightLoader};
-pub use ggus::ggml_quants::digit_layout::types as primitive;
+pub use gguf::ggml_quants::digit_layout::{types as primitive, DigitLayout};
 pub use random_sample::RandomSample;
 pub use storage::{BlkStorage as LlamaBlkStorage, Storage as LlamaStorage};
 
