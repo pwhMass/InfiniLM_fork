@@ -27,7 +27,6 @@ impl Llama {
             blocks,
         } = model;
         assert_eq!(meta.distribute, 1);
-        assert!(meta.dt_mat.nbytes().is_some());
         Self {
             _storage,
             token_embed,
@@ -45,6 +44,8 @@ impl Llama {
     }
 
     pub fn infer(&mut self, input: &[u32], cache: &mut [u8], pos: usize) -> u32 {
+        const EMPTY: &[u8] = &[];
+
         let meta = self.single.meta();
         let &LlamaMeta {
             dt_mat: element,
@@ -52,28 +53,23 @@ impl Llama {
             dh,
             ..
         } = meta;
-        let cache = meta.kv_cache(dctx, cache);
-        let embd = meta.embd(input.len(), ());
-        let logits = meta.logits(1, ());
+        let cache = meta.kv_cache(dctx).map(|_| cache);
+        let mut embd = meta.embd(input.len()).map(|size| vec![0u8; size]);
+        let mut logits = meta.logits(1).map(|size| vec![0u8; size]);
 
-        let ele = element.nbytes().unwrap();
-        let mut embd_buf = vec![0u8; embd.shape().iter().product::<usize>() * ele];
-        let mut logits_buf = vec![0u8; logits.shape().iter().product::<usize>() * ele];
-
-        let d = embd.shape()[1] * ele;
+        let d = embd.get().len() / input.len();
         for (i, &tok) in input.iter().enumerate() {
-            embd_buf[i * d..][..d].copy_from_slice(&self.token_embed[tok as usize * d..][..d]);
+            embd.get_mut()[i * d..][..d]
+                .copy_from_slice(&self.token_embed[tok as usize * d..][..d]);
         }
-
-        let mut logits = logits.map(|()| &mut *logits_buf);
 
         self.single
             .launch(
                 LlamaArgs {
-                    embd: embd.map(|()| &mut *embd_buf),
+                    embd: embd.map_slice_mut(),
                     logits: logits.map_slice_mut(),
-                    sin: Tensor::new(element, &[0, dh], &[]),
-                    cos: Tensor::new(element, &[0, dh], &[]),
+                    sin: Tensor::new(element, &[0, dh]).map(|_| EMPTY),
+                    cos: Tensor::new(element, &[0, dh]).map(|_| EMPTY),
                     requests: vec![LlamaRequest {
                         cache,
                         seq_len: input.len(),
@@ -99,7 +95,7 @@ impl Llama {
             .launch(
                 &mut pairs,
                 &logits,
-                &Tensor::new(primitive::U32, &[0], &[0u8; 0][..]),
+                &Tensor::new(primitive::U32, &[0]).map(|_| EMPTY),
                 SampleArgs::ARG_MAX,
                 &mut [],
                 &ThisThread,
@@ -196,7 +192,7 @@ fn test_infer() {
     let meta = llama.single.meta();
     println!("{meta:?}");
 
-    let cache = meta.kv_cache(meta.dctx, ());
+    let cache = meta.kv_cache(meta.dctx);
     let mut cache_buf = vec![0u8; cache.shape().iter().product::<usize>() * size_of::<f16>()];
 
     let mut prompt = "Once upon a time,".to_string();

@@ -16,4 +16,4 @@ test-utils.path = "test-utils"
 
 ggus = { git = "https://github.com/YdrMaster/gguf", rev = "e64d758" }
 ndarray-layout = { git = "https://github.com/YdrMaster/ndarray-layout", rev = "5c6b969" }
-operators = { git = "https://github.com/YdrMaster/operators-rs", rev = "a9ddac5", default-features = false }
+operators = { git = "https://github.com/YdrMaster/operators-rs", rev = "b956b29", default-features = false }

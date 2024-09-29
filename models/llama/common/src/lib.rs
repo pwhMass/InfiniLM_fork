@@ -35,7 +35,7 @@ pub struct LlamaMeta {
 }
 
 impl LlamaMeta {
-    pub fn kv_cache<T>(&self, buf: usize, p: T) -> Tensor<T> {
+    pub fn kv_cache(&self, buf: usize) -> Tensor<usize> {
         let &Self {
             dt_mat,
             nblk,
@@ -44,20 +44,20 @@ impl LlamaMeta {
             distribute,
             ..
         } = self;
-        Tensor::new(dt_mat, &[buf, nblk, 2, nkvh / distribute, dh], p)
+        Tensor::new(dt_mat, &[buf, nblk, 2, nkvh / distribute, dh])
     }
 
-    pub fn embd<T>(&self, nt: usize, p: T) -> Tensor<T> {
+    pub fn embd(&self, nt: usize) -> Tensor<usize> {
         let &Self { dt_mat, nh, dh, .. } = self;
-        Tensor::new(dt_mat, &[nt, nh * dh], p)
+        Tensor::new(dt_mat, &[nt, nh * dh])
     }
 
-    pub fn logits<T>(&self, nt: usize, p: T) -> Tensor<T> {
+    pub fn logits(&self, nt: usize) -> Tensor<usize> {
         let &Self { dt_mat, dvoc, .. } = self;
-        Tensor::new(dt_mat, &[nt, dvoc], p)
+        Tensor::new(dt_mat, &[nt, dvoc])
     }
 
-    pub fn token_embd<T>(&self, p: T) -> Tensor<T> {
+    pub fn token_embd(&self) -> Tensor<usize> {
         let &Self {
             dt_mat,
             nh,
@@ -65,14 +65,14 @@ impl LlamaMeta {
             dvoc,
             ..
         } = self;
-        Tensor::new(dt_mat, &[dvoc, nh * dh], p)
+        Tensor::new(dt_mat, &[dvoc, nh * dh])
     }
 
-    pub fn attn_norm<T>(&self, p: T) -> Tensor<T> {
-        self.norm(p)
+    pub fn attn_norm(&self) -> Tensor<usize> {
+        self.norm()
     }
 
-    pub fn attn_qkv<T>(&self, p: T, distributed: bool) -> Tensor<T> {
+    pub fn attn_qkv(&self, distributed: bool) -> Tensor<usize> {
         let &Self {
             nh,
             nkvh,
@@ -82,23 +82,23 @@ impl LlamaMeta {
         } = self;
         let row = (nh + nkvh + nkvh) / distribute * dh;
         let col = nh * dh;
-        self.mat(p, row, col, distributed)
+        self.mat(row, col, distributed)
     }
 
-    pub fn attn_o<T>(&self, p: T, distributed: bool) -> Tensor<T> {
+    pub fn attn_o(&self, distributed: bool) -> Tensor<usize> {
         let &Self {
             nh, dh, distribute, ..
         } = self;
         let row = nh * dh;
         let col = nh / distribute * dh;
-        self.mat(p, row, col, distributed)
+        self.mat(row, col, distributed)
     }
 
-    pub fn ffn_norm<T>(&self, p: T) -> Tensor<T> {
-        self.norm(p)
+    pub fn ffn_norm(&self) -> Tensor<usize> {
+        self.norm()
     }
 
-    pub fn ffn_gate_up<T>(&self, p: T, distributed: bool) -> Tensor<T> {
+    pub fn ffn_gate_up(&self, distributed: bool) -> Tensor<usize> {
         let &Self {
             nh,
             dh,
@@ -108,10 +108,10 @@ impl LlamaMeta {
         } = self;
         let row = (di + di) / distribute;
         let col = nh * dh;
-        self.mat(p, row, col, distributed)
+        self.mat(row, col, distributed)
     }
 
-    pub fn ffn_down<T>(&self, p: T, distributed: bool) -> Tensor<T> {
+    pub fn ffn_down(&self, distributed: bool) -> Tensor<usize> {
         let &Self {
             nh,
             dh,
@@ -121,32 +121,32 @@ impl LlamaMeta {
         } = self;
         let row = nh * dh;
         let col = di / distribute;
-        self.mat(p, row, col, distributed)
+        self.mat(row, col, distributed)
     }
 
-    pub fn output_norm<T>(&self, p: T) -> Tensor<T> {
-        self.norm(p)
+    pub fn output_norm(&self) -> Tensor<usize> {
+        self.norm()
     }
 
-    pub fn output<T>(&self, p: T) -> Tensor<T> {
-        self.token_embd(p).transpose(&[1, 0])
+    pub fn output(&self) -> Tensor<usize> {
+        self.token_embd().transpose(&[1, 0])
     }
 
-    fn norm<T>(&self, p: T) -> Tensor<T> {
+    fn norm(&self) -> Tensor<usize> {
         let &Self {
             dt_norm, nh, dh, ..
         } = self;
-        Tensor::new(dt_norm, &[nh * dh], p)
+        Tensor::new(dt_norm, &[nh * dh])
     }
 
-    fn mat<T>(&self, p: T, row: usize, col: usize, distributed: bool) -> Tensor<T> {
+    fn mat(&self, row: usize, col: usize, distributed: bool) -> Tensor<usize> {
         let &Self {
             dt_mat, distribute, ..
         } = self;
         if distributed {
-            Tensor::new(dt_mat, &[row, col], p).transpose(&[1, 0])
+            Tensor::new(dt_mat, &[row, col]).transpose(&[1, 0])
         } else {
-            Tensor::new(dt_mat, &[distribute, row, col], p).transpose(&[2, 1])
+            Tensor::new(dt_mat, &[distribute, row, col]).transpose(&[2, 1])
         }
     }
 }

@@ -1,5 +1,5 @@
 ﻿use super::{args::Args, LlamaMeta};
-use gguf::ggml_quants::digit_layout::types as ty;
+use gguf::ggml_quants::digit_layout::{types as ty, DigitLayout};
 use itertools::izip;
 use operators::{
     attention_kv_cached::AttnKVCached,
@@ -11,7 +11,7 @@ use operators::{
     ByteOf, Hardware, LaunchError, Operator, QueueAlloc, QueueOf, Workspace,
 };
 use std::ops::{Deref, DerefMut};
-use tensor::{split, Tensor};
+use tensor::{dt_size, split, Tensor};
 
 pub trait Operators {
     type Hardware: Hardware;
@@ -25,6 +25,19 @@ pub trait Operators {
     fn debug<T>(tensor: &Tensor<T>)
     where
         T: Deref<Target = [ByteOf<Self::Hardware>]>;
+
+    fn build_sin_cos<QA>(
+        dt: DigitLayout,
+        nctx: usize,
+        dh: usize,
+        queue_alloc: &QA,
+    ) -> Tensor<QA::DevMem>
+    where
+        QA: QueueAlloc<Hardware = Self::Hardware>,
+    {
+        Tensor::new(dt, &[2, nctx, dh])
+            .map(|_| <Self::Rope as Rope<Self::Hardware>>::build_sincos(dt, nctx, dh, queue_alloc))
+    }
 }
 
 pub enum BlkWeight {
@@ -80,6 +93,31 @@ impl<Ops: Operators, W> LlamaWorker<Ops, W> {
     pub const fn meta(&self) -> &LlamaMeta {
         &self.meta
     }
+
+    pub fn workspace_size(&self, nt: usize, max_seq_len: usize, max_att_len: usize) -> usize {
+        let LlamaMeta {
+            dt_mat,
+            nh,
+            nkvh,
+            dh,
+            di,
+            distribute,
+            ..
+        } = self.meta;
+        let d = nh * dh;
+        let nh = nh / distribute;
+        let nkvh = nkvh / distribute;
+        let di = di / distribute;
+
+        let ele = dt_size(dt_mat);
+        let embd = nt * d * ele;
+        let qkv = nt * (nh + nkvh + nkvh) * dh * ele;
+        let gate_up = nt * di * 2 * ele;
+        let q = max_seq_len * nh * dh * ele;
+        let att = nkvh * max_seq_len * max_att_len * ele;
+
+        embd + qkv.max(gate_up) + q + att
+    }
 }
 
 impl<Ops, W> LlamaWorker<Ops, W>
@@ -114,32 +152,20 @@ where
             nh,
             nkvh,
             dh,
-            di,
             distribute,
             ..
         } = self.meta;
-        let d = nh * dh;
-        let nh = nh / distribute;
-        let nkvh = nkvh / distribute;
-        let di = di / distribute;
-
-        let ele = dt_mat.nbytes().unwrap();
-        let embd_size = nt * d * ele;
-        let qkv_size = nt * (nh + nkvh + nkvh) * dh * ele;
-        let gate_up_size = nt * di * 2 * ele;
-        let q_size = max_seq_len * nh * dh * ele;
-        let att_size = nkvh * max_seq_len * max_att_len * ele;
-        let workspace_size = embd_size + qkv_size.max(gate_up_size) + q_size + att_size;
-
+        let workspace_size = self.workspace_size(nt, max_seq_len, max_att_len);
         let mut workspace = Workspace::new(queue_alloc, workspace, workspace_size);
 
         let mut x = embd;
-        let (x1, workspace) = workspace.split_at_mut(embd_size);
-        let mut x1 = Tensor::new(dt_mat, x.shape(), x1);
+        let x1 = Tensor::new(dt_mat, x.shape());
+        let (buf, workspace) = workspace.split_at_mut(*x1.get());
+        let mut x1 = x1.map(|_| buf);
 
-        let pos = Tensor::new(
-            ty::U32,
-            &[nt],
+        let qkv = Tensor::new(dt_mat, &[nt, (nh + nkvh + nkvh) * dh]);
+
+        let pos = Tensor::new(ty::U32, &[nt]).map(|_| {
             Ops::Rope::build_pos(
                 nt,
                 requests.iter().map(|req| Seq {
@@ -147,8 +173,8 @@ where
                     len: req.seq_len,
                 }),
                 queue_alloc,
-            ),
-        );
+            )
+        });
 
         let req_split = requests.iter().map(|req| req.seq_len).collect::<Vec<_>>();
 
@@ -158,8 +184,8 @@ where
                 let w = self.weights.attn_norm(iblk, queue);
                 self.rms_norm(&mut x1, &x, &w, workspace, queue_alloc)?;
 
-                let (qkv, workspace) = workspace.split_at_mut(qkv_size);
-                let mut qkv = Tensor::new(dt_mat, &[nt, (nh + nkvh + nkvh) * dh], qkv);
+                let (buf, workspace) = workspace.split_at_mut(*qkv.get());
+                let mut qkv = qkv.clone().map(|_| buf);
 
                 let w = self.weights.attn_qkv(iblk, queue);
                 self.mat_mul(&mut qkv, 0., &x1, &w, 1., workspace, queue_alloc)?;
@@ -460,28 +486,28 @@ where
 }
 
 struct WeightDecorator<W> {
-    attn_norm: Tensor<()>,
-    attn_qkv: Tensor<()>,
-    attn_o: Tensor<()>,
-    ffn_norm: Tensor<()>,
-    ffn_gate_up: Tensor<()>,
-    ffn_down: Tensor<()>,
-    output_norm: Tensor<()>,
-    output: Tensor<()>,
+    attn_norm: Tensor<usize>,
+    attn_qkv: Tensor<usize>,
+    attn_o: Tensor<usize>,
+    ffn_norm: Tensor<usize>,
+    ffn_gate_up: Tensor<usize>,
+    ffn_down: Tensor<usize>,
+    output_norm: Tensor<usize>,
+    output: Tensor<usize>,
     weights: W,
 }
 
 impl LlamaMeta {
     fn decorator<W>(&self, weights: W) -> WeightDecorator<W> {
         WeightDecorator {
-            attn_norm: self.attn_norm(()),
-            attn_qkv: self.attn_qkv((), true),
-            attn_o: self.attn_o((), true),
-            ffn_norm: self.ffn_norm(()),
-            ffn_gate_up: self.ffn_gate_up((), true),
-            ffn_down: self.ffn_down((), true),
-            output_norm: self.output_norm(()),
-            output: self.output(()),
+            attn_norm: self.attn_norm(),
+            attn_qkv: self.attn_qkv(true),
+            attn_o: self.attn_o(true),
+            ffn_norm: self.ffn_norm(),
+            ffn_gate_up: self.ffn_gate_up(true),
+            ffn_down: self.ffn_down(true),
+            output_norm: self.output_norm(),
+            output: self.output(),
             weights,
         }
     }
@@ -548,6 +574,6 @@ impl<W: WeightLoader> WeightDecorator<W> {
 }
 
 #[inline]
-fn combine<T>(tensor: &Tensor<()>, p: T) -> Tensor<T> {
-    tensor.clone().map(|()| p)
+fn combine<T>(tensor: &Tensor<usize>, p: T) -> Tensor<T> {
+    tensor.clone().map(|_| p)
 }

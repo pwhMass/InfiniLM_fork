@@ -132,7 +132,7 @@ fn test_fmt() {
     let data = Vec::from_iter((0..24).map(|x| x as f32));
     let data = unsafe { from_raw_parts(data.as_ptr().cast::<u8>(), size_of_val(&*data)) };
     // [2, 3, 4]
-    let t = Tensor::new(F32, &shape, data);
+    let t = Tensor::new(F32, &shape).map(|_| data);
     println!("{t}");
     // [2, 3, 2, 2]
     let t = t.tile(2, &[2, 2]);
