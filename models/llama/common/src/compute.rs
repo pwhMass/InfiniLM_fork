@@ -2,25 +2,28 @@
 use gguf::ggml_quants::digit_layout::{types as ty, DigitLayout};
 use itertools::izip;
 use operators::{
+    all_reduce::{AllReduce, ReduceOp},
     attention_kv_cached::AttnKVCached,
     mat_mul::MatMul,
     mlp::Mlp,
     rearrange::Rearrange,
     rms_norm::RmsNorm,
     rope::{Rope, Seq},
-    ByteOf, Hardware, LaunchError, Operator, QueueAlloc, QueueOf, Workspace,
+    ByteOf, Hardware, LaunchError, Operator, QueueAlloc, QueueOf, TopoNode, Workspace,
 };
 use std::ops::{Deref, DerefMut};
 use tensor::{dt_size, split, Tensor};
 
 pub trait Operators {
     type Hardware: Hardware;
+    type TopoNode: TopoNode<Self::Hardware>;
     type RmsNorm: RmsNorm<Self::Hardware>;
     type MatMul: MatMul<Self::Hardware>;
     type Rope: Rope<Self::Hardware>;
     type AttnKVCached: AttnKVCached<Self::Hardware>;
     type Mlp: Mlp<Self::Hardware>;
     type Rearrange: Rearrange<Self::Hardware>;
+    type AllReduce: AllReduce<Self::Hardware, Self::TopoNode>;
 
     fn debug<T>(tensor: &Tensor<T>)
     where
@@ -73,10 +76,12 @@ pub struct LlamaWorker<Ops: Operators, W> {
     attn_kv_cached: Ops::AttnKVCached,
     mlp: Ops::Mlp,
     rearrange: Ops::Rearrange,
+    all_reduce: Ops::AllReduce,
 }
 
 impl<Ops: Operators, W> LlamaWorker<Ops, W> {
-    pub fn new(processor: &Ops::Hardware, meta: LlamaMeta, weights: W) -> Self {
+    pub fn new(node: &Ops::TopoNode, meta: LlamaMeta, weights: W) -> Self {
+        let processor = node.processor();
         Self {
             weights: meta.decorator(weights),
             meta,
@@ -86,6 +91,7 @@ impl<Ops: Operators, W> LlamaWorker<Ops, W> {
             attn_kv_cached: Ops::AttnKVCached::new(processor),
             mlp: Ops::Mlp::new(processor),
             rearrange: Ops::Rearrange::new(processor),
+            all_reduce: Ops::AllReduce::new(node),
         }
     }
 
@@ -240,7 +246,7 @@ where
             self.mat_mul(&mut x, 1., &x1, &w, 1., workspace, queue_alloc)?;
 
             if distribute > 1 {
-                todo!("all reduce")
+                self.all_reduce(&mut x, workspace, queue_alloc)?;
             }
 
             let w = self.weights.ffn_norm(iblk, queue);
@@ -250,7 +256,7 @@ where
             self.mlp(&mut x, &x1, iblk, mlp_alpha, true, workspace, queue_alloc)?;
 
             if distribute > 1 {
-                todo!("all reduce")
+                self.all_reduce(&mut x, workspace, queue_alloc)?;
             }
         }
 
@@ -478,6 +484,29 @@ where
                 dst_base: dst.base_mut(),
                 src_layout: src.layout(),
                 src_base: src.base(),
+            },
+            workspace,
+            queue_alloc,
+        )
+    }
+
+    fn all_reduce<X, QA>(
+        &self,
+        x: &mut Tensor<X>,
+        workspace: &mut [ByteOf<Ops::Hardware>],
+        queue_alloc: &QA,
+    ) -> Result<(), LaunchError>
+    where
+        X: DerefMut<Target = [ByteOf<Ops::Hardware>]>,
+        QA: QueueAlloc<Hardware = Ops::Hardware>,
+    {
+        self.all_reduce.launch(
+            &operators::all_reduce::Args {
+                dst_layout: x.layout(),
+                dst_base: x.base_mut(),
+                src_layout: x.layout(),
+                src_base: x.base(),
+                op: ReduceOp::Sum,
             },
             workspace,
             queue_alloc,

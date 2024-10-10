@@ -4,6 +4,7 @@ use llama::{
     RandomSample, Tensor, WeightLoader,
 };
 use operators::{
+    all_reduce::NonAllReduce,
     common_cpu::{Cpu, ThisThread},
     random_sample::{common_cpu::Operator as CpuOp, KVPair, SampleArgs},
     ByteOf, QueueOf,
@@ -116,12 +117,14 @@ macro_rules! op {
 
 impl llama::Operators for Operators {
     type Hardware = Cpu;
+    type TopoNode = Cpu;
     type RmsNorm = op!(rms_norm);
     type MatMul = op!(mat_mul);
     type Rope = op!(rope);
     type AttnKVCached = op!(attention_kv_cached);
     type Mlp = op!(mlp);
     type Rearrange = op!(rearrange);
+    type AllReduce = NonAllReduce<Cpu>;
 
     fn debug<T>(tensor: &Tensor<T>)
     where
@@ -240,6 +243,6 @@ fn test_infer() {
         println!(
             "{name}: {time:?} for {n} tokens, avg: {:?} per token",
             time.div_f64(n as _)
-        );
+        )
     }
 }
