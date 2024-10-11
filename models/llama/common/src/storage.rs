@@ -74,7 +74,7 @@ impl<'a> Storage<&'a [u8]> {
 }
 
 impl<T> Storage<T> {
-    pub fn map<U>(self, f: &mut impl FnMut(T) -> U) -> Storage<U> {
+    pub fn map<U>(self, mut f: impl FnMut(T) -> U) -> Storage<U> {
         Storage {
             meta: self.meta,
             token_embed: f(self.token_embed),
@@ -84,14 +84,14 @@ impl<T> Storage<T> {
                 .blocks
                 .into_vec()
                 .into_iter()
-                .map(|blk| blk.map(f))
+                .map(|blk| blk.map(&mut f))
                 .collect(),
         }
     }
 }
 
 impl<T> BlkStorage<T> {
-    pub fn map<U>(self, f: &mut impl FnMut(T) -> U) -> BlkStorage<U> {
+    pub fn map<U>(self, mut f: impl FnMut(T) -> U) -> BlkStorage<U> {
         BlkStorage {
             attn_norm: f(self.attn_norm),
             attn_qkv: f(self.attn_qkv),

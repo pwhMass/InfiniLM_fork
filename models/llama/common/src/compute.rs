@@ -547,64 +547,55 @@ impl LlamaMeta {
 impl<W: WeightLoader> WeightDecorator<W> {
     #[inline]
     pub fn attn_norm(&self, iblk: usize, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory<'_>> {
-        combine(
-            &self.attn_norm,
-            self.weights.load_blk(BlkWeight::AttnNorm, iblk, queue),
-        )
+        self.attn_norm
+            .clone()
+            .map(|_| self.weights.load_blk(BlkWeight::AttnNorm, iblk, queue))
     }
 
     #[inline]
     pub fn attn_qkv(&self, iblk: usize, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory<'_>> {
-        combine(
-            &self.attn_qkv,
-            self.weights.load_blk(BlkWeight::AttnQKV, iblk, queue),
-        )
+        self.attn_qkv
+            .clone()
+            .map(|_| self.weights.load_blk(BlkWeight::AttnQKV, iblk, queue))
     }
 
     #[inline]
     pub fn attn_o(&self, iblk: usize, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory<'_>> {
-        combine(
-            &self.attn_o,
-            self.weights.load_blk(BlkWeight::AttnO, iblk, queue),
-        )
+        self.attn_o
+            .clone()
+            .map(|_| self.weights.load_blk(BlkWeight::AttnO, iblk, queue))
     }
 
     #[inline]
     pub fn ffn_norm(&self, iblk: usize, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory<'_>> {
-        combine(
-            &self.ffn_norm,
-            self.weights.load_blk(BlkWeight::FfnNorm, iblk, queue),
-        )
+        self.ffn_norm
+            .clone()
+            .map(|_| self.weights.load_blk(BlkWeight::FfnNorm, iblk, queue))
     }
 
     #[inline]
     pub fn ffn_gate_up(&self, iblk: usize, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory<'_>> {
-        combine(
-            &self.ffn_gate_up,
-            self.weights.load_blk(BlkWeight::FfnGateUp, iblk, queue),
-        )
+        self.ffn_gate_up
+            .clone()
+            .map(|_| self.weights.load_blk(BlkWeight::FfnGateUp, iblk, queue))
     }
 
     #[inline]
     pub fn ffn_down(&self, iblk: usize, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory<'_>> {
-        combine(
-            &self.ffn_down,
-            self.weights.load_blk(BlkWeight::FfnDown, iblk, queue),
-        )
+        self.ffn_down
+            .clone()
+            .map(|_| self.weights.load_blk(BlkWeight::FfnDown, iblk, queue))
     }
 
     #[inline]
     pub fn output_norm(&self, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory<'_>> {
-        combine(&self.output_norm, self.weights.output_norm(queue))
+        self.output_norm
+            .clone()
+            .map(|_| self.weights.output_norm(queue))
     }
 
     #[inline]
     pub fn output(&self, queue: &QueueOf<W::Hardware>) -> Tensor<W::Memory<'_>> {
-        combine(&self.output, self.weights.output(queue))
+        self.output.clone().map(|_| self.weights.output(queue))
     }
-}
-
-#[inline]
-fn combine<T>(tensor: &Tensor<usize>, p: T) -> Tensor<T> {
-    tensor.clone().map(|_| p)
 }

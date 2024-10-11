@@ -1,45 +1,34 @@
+mod impls;
+
+use impls::{Operators, Weights};
 use llama::{
     ext::{f16, primitive, Mmap},
-    BlkWeight, LlamaArgs, LlamaBlkStorage, LlamaMeta, LlamaRequest, LlamaStorage, LlamaWorker,
-    RandomSample, Tensor, WeightLoader,
+    LlamaArgs, LlamaMeta, LlamaRequest, LlamaStorage, LlamaWorker, RandomSample, Tensor,
 };
 use operators::{
-    all_reduce::NonAllReduce,
     common_cpu::{Cpu, ThisThread},
     random_sample::{common_cpu::Operator as CpuOp, KVPair, SampleArgs},
-    ByteOf, QueueOf,
 };
-use std::{ops::Deref, slice::from_raw_parts_mut};
+use std::slice::from_raw_parts_mut;
 
 pub struct Llama {
     _storage: Box<[Mmap]>,
     token_embed: &'static [u8],
-    single: LlamaWorker<Operators, Weights>,
+    single: LlamaWorker<Operators, Weights<'static>>,
     sample: RandomSample<Cpu, CpuOp>,
 }
 
 impl Llama {
     pub fn new(_storage: Box<[Mmap]>, model: LlamaStorage<&'static [u8]>) -> Self {
         let LlamaStorage {
-            meta,
-            token_embed,
-            output_norm,
-            output,
-            blocks,
-        } = model;
-        assert_eq!(meta.distribute, 1);
+            meta, token_embed, ..
+        } = &model;
+        // TODO: rank
+        let weights = Weights::new(&model, 0, meta.distribute);
         Self {
             _storage,
             token_embed,
-            single: LlamaWorker::new(
-                &Cpu,
-                meta,
-                Weights {
-                    blks: blocks,
-                    output_norm,
-                    output,
-                },
-            ),
+            single: LlamaWorker::new(&Cpu, model.meta, weights),
             sample: RandomSample::new(&Cpu),
         }
     }
@@ -107,72 +96,6 @@ impl Llama {
     }
 }
 
-struct Operators;
-
-macro_rules! op {
-    ($name:ident) => {
-        operators::$name::common_cpu::Operator
-    };
-}
-
-impl llama::Operators for Operators {
-    type Hardware = Cpu;
-    type TopoNode = Cpu;
-    type RmsNorm = op!(rms_norm);
-    type MatMul = op!(mat_mul);
-    type Rope = op!(rope);
-    type AttnKVCached = op!(attention_kv_cached);
-    type Mlp = op!(mlp);
-    type Rearrange = op!(rearrange);
-    type AllReduce = NonAllReduce<Cpu>;
-
-    fn debug<T>(tensor: &Tensor<T>)
-    where
-        T: Deref<Target = [ByteOf<Self::Hardware>]>,
-    {
-        println!("{tensor}");
-    }
-}
-
-struct Weights {
-    blks: Box<[LlamaBlkStorage<&'static [u8]>]>,
-    output_norm: &'static [u8],
-    output: &'static [u8],
-}
-
-impl WeightLoader for Weights {
-    type Hardware = Cpu;
-    type Memory<'s> = &'s [u8];
-
-    #[inline]
-    fn load_blk(
-        &self,
-        which: BlkWeight,
-        iblk: usize,
-        _queue: &QueueOf<Self::Hardware>,
-    ) -> Self::Memory<'_> {
-        let blk = &self.blks[iblk];
-        match which {
-            BlkWeight::AttnNorm => blk.attn_norm,
-            BlkWeight::AttnQKV => blk.attn_qkv,
-            BlkWeight::AttnO => blk.attn_o,
-            BlkWeight::FfnNorm => blk.ffn_norm,
-            BlkWeight::FfnGateUp => blk.ffn_gate_up,
-            BlkWeight::FfnDown => blk.ffn_down,
-        }
-    }
-
-    #[inline]
-    fn output_norm(&self, _queue: &QueueOf<Self::Hardware>) -> Self::Memory<'_> {
-        self.output_norm
-    }
-
-    #[inline]
-    fn output(&self, _queue: &QueueOf<Self::Hardware>) -> Self::Memory<'_> {
-        self.output
-    }
-}
-
 #[test]
 fn test_infer() {
     use gguf::{GGufMetaMapExt, GGufModel};
@@ -189,7 +112,7 @@ fn test_infer() {
     let eos = gguf.tokenizer_ggml_eos_token_id().unwrap();
     let tokenizer = gguf.tokenizer();
     let llama =
-        LlamaStorage::from_gguf(&gguf).map(&mut |s| unsafe { from_raw_parts(s.as_ptr(), s.len()) });
+        LlamaStorage::from_gguf(&gguf).map(|s| unsafe { from_raw_parts(s.as_ptr(), s.len()) });
     let mut llama = Llama::new(shards, llama);
 
     let meta = llama.single.meta();
