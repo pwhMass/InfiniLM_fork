@@ -8,7 +8,7 @@ use operators::{
     mlp::Mlp,
     rearrange::Rearrange,
     rms_norm::RmsNorm,
-    rope::{Rope, Seq},
+    rope::{Rope, Seq, SinCosTable},
     ByteOf, Hardware, LaunchError, Operator, QueueAlloc, QueueOf, TopoNode, Workspace,
 };
 use std::ops::{Deref, DerefMut};
@@ -38,8 +38,9 @@ pub trait Operators {
     where
         QA: QueueAlloc<Hardware = Self::Hardware>,
     {
-        Tensor::new(dt, &[2, nctx, dh])
-            .map(|_| <Self::Rope as Rope<Self::Hardware>>::build_sincos(dt, nctx, dh, queue_alloc))
+        let SinCosTable { nctx, mem } =
+            <Self::Rope as Rope<Self::Hardware>>::build_sincos(dt, nctx, dh, queue_alloc);
+        Tensor::new(dt, &[2, nctx, dh]).map(|_| mem)
     }
 }
 
@@ -145,8 +146,7 @@ where
     {
         let Args {
             embd,
-            sin,
-            cos,
+            sin_cos,
             mut logits,
             mut requests,
             num_tokens: nt,
@@ -172,6 +172,9 @@ where
         let mut x1 = x1.map(|_| buf);
 
         let qkv = Tensor::new(dt_mat, &[nt, (nh + nkvh + nkvh) * dh]);
+
+        let sin = sin_cos.clone().index(0, 0);
+        let cos = sin_cos.index(0, 1);
 
         let pos = Tensor::new(ty::U32, &[nt]).map(|_| {
             Ops::Rope::build_pos(

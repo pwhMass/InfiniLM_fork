@@ -1,5 +1,6 @@
-﻿use operators::{
-    random_sample::{self, RandomSample as Trait, SampleArgs},
+﻿use gguf::ggml_quants::digit_layout::types as ty;
+use operators::{
+    random_sample::{self, Indices, RandomSample as Trait, SampleArgs},
     Hardware, LaunchError, QueueAlloc,
 };
 use std::{
@@ -19,6 +20,14 @@ where
     H: Hardware,
     Op: Trait<H>,
 {
+    pub fn build_indices<QA>(n: usize, queue_alloc: &QA) -> Tensor<QA::DevMem>
+    where
+        QA: QueueAlloc<Hardware = H>,
+    {
+        let Indices { n, mem } = Op::build_indices(n, queue_alloc);
+        Tensor::new(ty::U32, &[n]).map(|_| mem)
+    }
+
     pub fn new(processor: &H) -> Self {
         Self {
             op: Op::new(processor),

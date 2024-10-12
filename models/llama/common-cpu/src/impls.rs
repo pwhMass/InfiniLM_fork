@@ -2,11 +2,20 @@
 use operators::{
     all_reduce::{AllReduce, NonAllReduce},
     common_cpu::Cpu,
+    random_sample::common_cpu::Operator as RandomSampleCpu,
     ByteOf, QueueOf, TopoNode,
 };
 use std::{marker::PhantomData, ops::Deref};
 
-pub(crate) struct Operators<N = Cpu, R = NonAllReduce<Cpu>>(PhantomData<(N, R)>);
+pub struct Operators<N = Cpu, R = NonAllReduce<Cpu>>(PhantomData<(N, R)>);
+
+pub type RandomSample = llama::RandomSample<Cpu, RandomSampleCpu>;
+
+pub struct Weights<'w> {
+    blks: Box<[LlamaBlkStorage<&'w [u8]>]>,
+    output_norm: &'w [u8],
+    output: &'w [u8],
+}
 
 macro_rules! op {
     ($name:ident) => {
@@ -35,12 +44,6 @@ where
     {
         println!("{tensor}");
     }
-}
-
-pub(crate) struct Weights<'w> {
-    blks: Box<[LlamaBlkStorage<&'w [u8]>]>,
-    output_norm: &'w [u8],
-    output: &'w [u8],
 }
 
 impl<'w> Weights<'w> {

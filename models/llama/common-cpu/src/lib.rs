@@ -1,13 +1,13 @@
 mod impls;
 
-use impls::{Operators, Weights};
+pub use impls::{Operators, RandomSample, Weights};
 use llama::{
-    ext::{f16, primitive, Mmap},
-    LlamaArgs, LlamaMeta, LlamaRequest, LlamaStorage, LlamaWorker, RandomSample, Tensor,
+    ext::{f16, Mmap},
+    LlamaArgs, LlamaMeta, LlamaRequest, LlamaStorage, LlamaWorker, Tensor,
 };
 use operators::{
     common_cpu::{Cpu, ThisThread},
-    random_sample::{common_cpu::Operator as CpuOp, KVPair, SampleArgs},
+    random_sample::{KVPair, SampleArgs},
 };
 use std::slice::from_raw_parts_mut;
 
@@ -15,7 +15,7 @@ pub struct Llama {
     _storage: Box<[Mmap]>,
     token_embed: &'static [u8],
     single: LlamaWorker<Operators, Weights<'static>>,
-    sample: RandomSample<Cpu, CpuOp>,
+    sample: RandomSample,
 }
 
 impl Llama {
@@ -34,15 +34,19 @@ impl Llama {
     }
 
     pub fn infer(&mut self, input: &[u32], cache: &mut [u8], pos: usize) -> u32 {
-        const EMPTY: &[u8] = &[];
-
         let meta = self.single.meta();
         let &LlamaMeta {
-            dt_mat: element,
+            dt_embd,
             nctx,
+            nvoc,
             dh,
             ..
         } = meta;
+
+        let sin_cos =
+            <Operators as llama::Operators>::build_sin_cos(dt_embd, nctx, dh, &ThisThread);
+        let indices = RandomSample::build_indices(nvoc, &ThisThread);
+
         let cache = meta.kv_cache(nctx).map(|_| cache);
         let mut embd = meta.embd(input.len()).map(|size| vec![0u8; size]);
         let mut logits = meta.logits(1).map(|size| vec![0u8; size]);
@@ -58,8 +62,7 @@ impl Llama {
                 LlamaArgs {
                     embd: embd.map_slice_mut(),
                     logits: logits.map_slice_mut(),
-                    sin: Tensor::new(element, &[0, dh]).map(|_| EMPTY),
-                    cos: Tensor::new(element, &[0, dh]).map(|_| EMPTY),
+                    sin_cos: sin_cos.map_slice(),
                     requests: vec![LlamaRequest {
                         cache,
                         seq_len: input.len(),
@@ -85,7 +88,7 @@ impl Llama {
             .launch(
                 &mut pairs,
                 &logits,
-                &Tensor::new(primitive::U32, &[0]).map(|_| EMPTY),
+                &indices,
                 SampleArgs::ARG_MAX,
                 &mut [],
                 &ThisThread,

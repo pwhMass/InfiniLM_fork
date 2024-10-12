@@ -7,10 +7,8 @@ pub struct Args<'a, H: Hardware> {
     /// shape: [nout, nvoc]
     pub logits: Tensor<&'a mut [H::Byte]>,
 
-    /// shape: [_, dh]
-    pub sin: Tensor<&'a [H::Byte]>,
-    /// shape: [_, dh]
-    pub cos: Tensor<&'a [H::Byte]>,
+    /// shape: [2, _, dh]
+    pub sin_cos: Tensor<&'a [H::Byte]>,
 
     pub requests: Vec<Request<'a, H>>,
 
