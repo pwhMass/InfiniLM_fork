@@ -20,15 +20,19 @@ pub mod ext {
 
 #[derive(Clone, Debug)]
 pub struct LlamaMeta {
+    pub dt_embd: ext::DigitLayout,
     pub dt_norm: ext::DigitLayout,
     pub dt_mat: ext::DigitLayout,
+
     pub nblk: usize,
+    pub nctx: usize,
+    pub nvoc: usize,
     pub nh: usize,
     pub nkvh: usize,
+    pub d: usize,
     pub dh: usize,
     pub di: usize,
-    pub dctx: usize,
-    pub dvoc: usize,
+
     pub epsilon: f32,
     pub theta: f32,
     pub distribute: usize,
@@ -48,24 +52,17 @@ impl LlamaMeta {
     }
 
     pub fn embd(&self, nt: usize) -> Tensor<usize> {
-        let &Self { dt_mat, nh, dh, .. } = self;
-        Tensor::new(dt_mat, &[nt, nh * dh])
+        let &Self { dt_embd, d, .. } = self;
+        Tensor::new(dt_embd, &[nt, d])
     }
 
     pub fn logits(&self, nt: usize) -> Tensor<usize> {
-        let &Self { dt_mat, dvoc, .. } = self;
-        Tensor::new(dt_mat, &[nt, dvoc])
+        let &Self { dt_embd, nvoc, .. } = self;
+        Tensor::new(dt_embd, &[nt, nvoc])
     }
 
     pub fn token_embd(&self) -> Tensor<usize> {
-        let &Self {
-            dt_mat,
-            nh,
-            dh,
-            dvoc,
-            ..
-        } = self;
-        Tensor::new(dt_mat, &[dvoc, nh * dh])
+        self.embd(self.nvoc)
     }
 
     pub fn attn_norm(&self) -> Tensor<usize> {
@@ -76,22 +73,25 @@ impl LlamaMeta {
         let &Self {
             nh,
             nkvh,
+            d,
             dh,
             distribute,
             ..
         } = self;
         let row = (nh + nkvh + nkvh) / distribute * dh;
-        let col = nh * dh;
-        self.mat(row, col, distributed)
+        self.mat(row, d, distributed)
     }
 
     pub fn attn_o(&self, distributed: bool) -> Tensor<usize> {
         let &Self {
-            nh, dh, distribute, ..
+            nh,
+            d,
+            dh,
+            distribute,
+            ..
         } = self;
-        let row = nh * dh;
         let col = nh / distribute * dh;
-        self.mat(row, col, distributed)
+        self.mat(d, col, distributed)
     }
 
     pub fn ffn_norm(&self) -> Tensor<usize> {
@@ -100,28 +100,16 @@ impl LlamaMeta {
 
     pub fn ffn_gate_up(&self, distributed: bool) -> Tensor<usize> {
         let &Self {
-            nh,
-            dh,
-            di,
-            distribute,
-            ..
+            d, di, distribute, ..
         } = self;
-        let row = (di + di) / distribute;
-        let col = nh * dh;
-        self.mat(row, col, distributed)
+        self.mat((di + di) / distribute, d, distributed)
     }
 
     pub fn ffn_down(&self, distributed: bool) -> Tensor<usize> {
         let &Self {
-            nh,
-            dh,
-            di,
-            distribute,
-            ..
+            d, di, distribute, ..
         } = self;
-        let row = nh * dh;
-        let col = di / distribute;
-        self.mat(row, col, distributed)
+        self.mat(d, di / distribute, distributed)
     }
 
     pub fn output_norm(&self) -> Tensor<usize> {
@@ -133,10 +121,8 @@ impl LlamaMeta {
     }
 
     fn norm(&self) -> Tensor<usize> {
-        let &Self {
-            dt_norm, nh, dh, ..
-        } = self;
-        Tensor::new(dt_norm, &[nh * dh])
+        let &Self { dt_norm, d, .. } = self;
+        Tensor::new(dt_norm, &[d])
     }
 
     fn mat(&self, row: usize, col: usize, distributed: bool) -> Tensor<usize> {

@@ -24,15 +24,19 @@ impl<'a> Storage<&'a [u8]> {
     pub fn from_gguf(gguf: &GGufModel<'a>) -> Self {
         #[rustfmt::skip]
         let meta = LlamaMeta {
+            dt_embd: gguf.tensors[ "token_embd.weight"].ty,
             dt_norm: gguf.tensors["output_norm.weight"].ty,
-            dt_mat : gguf.tensors[ "token_embd.weight"].ty,
-            nblk   : gguf.llm_block_count().unwrap   (),
-            nh     : gguf.llm_attention_head_count   ().unwrap(),
-            nkvh   : gguf.llm_attention_head_count_kv().unwrap(),
-            dh     : gguf.llm_rope_dimension_count   ().unwrap(),
-            di     : gguf.llm_feed_forward_length    ().unwrap(),
-            dctx   : gguf.llm_context_length         ().unwrap(),
-            dvoc   : gguf.tokenizer_ggml_tokens      ().unwrap().len(),
+            dt_mat : gguf.tensors[     "output.weight"].ty,
+
+            nblk: gguf.llm_block_count            ().unwrap(),
+            nctx: gguf.llm_context_length         ().unwrap(),
+            nvoc: gguf.tokenizer_ggml_tokens      ().unwrap().len(),
+            nh  : gguf.llm_attention_head_count   ().unwrap(),
+            nkvh: gguf.llm_attention_head_count_kv().unwrap(),
+            d   : gguf.llm_embedding_length       ().unwrap(),
+            dh  : gguf.llm_rope_dimension_count   ().unwrap(),
+            di  : gguf.llm_feed_forward_length    ().unwrap(),
+
             epsilon: match gguf.llm_attention_layer_norm_rms_epsilon() {
                 Ok(val) => val,
                 Err(GGufMetaError::NotExist) => 1e-5,
@@ -49,7 +53,6 @@ impl<'a> Storage<&'a [u8]> {
                 Err(e) => panic!("failed to read meta: {e:?}"),
             },
         };
-        assert_eq!(meta.nh * meta.dh, gguf.llm_embedding_length().unwrap());
 
         #[rustfmt::skip]
         let blocks = (0..meta.nblk)

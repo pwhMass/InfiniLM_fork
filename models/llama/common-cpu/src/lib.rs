@@ -39,11 +39,11 @@ impl Llama {
         let meta = self.single.meta();
         let &LlamaMeta {
             dt_mat: element,
-            dctx,
+            nctx,
             dh,
             ..
         } = meta;
-        let cache = meta.kv_cache(dctx).map(|_| cache);
+        let cache = meta.kv_cache(nctx).map(|_| cache);
         let mut embd = meta.embd(input.len()).map(|size| vec![0u8; size]);
         let mut logits = meta.logits(1).map(|size| vec![0u8; size]);
 
@@ -118,7 +118,7 @@ fn test_infer() {
     let meta = llama.single.meta();
     println!("{meta:?}");
 
-    let cache = meta.kv_cache(meta.dctx);
+    let cache = meta.kv_cache(meta.nctx);
     let mut cache_buf = vec![0u8; cache.shape().iter().product::<usize>() * size_of::<f16>()];
 
     let mut prompt = "Once upon a time,".to_string();

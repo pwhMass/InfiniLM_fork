@@ -107,12 +107,12 @@ impl<Ops: Operators, W> LlamaWorker<Ops, W> {
             dt_mat,
             nh,
             nkvh,
+            d,
             dh,
             di,
             distribute,
             ..
         } = self.meta;
-        let d = nh * dh;
         let nh = nh / distribute;
         let nkvh = nkvh / distribute;
         let di = di / distribute;

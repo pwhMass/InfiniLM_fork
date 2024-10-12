@@ -2,9 +2,9 @@
 use tensor::Tensor;
 
 pub struct Args<'a, H: Hardware> {
-    /// shape: [nt, nh x dh]
+    /// shape: [nt, d]
     pub embd: Tensor<&'a mut [H::Byte]>,
-    /// shape: [n_out, dvoc]
+    /// shape: [nout, nvoc]
     pub logits: Tensor<&'a mut [H::Byte]>,
 
     /// shape: [_, dh]
