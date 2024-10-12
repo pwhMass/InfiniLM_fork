@@ -6,7 +6,6 @@ pub struct Args<'a, H: Hardware> {
     pub embd: Tensor<&'a mut [H::Byte]>,
     /// shape: [nout, nvoc]
     pub logits: Tensor<&'a mut [H::Byte]>,
-
     /// shape: [2, _, dh]
     pub sin_cos: Tensor<&'a [H::Byte]>,
 

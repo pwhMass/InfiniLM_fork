@@ -11,7 +11,6 @@ gguf.workspace = true
 operators.workspace = true
 tensor.workspace = true
 itertools = "0.13"
-rand = "0.8"
 
 [dev-dependencies]
 test-utils.workspace = true

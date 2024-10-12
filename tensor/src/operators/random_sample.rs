@@ -1,19 +1,16 @@
-﻿use gguf::ggml_quants::digit_layout::types as ty;
+﻿use crate::Tensor;
+use ggus::ggml_quants::digit_layout::types as ty;
 use operators::{
     random_sample::{self, Indices, RandomSample as Trait, SampleArgs},
-    Hardware, LaunchError, QueueAlloc,
+    Hardware, LaunchError, QueueAlloc, TopoNode,
 };
 use std::{
     marker::PhantomData,
     ops::{Deref, DerefMut},
     ptr::{null, null_mut},
 };
-use tensor::Tensor;
 
-pub struct RandomSample<H, Op> {
-    op: Op,
-    _hardware: PhantomData<H>,
-}
+pub struct RandomSample<H, Op>(Op, PhantomData<H>);
 
 impl<H, Op> RandomSample<H, Op>
 where
@@ -28,11 +25,8 @@ where
         Tensor::new(ty::U32, &[n]).map(|_| mem)
     }
 
-    pub fn new(processor: &H) -> Self {
-        Self {
-            op: Op::new(processor),
-            _hardware: PhantomData,
-        }
+    pub fn new(node: &impl TopoNode<H>) -> Self {
+        Self(Op::new(node.processor()), PhantomData)
     }
 
     pub fn launch<Pair, L, I, QA>(
@@ -72,7 +66,7 @@ where
             args.logits_base = logits.base();
             args.seed = rand::random();
 
-            self.op.launch(&args, workspace, queue_alloc)?;
+            self.0.launch(&args, workspace, queue_alloc)?;
         }
 
         Ok(())
