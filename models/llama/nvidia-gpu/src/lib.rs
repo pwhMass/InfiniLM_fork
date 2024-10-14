@@ -1,27 +1,20 @@
 #![cfg(hw_detected)]
 
-use llama::{ext::Mmap, LlamaStorage, Tensor, WeightLoader};
+use llama::{BlkWeight, LlamaStorage, Tensor, WeightLoader};
 use operators::{
-    all_reduce::NonAllReduce,
+    all_reduce::{AllReduce, NonAllReduce},
     cuda::{memcpy_d2h, DevByte},
     nvidia_gpu::Gpu,
-    ByteOf,
+    random_sample::nvidia_gpu::Operator as RandomSampleGpu,
+    ByteOf, QueueOf, TopoNode,
 };
-use std::ops::Deref;
+use std::{marker::PhantomData, ops::Deref};
 
-pub struct Llama {}
+pub struct Operators<N = Gpu, R = NonAllReduce<Gpu>>(PhantomData<(N, R)>);
 
-impl Llama {
-    pub fn new(_storage: Box<[Mmap]>, _model: LlamaStorage<&'static [u8]>) -> Self {
-        Self {}
-    }
+pub type RandomSample = llama::RandomSample<Gpu, RandomSampleGpu>;
 
-    pub fn infer(&mut self, input: &[u32], cache: &mut [u8], pos: usize) -> u32 {
-        todo!()
-    }
-}
-
-struct Operators;
+pub struct Weights<'w>(PhantomData<&'w ()>);
 
 macro_rules! op {
     ($name:ident) => {
@@ -29,50 +22,67 @@ macro_rules! op {
     };
 }
 
-impl llama::Operators for Operators {
+impl<N, R> llama::Operators for Operators<N, R>
+where
+    N: TopoNode<Gpu>,
+    R: AllReduce<Gpu, N>,
+{
     type Hardware = Gpu;
-    type TopoNode = Gpu;
+    type TopoNode = N;
     type RmsNorm = op!(rms_norm);
     type MatMul = op!(mat_mul);
     type Rope = op!(rope);
     type AttnKVCached = op!(attention_kv_cached);
     type Mlp = op!(mlp);
     type Rearrange = op!(rearrange);
-    type AllReduce = NonAllReduce<Gpu>;
+    type AllReduce = R;
 
     fn debug<T>(tensor: &Tensor<T>)
     where
         T: Deref<Target = [ByteOf<Self::Hardware>]>,
     {
-        let tensor = tensor.as_ref().map(|mem| {
-            let mut buf = vec![0u8; mem.len()];
-            memcpy_d2h(&mut buf, mem);
-            buf
+        let tensor = tensor.as_ref().map(|s| {
+            let mut host = vec![0u8; s.len()];
+            memcpy_d2h(&mut host, s);
+            host
         });
         println!("{tensor}");
     }
 }
 
-struct Weights {}
+impl<'w> Weights<'w> {
+    pub fn new(_model: &LlamaStorage<&'w [u8]>, _rank: usize, _distribute: usize) -> Self {
+        todo!()
+    }
+}
 
-impl WeightLoader for Weights {
+impl WeightLoader for Weights<'_> {
     type Hardware = Gpu;
-    type Memory<'s> = &'s [DevByte];
+    type Memory<'s>
+        = &'s [DevByte]
+    where
+        Self: 's;
 
+    #[inline]
     fn load_blk(
         &self,
-        which: llama::BlkWeight,
-        iblk: usize,
-        queue: &operators::QueueOf<Self::Hardware>,
+        _which: BlkWeight,
+        _iblk: usize,
+        _queue: &QueueOf<Self::Hardware>,
     ) -> Self::Memory<'_> {
         todo!()
     }
 
-    fn output_norm(&self, queue: &operators::QueueOf<Self::Hardware>) -> Self::Memory<'_> {
+    #[inline]
+    fn output_norm(&self, _queue: &QueueOf<Self::Hardware>) -> Self::Memory<'_> {
         todo!()
     }
 
-    fn output(&self, queue: &operators::QueueOf<Self::Hardware>) -> Self::Memory<'_> {
+    #[inline]
+    fn output(&self, _queue: &QueueOf<Self::Hardware>) -> Self::Memory<'_> {
         todo!()
     }
 }
+
+#[cfg(test)]
+mod test;

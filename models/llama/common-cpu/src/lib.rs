@@ -1,174 +1,110 @@
-mod impls;
-
-pub use impls::{Operators, RandomSample, Weights};
-use llama::{
-    ext::{f16, Mmap},
-    LlamaArgs, LlamaMeta, LlamaRequest, LlamaStorage, LlamaWorker, Tensor,
-};
+use llama::{BlkWeight, LlamaBlkStorage, LlamaStorage, Tensor, WeightLoader};
 use operators::{
-    common_cpu::{Cpu, ThisThread},
-    random_sample::{KVPair, SampleArgs},
+    all_reduce::{AllReduce, NonAllReduce},
+    common_cpu::Cpu,
+    random_sample::common_cpu::Operator as RandomSampleCpu,
+    ByteOf, QueueOf, TopoNode,
 };
-use std::slice::from_raw_parts_mut;
+use std::{marker::PhantomData, ops::Deref};
 
-pub struct Llama {
-    _storage: Box<[Mmap]>,
-    token_embed: &'static [u8],
-    single: LlamaWorker<Operators, Weights<'static>>,
-    sample: RandomSample,
+pub struct Operators<N = Cpu, R = NonAllReduce<Cpu>>(PhantomData<(N, R)>);
+
+pub type RandomSample = llama::RandomSample<Cpu, RandomSampleCpu>;
+
+pub struct Weights<'w> {
+    blks: Box<[LlamaBlkStorage<&'w [u8]>]>,
+    output_norm: &'w [u8],
+    output: &'w [u8],
 }
 
-impl Llama {
-    pub fn new(_storage: Box<[Mmap]>, model: LlamaStorage<&'static [u8]>) -> Self {
+macro_rules! op {
+    ($name:ident) => {
+        operators::$name::common_cpu::Operator
+    };
+}
+
+impl<N, R> llama::Operators for Operators<N, R>
+where
+    N: TopoNode<Cpu>,
+    R: AllReduce<Cpu, N>,
+{
+    type Hardware = Cpu;
+    type TopoNode = N;
+    type RmsNorm = op!(rms_norm);
+    type MatMul = op!(mat_mul);
+    type Rope = op!(rope);
+    type AttnKVCached = op!(attention_kv_cached);
+    type Mlp = op!(mlp);
+    type Rearrange = op!(rearrange);
+    type AllReduce = R;
+
+    fn debug<T>(tensor: &Tensor<T>)
+    where
+        T: Deref<Target = [ByteOf<Self::Hardware>]>,
+    {
+        println!("{tensor}");
+    }
+}
+
+impl<'w> Weights<'w> {
+    pub fn new(model: &LlamaStorage<&'w [u8]>, rank: usize, distribute: usize) -> Self {
         let LlamaStorage {
-            meta, token_embed, ..
-        } = &model;
-        // TODO: rank
-        let weights = Weights::new(&model, 0, meta.distribute);
-        Self {
-            _storage,
-            token_embed,
-            single: LlamaWorker::new(&Cpu, model.meta, weights),
-            sample: RandomSample::new(&Cpu),
-        }
-    }
-
-    pub fn infer(&mut self, input: &[u32], cache: &mut [u8], pos: usize) -> u32 {
-        let meta = self.single.meta();
-        let &LlamaMeta {
-            dt_embd,
-            nctx,
-            nvoc,
-            dh,
+            output_norm,
+            output,
+            blocks,
             ..
-        } = meta;
-
-        let sin_cos =
-            <Operators as llama::Operators>::build_sin_cos(dt_embd, nctx, dh, &ThisThread);
-        let indices = RandomSample::build_indices(nvoc, &ThisThread);
-
-        let cache = meta.kv_cache(nctx).map(|_| cache);
-        let mut embd = meta.embd(input.len()).map(|size| vec![0u8; size]);
-        let mut logits = meta.logits(1).map(|size| vec![0u8; size]);
-
-        let d = embd.get().len() / input.len();
-        for (i, &tok) in input.iter().enumerate() {
-            embd.get_mut()[i * d..][..d]
-                .copy_from_slice(&self.token_embed[tok as usize * d..][..d]);
+        } = model;
+        Self {
+            blks: blocks
+                .iter()
+                .map(|blk| {
+                    blk.clone().map(|s| {
+                        let len = s.len() / distribute;
+                        &s[rank * len..][..len]
+                    })
+                })
+                .collect(),
+            output_norm,
+            output,
         }
-
-        self.single
-            .launch(
-                LlamaArgs {
-                    embd: embd.map_slice_mut(),
-                    logits: logits.map_slice_mut(),
-                    sin_cos: sin_cos.map_slice(),
-                    requests: vec![LlamaRequest {
-                        cache,
-                        seq_len: input.len(),
-                        out_len: 1,
-                        pos,
-                    }],
-                    num_tokens: input.len(),
-                    max_seq_len: input.len(),
-                    max_att_len: pos + input.len(),
-                    mlp_alpha: 1.,
-                },
-                &mut [],
-                &ThisThread,
-            )
-            .unwrap();
-
-        let mut pair = KVPair::new(0, f16::ZERO);
-        let mut pairs = Tensor::kv_pair_vec(1, |_| unsafe {
-            from_raw_parts_mut(&mut pair as *mut _ as *mut u8, size_of_val(&pair))
-        });
-
-        self.sample
-            .launch(
-                &mut pairs,
-                &logits,
-                &indices,
-                SampleArgs::ARG_MAX,
-                &mut [],
-                &ThisThread,
-            )
-            .unwrap();
-
-        pair.idx() as u32
     }
 }
 
-#[test]
-fn test_infer() {
-    use gguf::{GGufMetaMapExt, GGufModel};
-    use std::{
-        io::Write,
-        slice::from_raw_parts,
-        time::{Duration, Instant},
-    };
+impl WeightLoader for Weights<'_> {
+    type Hardware = Cpu;
+    type Memory<'s>
+        = &'s [u8]
+    where
+        Self: 's;
 
-    let Some(shards) = test_utils::map_gguf_files() else {
-        return;
-    };
-    let gguf = GGufModel::read(shards.iter().map(|s| &**s));
-    let eos = gguf.tokenizer_ggml_eos_token_id().unwrap();
-    let tokenizer = gguf.tokenizer();
-    let llama =
-        LlamaStorage::from_gguf(&gguf).map(|s| unsafe { from_raw_parts(s.as_ptr(), s.len()) });
-    let mut llama = Llama::new(shards, llama);
-
-    let meta = llama.single.meta();
-    println!("{meta:?}");
-
-    let cache = meta.kv_cache(meta.nctx);
-    let mut cache_buf = vec![0u8; cache.shape().iter().product::<usize>() * size_of::<f16>()];
-
-    let mut prompt = "Once upon a time,".to_string();
-
-    print!("{prompt}");
-    std::io::stdout().flush().unwrap();
-
-    let mut tokens = tokenizer.encode(&prompt);
-    let num_prompt_tokens = tokens.len();
-
-    let mut prefill = Duration::ZERO;
-    let mut decode = Duration::ZERO;
-
-    let mut pos = 0;
-    loop {
-        let time = Instant::now();
-        let next = llama.infer(&tokens, &mut cache_buf, pos);
-        let time = time.elapsed();
-
-        if prefill.is_zero() {
-            prefill = time;
-        } else {
-            decode += time;
+    #[inline]
+    fn load_blk(
+        &self,
+        which: BlkWeight,
+        iblk: usize,
+        _queue: &QueueOf<Self::Hardware>,
+    ) -> Self::Memory<'_> {
+        let blk = &self.blks[iblk];
+        match which {
+            BlkWeight::AttnNorm => blk.attn_norm,
+            BlkWeight::AttnQKV => blk.attn_qkv,
+            BlkWeight::AttnO => blk.attn_o,
+            BlkWeight::FfnNorm => blk.ffn_norm,
+            BlkWeight::FfnGateUp => blk.ffn_gate_up,
+            BlkWeight::FfnDown => blk.ffn_down,
         }
-
-        pos += tokens.len();
-        if next == eos {
-            break;
-        }
-
-        let piece = tokenizer.decode(next);
-        print!("{piece}");
-        std::io::stdout().flush().unwrap();
-        prompt.push_str(&piece);
-        tokens = vec![next];
     }
 
-    println!();
-    println!();
-    print_time("total", prefill + decode, pos);
-    print_time("prefill", prefill, num_prompt_tokens);
-    print_time("decode", decode, pos - num_prompt_tokens);
+    #[inline]
+    fn output_norm(&self, _queue: &QueueOf<Self::Hardware>) -> Self::Memory<'_> {
+        self.output_norm
+    }
 
-    fn print_time(name: &str, time: Duration, n: usize) {
-        println!(
-            "{name}: {time:?} for {n} tokens, avg: {:?} per token",
-            time.div_f64(n as _)
-        )
+    #[inline]
+    fn output(&self, _queue: &QueueOf<Self::Hardware>) -> Self::Memory<'_> {
+        self.output
     }
 }
+
+#[cfg(test)]
+mod test;

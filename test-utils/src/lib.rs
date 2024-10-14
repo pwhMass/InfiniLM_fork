@@ -13,3 +13,13 @@ pub fn map_gguf_files() -> Option<Box<[Mmap]>> {
     }
     Some(map_files(path))
 }
+
+#[macro_export]
+macro_rules! print_now {
+    ($($arg:tt)*) => {{
+        use std::io::Write;
+
+        print!($($arg)*);
+        std::io::stdout().flush().unwrap();
+    }};
+}
