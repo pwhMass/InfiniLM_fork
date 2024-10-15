@@ -47,7 +47,7 @@ where
 }
 
 impl<'w> Weights<'w> {
-    pub fn new(model: &LlamaStorage<&'w [u8]>, rank: usize, distribute: usize) -> Self {
+    pub fn new(model: &LlamaStorage<&'w [u8]>) -> Self {
         let LlamaStorage {
             output_norm,
             output,
@@ -55,15 +55,7 @@ impl<'w> Weights<'w> {
             ..
         } = model;
         Self {
-            blks: blocks
-                .iter()
-                .map(|blk| {
-                    blk.clone().map(|s| {
-                        let len = s.len() / distribute;
-                        &s[rank * len..][..len]
-                    })
-                })
-                .collect(),
+            blks: blocks.clone(),
             output_norm,
             output,
         }

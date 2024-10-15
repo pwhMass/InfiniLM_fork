@@ -10,7 +10,7 @@ pub struct Storage<T> {
     pub blocks: Box<[BlkStorage<T>]>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct BlkStorage<T> {
     pub attn_norm: T,
     pub attn_qkv: T,
@@ -47,11 +47,6 @@ impl<'a> Storage<&'a [u8]> {
                 Err(GGufMetaError::NotExist) => 1e4,
                 Err(e) => panic!("failed to read meta: {e:?}"),
             },
-            distribute: match gguf.get_usize("llama.distrubute") {
-                Ok(val) => val,
-                Err(GGufMetaError::NotExist) => 1,
-                Err(e) => panic!("failed to read meta: {e:?}"),
-            },
         };
 
         #[rustfmt::skip]
@@ -76,23 +71,6 @@ impl<'a> Storage<&'a [u8]> {
     }
 }
 
-impl<T> Storage<T> {
-    pub fn map<U>(self, mut f: impl FnMut(T) -> U) -> Storage<U> {
-        Storage {
-            meta: self.meta,
-            token_embed: f(self.token_embed),
-            output_norm: f(self.output_norm),
-            output: f(self.output),
-            blocks: self
-                .blocks
-                .into_vec()
-                .into_iter()
-                .map(|blk| blk.map(&mut f))
-                .collect(),
-        }
-    }
-}
-
 impl<T> BlkStorage<T> {
     pub fn map<U>(self, mut f: impl FnMut(T) -> U) -> BlkStorage<U> {
         BlkStorage {
@@ -102,6 +80,17 @@ impl<T> BlkStorage<T> {
             ffn_norm: f(self.ffn_norm),
             ffn_gate_up: f(self.ffn_gate_up),
             ffn_down: f(self.ffn_down),
+        }
+    }
+
+    pub fn as_ref(&self) -> BlkStorage<&T> {
+        BlkStorage {
+            attn_norm: &self.attn_norm,
+            attn_qkv: &self.attn_qkv,
+            attn_o: &self.attn_o,
+            ffn_norm: &self.ffn_norm,
+            ffn_gate_up: &self.ffn_gate_up,
+            ffn_down: &self.ffn_down,
         }
     }
 }

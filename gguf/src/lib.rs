@@ -10,6 +10,7 @@ use memmap2::Mmap;
 use std::{collections::HashMap, fmt::Debug, fs::File, path::Path};
 
 pub use ggus::{ggml_quants, GGufMetaError, GGufMetaMapExt};
+pub use tokenizer::Tokenizer;
 pub mod ext {
     pub use memmap2::Mmap;
 }

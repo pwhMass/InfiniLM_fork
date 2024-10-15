@@ -111,12 +111,8 @@ impl<Ops: Operators, W> LlamaWorker<Ops, W> {
             d,
             dh,
             di,
-            distribute,
             ..
         } = self.meta;
-        let nh = nh / distribute;
-        let nkvh = nkvh / distribute;
-        let di = di / distribute;
 
         let ele = dt_size(dt_mat);
         let embd = nt * d * ele;
@@ -160,7 +156,6 @@ where
             nh,
             nkvh,
             dh,
-            distribute,
             ..
         } = self.meta;
         let workspace_size = self.workspace_size(nt, max_seq_len, max_att_len);
@@ -207,10 +202,7 @@ where
                 let mut q = q;
                 let mut k = k;
                 let v = v;
-                let o = x1
-                    .as_mut()
-                    .tile(1, &[nh * distribute, dh])
-                    .map(|t| &mut t[..]);
+                let o = x1.as_mut().tile(1, &[nh, dh]).map(|t| &mut t[..]);
 
                 self.rope(&mut q, &pos, &sin, &cos, workspace, queue_alloc)?;
                 self.rope(&mut k, &pos, &sin, &cos, workspace, queue_alloc)?;
@@ -250,9 +242,7 @@ where
             let w = self.weights.attn_o(iblk, queue);
             self.mat_mul(&mut x, 1., &x1, &w, 1., workspace, queue_alloc)?;
 
-            if distribute > 1 {
-                self.all_reduce(&mut x, workspace, queue_alloc)?;
-            }
+            self.all_reduce(&mut x, workspace, queue_alloc)?;
 
             let w = self.weights.ffn_norm(iblk, queue);
             self.rms_norm(&mut x1, &x, &w, workspace, queue_alloc)?;
@@ -260,9 +250,7 @@ where
             #[rustfmt::skip]
             self.mlp(&mut x, &x1, iblk, mlp_alpha, true, workspace, queue_alloc)?;
 
-            if distribute > 1 {
-                self.all_reduce(&mut x, workspace, queue_alloc)?;
-            }
+            self.all_reduce(&mut x, workspace, queue_alloc)?;
         }
 
         // 集中要采样的 token
@@ -535,11 +523,11 @@ impl LlamaMeta {
     fn decorator<W>(&self, weights: W) -> WeightDecorator<W> {
         WeightDecorator {
             attn_norm: self.attn_norm(),
-            attn_qkv: self.attn_qkv(true),
-            attn_o: self.attn_o(true),
+            attn_qkv: self.attn_qkv(),
+            attn_o: self.attn_o(),
             ffn_norm: self.ffn_norm(),
-            ffn_gate_up: self.ffn_gate_up(true),
-            ffn_down: self.ffn_down(true),
+            ffn_gate_up: self.ffn_gate_up(),
+            ffn_down: self.ffn_down(),
             output_norm: self.output_norm(),
             output: self.output(),
             weights,

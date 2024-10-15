@@ -6,12 +6,8 @@ use operators::{
     nvidia_gpu::{Config, Gpu},
     random_sample::{KVPair, SampleArgs},
 };
-use std::{
-    slice::from_raw_parts_mut,
-    time::{Duration, Instant},
-    usize,
-};
-use test_utils::print_now;
+use std::{slice::from_raw_parts_mut, usize};
+use test_utils::CausalLM;
 
 #[test]
 fn test_infer() {
@@ -26,116 +22,86 @@ fn test_infer() {
 
     let gguf = GGufModel::read(shards.iter().map(|s| &**s));
     let model = LlamaStorage::from_gguf(&gguf);
-    assert_eq!(model.meta.distribute, 1);
-
     let gpu = Gpu::new(gpu.context(), Config::default());
-    gpu.apply(|ctx| {
-        let stream = ctx.stream();
-        let weights = Weights::new(&model, 0, 1, usize::MAX, &stream);
+    let gpu = &gpu;
 
+    std::thread::scope(|s| {
         let LlamaStorage {
             meta, token_embed, ..
-        } = model;
-        println!("{meta:?}");
-        let mut llama = Llama {
-            token_embed: stream.from_host(token_embed),
-            worker: LlamaWorker::new(&gpu, meta.clone(), weights),
-            sample: RandomSample::new(&gpu),
-        };
-        llama.sample.scheme(meta.dt_embd, meta.nvoc).unwrap();
+        } = &model;
 
-        let eos = gguf.tokenizer_ggml_eos_token_id().unwrap();
-        let tokenizer = gguf.tokenizer();
+        let sample = s.spawn(move || {
+            let mut sample = RandomSample::new(gpu);
+            sample.scheme(meta.dt_embd, meta.nvoc).unwrap();
+            sample
+        });
+        gpu.apply(|ctx| {
+            let stream = ctx.stream();
+            let weights = Weights::new(&model, usize::MAX, &stream);
 
-        let meta = llama.worker.meta();
-        let mut cache = meta
-            .kv_cache(meta.nctx)
-            .map(|size| stream.malloc::<u8>(size))
-            .take();
+            println!("{meta:?}");
+            let &LlamaMeta {
+                dt_embd,
+                nctx,
+                nvoc,
+                dh,
+                ..
+            } = meta;
 
-        let mut prompt = "Once upon a time,".to_string();
-        print_now!("{prompt}");
+            let eos = gguf.tokenizer_ggml_eos_token_id().unwrap();
+            let tokenizer = gguf.tokenizer();
 
-        let mut tokens = tokenizer.encode(&prompt);
-        let num_prompt_tokens = tokens.len();
+            let mut cache: DevMem<'_> = meta
+                .kv_cache(nctx)
+                .map(|size| stream.malloc::<u8>(size))
+                .take();
 
-        let mut prefill = Duration::ZERO;
-        let mut decode = Duration::ZERO;
+            test_utils::test_infer(
+                Llama {
+                    token_embed: stream.from_host(token_embed),
+                    worker: LlamaWorker::new(gpu, meta.clone(), weights),
+                    sample: sample.join().unwrap(),
 
-        let mut pos = 0;
-        loop {
-            let time = Instant::now();
-            let next = llama.infer(&tokens, &mut cache, pos, &stream);
-            let time = time.elapsed();
-
-            if prefill.is_zero() {
-                prefill = time;
-            } else {
-                decode += time;
-            }
-
-            pos += tokens.len();
-            if next == eos {
-                break;
-            }
-
-            let piece = tokenizer.decode(next);
-            print_now!("{piece}");
-            prompt.push_str(&piece);
-            tokens = vec![next];
-        }
-
-        println!();
-        println!();
-        print_time("total", prefill + decode, pos);
-        print_time("prefill", prefill, num_prompt_tokens);
-        print_time("decode", decode, pos - num_prompt_tokens);
+                    sin_cos: <Operators as llama::Operators>::build_sin_cos(
+                        dt_embd, nctx, dh, &stream,
+                    ),
+                    indices: RandomSample::build_indices(nvoc, &stream),
+                    stream,
+                },
+                &mut cache,
+                eos,
+                tokenizer,
+                "Once upon a time,",
+            );
+        });
     });
-
-    fn print_time(name: &str, time: Duration, n: usize) {
-        println!(
-            "{name}: {time:?} for {n} tokens, avg: {:?} per token",
-            time.div_f64(n as _)
-        )
-    }
 }
 
 struct Llama<'ctx> {
     token_embed: DevMem<'ctx>,
     worker: LlamaWorker<Operators, Weights<'ctx>>,
     sample: RandomSample,
+
+    sin_cos: Tensor<DevMem<'ctx>>,
+    indices: Tensor<DevMem<'ctx>>,
+    stream: Stream<'ctx>,
 }
 
-impl Llama<'_> {
-    pub fn infer(
-        &mut self,
-        input: &[u32],
-        cache: &mut [DevByte],
-        pos: usize,
-        stream: &Stream,
-    ) -> u32 {
+impl CausalLM<DevByte> for Llama<'_> {
+    fn infer(&mut self, input: &[u32], cache: &mut [DevByte], pos: usize) -> u32 {
         let meta = self.worker.meta();
-        let &LlamaMeta {
-            dt_embd,
-            nctx,
-            nvoc,
-            dh,
-            ..
-        } = meta;
 
-        let sin_cos = <Operators as llama::Operators>::build_sin_cos(dt_embd, nctx, dh, stream);
-        let indices = RandomSample::build_indices(nvoc, stream);
-
-        let cache = meta.kv_cache(nctx).map(|_| cache);
-        let mut embd = meta.embd(input.len()).map(|size| stream.malloc::<u8>(size));
-        let mut logits = meta.logits(1).map(|size| stream.malloc::<u8>(size));
+        let mut embd = meta
+            .embd(input.len())
+            .map(|len| self.stream.malloc::<u8>(len));
+        let mut logits = meta.logits(1).map(|len| self.stream.malloc::<u8>(len));
 
         let d = embd.get().len() / input.len();
         for (i, &tok) in input.iter().enumerate() {
-            stream.memcpy_d2d(
+            self.stream.memcpy_d2d(
                 &mut embd.get_mut()[i * d..][..d],
                 &self.token_embed[tok as usize * d..][..d],
-            );
+            )
         }
 
         self.worker
@@ -143,9 +109,9 @@ impl Llama<'_> {
                 LlamaArgs {
                     embd: embd.map_slice_mut(),
                     logits: logits.map_slice_mut(),
-                    sin_cos: sin_cos.map_slice(),
+                    sin_cos: self.sin_cos.map_slice(),
                     requests: vec![LlamaRequest {
-                        cache,
+                        cache: meta.kv_cache(meta.nctx).map(|_| cache),
                         seq_len: input.len(),
                         out_len: 1,
                         pos,
@@ -156,20 +122,20 @@ impl Llama<'_> {
                     mlp_alpha: 1.,
                 },
                 &mut [],
-                stream,
+                &self.stream,
             )
             .unwrap();
 
-        let mut pairs = Tensor::kv_pair_vec(1, |size| stream.malloc::<u8>(size));
+        let mut pairs = Tensor::kv_pair_vec(1, |size| self.stream.malloc::<u8>(size));
 
         self.sample
             .launch(
                 &mut pairs,
                 &logits,
-                &indices,
+                &self.indices,
                 SampleArgs::ARG_MAX,
                 &mut [],
-                stream,
+                &self.stream,
             )
             .unwrap();
 

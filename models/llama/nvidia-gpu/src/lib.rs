@@ -3,12 +3,12 @@
 use llama::{BlkWeight, LlamaBlkStorage, LlamaStorage, Tensor, WeightLoader};
 use operators::{
     all_reduce::{AllReduce, NonAllReduce},
-    cuda::{memcpy_d2h, DevByte, DevMem, HostMem, Stream},
+    cuda::{memcpy_d2h, DevByte, DevMem, Event, HostMem, Stream},
     nvidia_gpu::Gpu,
     random_sample::nvidia_gpu::Operator as RandomSampleGpu,
     ByteOf, QueueOf, TopoNode,
 };
-use std::{marker::PhantomData, ops::Deref};
+use std::{marker::PhantomData, mem::replace, ops::Deref};
 
 pub struct Operators<N = Gpu, R = NonAllReduce<Gpu>>(PhantomData<(N, R)>);
 
@@ -57,30 +57,54 @@ where
 }
 
 impl<'blk> Weights<'blk> {
-    pub fn new(
-        model: &LlamaStorage<&'_ [u8]>,
-        rank: usize,
-        distribute: usize,
-        pool_size: usize,
-        stream: &Stream<'blk>,
-    ) -> Self {
+    pub fn new(model: &LlamaStorage<&'_ [u8]>, pool_size: usize, stream: &Stream<'blk>) -> Self {
         assert!(pool_size > 0);
         if pool_size < model.meta.nblk {
             todo!()
         } else {
-            assert_eq!(rank, 0);
-            assert_eq!(distribute, 1);
+            let mut loader = model.blocks[0].map(|s| H2DLoader::new(s.len(), stream));
+
             Self {
                 blks: model
                     .blocks
                     .iter()
-                    .map(|blk| blk.clone().map(|s| stream.from_host(s)))
+                    .map(|blk| LlamaBlkStorage {
+                        attn_norm: loader.attn_norm.load(blk.attn_norm, stream),
+                        attn_qkv: loader.attn_qkv.load(blk.attn_qkv, stream),
+                        attn_o: loader.attn_o.load(blk.attn_o, stream),
+                        ffn_norm: loader.ffn_norm.load(blk.ffn_norm, stream),
+                        ffn_gate_up: loader.ffn_gate_up.load(blk.ffn_gate_up, stream),
+                        ffn_down: loader.ffn_down.load(blk.ffn_down, stream),
+                    })
                     .collect(),
                 blk_source: Box::new([]),
                 output_norm: stream.from_host(model.output_norm),
                 output: stream.from_host(model.output),
             }
         }
+    }
+}
+
+struct H2DLoader<'ctx> {
+    event: Event<'ctx>,
+    host: HostMem<'ctx>,
+    dev: DevMem<'ctx>,
+}
+
+impl<'ctx> H2DLoader<'ctx> {
+    fn new(size: usize, stream: &Stream<'ctx>) -> Self {
+        Self {
+            event: stream.record(),
+            host: stream.ctx().malloc_host::<u8>(size),
+            dev: stream.malloc::<u8>(size),
+        }
+    }
+
+    fn load(&mut self, host: &[u8], stream: &Stream<'ctx>) -> DevMem<'ctx> {
+        self.event.synchronize();
+        self.host.copy_from_slice(host);
+        stream.memcpy_h2d(&mut self.dev, &self.host);
+        replace(&mut self.dev, stream.malloc::<u8>(self.host.len()))
     }
 }
 
