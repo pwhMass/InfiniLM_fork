@@ -8,7 +8,7 @@ pub trait DataFmt {
 
 impl DataFmt for f16 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self == &f16::ZERO {
+        if *self == f16::ZERO {
             write!(f, " ________")
         } else {
             write!(f, "{:>9.3e}", self.to_f32())
@@ -18,7 +18,7 @@ impl DataFmt for f16 {
 
 impl DataFmt for bf16 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self == &bf16::ZERO {
+        if *self == bf16::ZERO {
             write!(f, " ________")
         } else {
             write!(f, "{:>9.3e}", self.to_f32())
@@ -28,20 +28,30 @@ impl DataFmt for bf16 {
 
 impl DataFmt for f32 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self == &0. {
+        if *self == 0. {
             write!(f, " ________")
         } else {
-            write!(f, "{:>9.3e}", self)
+            write!(f, "{self:>9.3e}")
         }
     }
 }
 
 impl DataFmt for f64 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self == &0. {
+        if *self == 0. {
             write!(f, " ________")
         } else {
-            write!(f, "{:>9.3e}", self)
+            write!(f, "{self:>9.3e}")
+        }
+    }
+}
+
+impl DataFmt for u32 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if *self == 0 {
+            write!(f, " ________")
+        } else {
+            write!(f, "{self:>6}")
         }
     }
 }
@@ -53,6 +63,7 @@ impl<Physical: Deref<Target = [u8]>> fmt::Display for Tensor<Physical> {
             primitive::BF16 => self.map_slice().write_tensor::<bf16>(&mut vec![], f),
             primitive::F32 => self.map_slice().write_tensor::<f32>(&mut vec![], f),
             primitive::F64 => self.map_slice().write_tensor::<f64>(&mut vec![], f),
+            primitive::U32 => self.map_slice().write_tensor::<u32>(&mut vec![], f),
             _ => todo!(),
         }
     }

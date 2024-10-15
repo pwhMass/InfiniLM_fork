@@ -1,9 +1,9 @@
 #![cfg(hw_detected)]
 
-use llama::{BlkWeight, LlamaStorage, Tensor, WeightLoader};
+use llama::{BlkWeight, LlamaBlkStorage, LlamaStorage, Tensor, WeightLoader};
 use operators::{
     all_reduce::{AllReduce, NonAllReduce},
-    cuda::{memcpy_d2h, DevByte},
+    cuda::{memcpy_d2h, DevByte, DevMem, HostMem, Stream},
     nvidia_gpu::Gpu,
     random_sample::nvidia_gpu::Operator as RandomSampleGpu,
     ByteOf, QueueOf, TopoNode,
@@ -14,7 +14,13 @@ pub struct Operators<N = Gpu, R = NonAllReduce<Gpu>>(PhantomData<(N, R)>);
 
 pub type RandomSample = llama::RandomSample<Gpu, RandomSampleGpu>;
 
-pub struct Weights<'w>(PhantomData<&'w ()>);
+pub struct Weights<'ctx> {
+    blks: Box<[LlamaBlkStorage<DevMem<'ctx>>]>,
+    #[allow(dead_code)]
+    blk_source: Box<[LlamaStorage<HostMem<'ctx>>]>,
+    output_norm: DevMem<'ctx>,
+    output: DevMem<'ctx>,
+}
 
 macro_rules! op {
     ($name:ident) => {
@@ -50,9 +56,31 @@ where
     }
 }
 
-impl<'w> Weights<'w> {
-    pub fn new(_model: &LlamaStorage<&'w [u8]>, _rank: usize, _distribute: usize) -> Self {
-        todo!()
+impl<'blk> Weights<'blk> {
+    pub fn new(
+        model: &LlamaStorage<&'_ [u8]>,
+        rank: usize,
+        distribute: usize,
+        pool_size: usize,
+        stream: &Stream<'blk>,
+    ) -> Self {
+        assert!(pool_size > 0);
+        if pool_size < model.meta.nblk {
+            todo!()
+        } else {
+            assert_eq!(rank, 0);
+            assert_eq!(distribute, 1);
+            Self {
+                blks: model
+                    .blocks
+                    .iter()
+                    .map(|blk| blk.clone().map(|s| stream.from_host(s)))
+                    .collect(),
+                blk_source: Box::new([]),
+                output_norm: stream.from_host(model.output_norm),
+                output: stream.from_host(model.output),
+            }
+        }
     }
 }
 
@@ -66,21 +94,29 @@ impl WeightLoader for Weights<'_> {
     #[inline]
     fn load_blk(
         &self,
-        _which: BlkWeight,
-        _iblk: usize,
+        which: BlkWeight,
+        iblk: usize,
         _queue: &QueueOf<Self::Hardware>,
     ) -> Self::Memory<'_> {
-        todo!()
+        let blk = &self.blks[iblk];
+        match which {
+            BlkWeight::AttnNorm => &blk.attn_norm,
+            BlkWeight::AttnQKV => &blk.attn_qkv,
+            BlkWeight::AttnO => &blk.attn_o,
+            BlkWeight::FfnNorm => &blk.ffn_norm,
+            BlkWeight::FfnGateUp => &blk.ffn_gate_up,
+            BlkWeight::FfnDown => &blk.ffn_down,
+        }
     }
 
     #[inline]
     fn output_norm(&self, _queue: &QueueOf<Self::Hardware>) -> Self::Memory<'_> {
-        todo!()
+        &self.output_norm
     }
 
     #[inline]
     fn output(&self, _queue: &QueueOf<Self::Hardware>) -> Self::Memory<'_> {
-        todo!()
+        &self.output
     }
 }
 

@@ -13,3 +13,7 @@ operators = { workspace = true, features = ["nvidia-gpu"] }
 [build-dependencies]
 build-script-cfg.workspace = true
 search-cuda-tools.workspace = true
+
+[dev-dependencies]
+test-utils.workspace = true
+gguf.workspace = true

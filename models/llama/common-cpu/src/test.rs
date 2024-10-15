@@ -89,7 +89,7 @@ struct Llama<'w> {
     sample: RandomSample,
 }
 
-impl<'w> Llama<'w> {
+impl Llama<'_> {
     pub fn infer(&mut self, input: &[u32], cache: &mut [u8], pos: usize) -> u32 {
         let meta = self.worker.meta();
         let &LlamaMeta {
