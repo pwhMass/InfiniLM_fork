@@ -10,7 +10,7 @@ use std::alloc::Layout;
 impl<T> Tensor<T> {
     pub fn kv_pair_vec(n: usize, f: impl FnOnce(usize) -> T) -> Self {
         Self {
-            element: KVPair::<()>::LAYOUT,
+            dt: KVPair::<()>::LAYOUT,
             layout: ArrayLayout::new_contiguous(&[n], BigEndian, size_of::<KVPair>()),
             physical: f(Layout::array::<KVPair>(n).unwrap().size()),
         }
@@ -18,6 +18,6 @@ impl<T> Tensor<T> {
 
     #[inline]
     pub fn layout(&self) -> TensorLayout {
-        TensorLayout::new(self.element, self.layout.shape(), self.layout.strides())
+        TensorLayout::new(self.dt, self.layout.shape(), self.layout.strides())
     }
 }

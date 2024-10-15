@@ -14,23 +14,23 @@ pub use split::{LocalSplitable, Splitable};
 
 #[derive(Clone)]
 pub struct Tensor<T> {
-    element: DigitLayout,
+    dt: DigitLayout,
     layout: ArrayLayout<5>,
     physical: T,
 }
 
 impl Tensor<usize> {
-    pub fn new(element: DigitLayout, shape: &[usize]) -> Self {
+    pub fn new(dt: DigitLayout, shape: &[usize]) -> Self {
         assert!(shape.len() <= 5);
 
         let mut buf = [0; 5];
         buf[..shape.len()].copy_from_slice(shape);
-        buf[shape.len() - 1] /= block_size(element);
+        buf[shape.len() - 1] /= block_size(dt);
         let shape = &buf[..shape.len()];
 
-        let ele = dt_size(element);
+        let ele = dt_size(dt);
         Self {
-            element,
+            dt,
             layout: ArrayLayout::new_contiguous(shape, BigEndian, ele),
             physical: shape.iter().product::<usize>() * ele,
         }
@@ -41,7 +41,7 @@ impl Tensor<usize> {
 impl<T> Tensor<T> {
     #[inline]
     pub const fn dt(&self) -> DigitLayout {
-        self.element
+        self.dt
     }
 
     #[inline]
@@ -77,7 +77,7 @@ impl<T> Tensor<T> {
     #[inline]
     pub fn as_ref(&self) -> Tensor<&T> {
         Tensor {
-            element: self.element,
+            dt: self.dt,
             layout: self.layout.clone(),
             physical: &self.physical,
         }
@@ -86,7 +86,7 @@ impl<T> Tensor<T> {
     #[inline]
     pub fn as_mut(&mut self) -> Tensor<&mut T> {
         Tensor {
-            element: self.element,
+            dt: self.dt,
             layout: self.layout.clone(),
             physical: &mut self.physical,
         }
@@ -95,10 +95,24 @@ impl<T> Tensor<T> {
     #[inline]
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Tensor<U> {
         Tensor {
-            element: self.element,
+            dt: self.dt,
             layout: self.layout,
             physical: f(self.physical),
         }
+    }
+
+    #[inline]
+    pub fn is_contiguous(&self) -> bool {
+        self.layout.merge(0..self.layout.ndim()).is_some()
+    }
+
+    #[inline]
+    pub fn get_contiguous_bytes(&self) -> Option<usize> {
+        let layout = self.layout.merge(0..self.layout.ndim())?;
+        let &[size] = layout.shape() else {
+            unreachable!()
+        };
+        Some(size * dt_size(self.dt))
     }
 }
 
@@ -186,7 +200,7 @@ impl<T> Tensor<T> {
 impl<T: Splitable> Tensor<T> {
     pub fn split<'a>(&'a self, axis: usize, parts: &'a [usize]) -> impl Iterator<Item = Self> + 'a {
         self.layout.split(axis, parts).map(|layout| Self {
-            element: self.element,
+            dt: self.dt,
             layout,
             physical: self.physical.split(),
         })

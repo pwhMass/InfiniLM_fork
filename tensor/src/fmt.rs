@@ -58,7 +58,7 @@ impl DataFmt for u32 {
 
 impl<Physical: Deref<Target = [u8]>> fmt::Display for Tensor<Physical> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.element {
+        match self.dt {
             primitive::F16 => self.map_slice().write_tensor::<f16>(&mut vec![], f),
             primitive::BF16 => self.map_slice().write_tensor::<bf16>(&mut vec![], f),
             primitive::F32 => self.map_slice().write_tensor::<f32>(&mut vec![], f),

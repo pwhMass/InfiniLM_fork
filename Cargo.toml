@@ -16,7 +16,7 @@ causal-lm.path = "causal-lm"
 test-utils.path = "test-utils"
 
 ggus = { git = "https://github.com/YdrMaster/gguf", rev = "c676bcc" }
-ndarray-layout = { git = "https://github.com/YdrMaster/ndarray-layout", rev = "5c6b969" }
+ndarray-layout = { git = "https://github.com/YdrMaster/ndarray-layout", rev = "68ab1db" }
 operators = { git = "https://github.com/YdrMaster/operators-rs", rev = "39ba50b", default-features = false }
 
 build-script-cfg = "0.0"
