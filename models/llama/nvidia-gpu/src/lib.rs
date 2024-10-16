@@ -131,6 +131,7 @@ impl<'ctx> H2DLoader<'ctx> {
             Contiguous::Owned(host) => self.host = host,
         };
         stream.memcpy_h2d(&mut self.dev, &self.host);
+        self.event = stream.record();
         replace(&mut self.dev, stream.malloc::<u8>(self.host.len()))
     }
 }
