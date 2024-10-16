@@ -1,5 +1,5 @@
 ﻿use crate::{Operators, RandomSample, Weights};
-use gguf::{GGufMetaMapExt, GGufModel};
+use gguf::{ext::utok, GGufMetaMapExt, GGufModel};
 use llama::{ext::f16, LlamaArgs, LlamaMeta, LlamaRequest, LlamaStorage, LlamaWorker, Tensor};
 use operators::{
     cuda::{self, memcpy_d2h, DevByte, DevMem, Device, NoDevice, Stream},
@@ -37,7 +37,7 @@ fn test_infer() {
         });
         gpu.apply(|ctx| {
             let stream = ctx.stream();
-            let weights = Weights::new(&model, usize::MAX, &stream);
+            let weights = Weights::new(&model, .., 1, usize::MAX, &stream);
 
             println!("{meta:?}");
             let &LlamaMeta {
@@ -88,7 +88,7 @@ struct Llama<'ctx> {
 }
 
 impl CausalLM<DevByte> for Llama<'_> {
-    fn infer(&mut self, input: &[u32], cache: &mut [DevByte], pos: usize) -> u32 {
+    fn infer(&mut self, input: &[utok], cache: &mut [DevByte], pos: usize) -> utok {
         let meta = self.worker.meta();
 
         let mut embd = meta
@@ -145,6 +145,6 @@ impl CausalLM<DevByte> for Llama<'_> {
             pairs.get(),
         );
 
-        pair.idx() as u32
+        pair.idx() as _
     }
 }

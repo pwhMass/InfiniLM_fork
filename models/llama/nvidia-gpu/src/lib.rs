@@ -1,6 +1,6 @@
 #![cfg(hw_detected)]
 
-use llama::{BlkWeight, LlamaBlkStorage, LlamaStorage, Tensor, WeightLoader};
+use llama::{BlkWeight, Contiguous, LlamaBlkStorage, LlamaStorage, Tensor, WeightLoader};
 use operators::{
     all_reduce::{AllReduce, NonAllReduce},
     cuda::{memcpy_d2h, DevByte, DevMem, Event, HostMem, Stream},
@@ -8,7 +8,11 @@ use operators::{
     random_sample::nvidia_gpu::Operator as RandomSampleGpu,
     ByteOf, QueueOf, TopoNode,
 };
-use std::{marker::PhantomData, mem::replace, ops::Deref};
+use std::{
+    marker::PhantomData,
+    mem::replace,
+    ops::{Deref, RangeBounds},
+};
 
 pub struct Operators<N = Gpu, R = NonAllReduce<Gpu>>(PhantomData<(N, R)>);
 
@@ -57,24 +61,44 @@ where
 }
 
 impl<'blk> Weights<'blk> {
-    pub fn new(model: &LlamaStorage<&'_ [u8]>, pool_size: usize, stream: &Stream<'blk>) -> Self {
+    pub fn new(
+        model: &LlamaStorage<&'_ [u8]>,
+        range: impl RangeBounds<usize> + Clone,
+        count: usize,
+        pool_size: usize,
+        stream: &Stream<'blk>,
+    ) -> Self {
         assert!(pool_size > 0);
         if pool_size < model.meta.nblk {
             todo!()
         } else {
-            let mut loader = model.blocks[0].map(|s| H2DLoader::new(s.len(), stream));
-
+            let mut loader = None;
             Self {
                 blks: model
                     .blocks
                     .iter()
-                    .map(|blk| LlamaBlkStorage {
-                        attn_norm: loader.attn_norm.load(blk.attn_norm, stream),
-                        attn_qkv: loader.attn_qkv.load(blk.attn_qkv, stream),
-                        attn_o: loader.attn_o.load(blk.attn_o, stream),
-                        ffn_norm: loader.ffn_norm.load(blk.ffn_norm, stream),
-                        ffn_gate_up: loader.ffn_gate_up.load(blk.ffn_gate_up, stream),
-                        ffn_down: loader.ffn_down.load(blk.ffn_down, stream),
+                    .map(|blk| {
+                        let blk = blk.distribute(&model.meta, range.clone(), count, |len| {
+                            stream.ctx().malloc_host::<u8>(len)
+                        });
+                        let loader = loader.get_or_insert_with(|| {
+                            blk.as_ref().map(|s| H2DLoader::new(s.len(), stream))
+                        });
+                        macro_rules! load {
+                            ($( $ident:ident )+ ) => {
+                                LlamaBlkStorage{
+                                    $( $ident: loader.$ident.load(blk.$ident, stream) ),+
+                                }
+                            };
+                        }
+                        load! {
+                            attn_norm
+                            attn_qkv
+                            attn_o
+                            ffn_norm
+                            ffn_gate_up
+                            ffn_down
+                        }
                     })
                     .collect(),
                 blk_source: Box::new([]),
@@ -100,9 +124,12 @@ impl<'ctx> H2DLoader<'ctx> {
         }
     }
 
-    fn load(&mut self, host: &[u8], stream: &Stream<'ctx>) -> DevMem<'ctx> {
+    fn load(&mut self, host: Contiguous<HostMem<'ctx>>, stream: &Stream<'ctx>) -> DevMem<'ctx> {
         self.event.synchronize();
-        self.host.copy_from_slice(host);
+        match host {
+            Contiguous::Borrowed(host) => self.host.copy_from_slice(host),
+            Contiguous::Owned(host) => self.host = host,
+        };
         stream.memcpy_h2d(&mut self.dev, &self.host);
         replace(&mut self.dev, stream.malloc::<u8>(self.host.len()))
     }

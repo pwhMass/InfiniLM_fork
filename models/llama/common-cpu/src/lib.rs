@@ -1,18 +1,21 @@
-use llama::{BlkWeight, LlamaBlkStorage, LlamaStorage, Tensor, WeightLoader};
+use llama::{BlkWeight, Contiguous, LlamaBlkStorage, LlamaStorage, Tensor, WeightLoader};
 use operators::{
     all_reduce::{AllReduce, NonAllReduce},
-    common_cpu::Cpu,
+    common_cpu::{Blob, Cpu},
     random_sample::common_cpu::Operator as RandomSampleCpu,
     ByteOf, QueueOf, TopoNode,
 };
-use std::{marker::PhantomData, ops::Deref};
+use std::{
+    marker::PhantomData,
+    ops::{Deref, RangeBounds},
+};
 
 pub struct Operators<N = Cpu, R = NonAllReduce<Cpu>>(PhantomData<(N, R)>);
 
 pub type RandomSample = llama::RandomSample<Cpu, RandomSampleCpu>;
 
 pub struct Weights<'w> {
-    blks: Box<[LlamaBlkStorage<&'w [u8]>]>,
+    blks: Box<[LlamaBlkStorage<Contiguous<'w, Blob>>]>,
     output_norm: &'w [u8],
     output: &'w [u8],
 }
@@ -47,7 +50,11 @@ where
 }
 
 impl<'w> Weights<'w> {
-    pub fn new(model: &LlamaStorage<&'w [u8]>) -> Self {
+    pub fn new(
+        model: &LlamaStorage<&'w [u8]>,
+        range: impl RangeBounds<usize> + Clone,
+        count: usize,
+    ) -> Self {
         let LlamaStorage {
             output_norm,
             output,
@@ -55,7 +62,10 @@ impl<'w> Weights<'w> {
             ..
         } = model;
         Self {
-            blks: blocks.clone(),
+            blks: blocks
+                .iter()
+                .map(|blk| blk.distribute(&model.meta, range.clone(), count, Blob::new))
+                .collect(),
             output_norm,
             output,
         }
@@ -78,12 +88,12 @@ impl WeightLoader for Weights<'_> {
     ) -> Self::Memory<'_> {
         let blk = &self.blks[iblk];
         match which {
-            BlkWeight::AttnNorm => blk.attn_norm,
-            BlkWeight::AttnQKV => blk.attn_qkv,
-            BlkWeight::AttnO => blk.attn_o,
-            BlkWeight::FfnNorm => blk.ffn_norm,
-            BlkWeight::FfnGateUp => blk.ffn_gate_up,
-            BlkWeight::FfnDown => blk.ffn_down,
+            BlkWeight::AttnNorm => &blk.attn_norm,
+            BlkWeight::AttnQKV => &blk.attn_qkv,
+            BlkWeight::AttnO => &blk.attn_o,
+            BlkWeight::FfnNorm => &blk.ffn_norm,
+            BlkWeight::FfnGateUp => &blk.ffn_gate_up,
+            BlkWeight::FfnDown => &blk.ffn_down,
         }
     }
 

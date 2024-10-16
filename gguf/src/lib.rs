@@ -13,6 +13,7 @@ pub use ggus::{ggml_quants, GGufMetaError, GGufMetaMapExt};
 pub use tokenizer::Tokenizer;
 pub mod ext {
     pub use memmap2::Mmap;
+    pub use tokeneer::utok;
 }
 
 /// 从指定文件的路径出发，映射所有分片文件。

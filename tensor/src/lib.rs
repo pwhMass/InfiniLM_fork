@@ -207,6 +207,30 @@ impl<T: Splitable> Tensor<T> {
     }
 }
 
+pub fn rearrange<T>(dst: &mut Tensor<T>, src: &Tensor<&[u8]>)
+where
+    T: DerefMut<Target = [u8]>,
+{
+    use ::operators::{
+        common_cpu::{Cpu, ThisThread},
+        rearrange::{common_cpu::Operator as Rearrange, Args},
+        Operator as _,
+    };
+
+    Rearrange::new(&Cpu)
+        .launch(
+            &Args {
+                dst_layout: dst.layout(),
+                dst_base: dst.base_mut(),
+                src_layout: src.layout(),
+                src_base: src.base(),
+            },
+            &mut [],
+            &ThisThread,
+        )
+        .unwrap()
+}
+
 pub const fn dt_size(dt: DigitLayout) -> usize {
     use ggus::ggml_quants::{
         bf16, digit_layout::types as primitive, f16, types as quantized, IQ1M, IQ1S, IQ2S, IQ2XS,

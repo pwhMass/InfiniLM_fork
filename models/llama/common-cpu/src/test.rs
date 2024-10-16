@@ -1,5 +1,5 @@
 ﻿use crate::{Operators, RandomSample, Weights};
-use gguf::{GGufMetaMapExt, GGufModel};
+use gguf::{ext::utok, GGufMetaMapExt, GGufModel};
 use llama::{ext::f16, LlamaArgs, LlamaMeta, LlamaRequest, LlamaStorage, LlamaWorker, Tensor};
 use operators::{
     common_cpu::{Cpu, ThisThread},
@@ -16,7 +16,7 @@ fn test_infer() {
     let gguf = GGufModel::read(shards.iter().map(|s| &**s));
 
     let model = LlamaStorage::from_gguf(&gguf);
-    let weights = Weights::new(&model);
+    let weights = Weights::new(&model, .., 1);
     let LlamaStorage {
         meta, token_embed, ..
     } = model;
@@ -47,7 +47,7 @@ struct Llama<'w> {
 }
 
 impl CausalLM<u8> for Llama<'_> {
-    fn infer(&mut self, input: &[u32], cache: &mut [u8], pos: usize) -> u32 {
+    fn infer(&mut self, input: &[utok], cache: &mut [u8], pos: usize) -> utok {
         let meta = self.worker.meta();
         let &LlamaMeta {
             dt_embd,
@@ -108,6 +108,6 @@ impl CausalLM<u8> for Llama<'_> {
             )
             .unwrap();
 
-        pair.idx() as u32
+        pair.idx() as _
     }
 }

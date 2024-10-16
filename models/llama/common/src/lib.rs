@@ -2,13 +2,16 @@ mod args;
 mod compute;
 mod storage;
 
+use std::ops::{Range, RangeBounds};
+
 pub use args::{Args as LlamaArgs, Request as LlamaRequest};
+pub use common::Contiguous;
 pub use compute::{BlkWeight, LlamaWorker, Operators, WeightLoader};
 pub use storage::{BlkStorage as LlamaBlkStorage, Storage as LlamaStorage};
 pub use tensor::{RandomSample, Tensor};
 pub mod ext {
     pub use gguf::{
-        ext::Mmap,
+        ext::{utok, Mmap},
         ggml_quants::{
             digit_layout::{types as primitive, DigitLayout},
             f16, types as quant,
@@ -36,6 +39,16 @@ pub struct LlamaMeta {
 }
 
 impl LlamaMeta {
+    pub fn distribute(&mut self, range: impl RangeBounds<usize>, count: usize) {
+        let len = normalize(range, count).len();
+        assert_eq!(self.nkvh % count, 0);
+        assert_eq!(self.di % count, 0);
+
+        self.nh = self.nh / count * len;
+        self.nkvh = self.nkvh / count * len;
+        self.di = self.di / count * len;
+    }
+
     pub fn kv_cache(&self, buf: usize) -> Tensor<usize> {
         let &Self {
             dt_mat,
@@ -107,4 +120,20 @@ impl LlamaMeta {
     fn mat(&self, row: usize, col: usize) -> Tensor<usize> {
         Tensor::new(self.dt_mat, &[row, col]).transpose(&[1, 0])
     }
+}
+
+fn normalize(range: impl RangeBounds<usize>, count: usize) -> Range<usize> {
+    use std::ops::Bound::*;
+    let start = match range.start_bound() {
+        Included(&i) => i,
+        Excluded(&i) => i + 1,
+        Unbounded => 0,
+    };
+    let end = match range.end_bound() {
+        Included(&i) => i + 1,
+        Excluded(&i) => i,
+        Unbounded => count,
+    };
+    assert!(start < end && end <= count);
+    start..end
 }

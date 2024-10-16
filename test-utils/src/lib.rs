@@ -1,4 +1,7 @@
-use gguf::{ext::Mmap, map_files, Tokenizer};
+use gguf::{
+    ext::{utok, Mmap},
+    map_files, Tokenizer,
+};
 use std::{
     fmt,
     path::Path,
@@ -20,13 +23,13 @@ pub fn map_gguf_files() -> Option<Box<[Mmap]>> {
 }
 
 pub trait CausalLM<B> {
-    fn infer(&mut self, tokens: &[u32], cache: &mut [B], pos: usize) -> u32;
+    fn infer(&mut self, tokens: &[utok], cache: &mut [B], pos: usize) -> utok;
 }
 
 pub fn test_infer<B>(
     mut lm: impl CausalLM<B>,
     cache: &mut [B],
-    eos: u32,
+    eos: utok,
     tokenizer: Tokenizer,
     prompt: &str,
 ) {
