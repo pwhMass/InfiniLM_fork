@@ -38,6 +38,12 @@ pub struct LlamaMeta {
     pub theta: f32,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum TensorUsage {
+    Storage,
+    Computation,
+}
+
 impl LlamaMeta {
     pub fn distribute(&mut self, range: impl RangeBounds<usize>, count: usize) {
         let len = normalize(range, count).len();
@@ -78,30 +84,30 @@ impl LlamaMeta {
         self.norm()
     }
 
-    pub fn attn_qkv(&self) -> Tensor<usize> {
+    pub fn attn_qkv(&self, usage: TensorUsage) -> Tensor<usize> {
         let &Self {
             nh, nkvh, d, dh, ..
         } = self;
-        self.mat((nh + nkvh + nkvh) * dh, d)
+        self.mat((nh + nkvh + nkvh) * dh, d, usage)
     }
 
-    pub fn attn_o(&self) -> Tensor<usize> {
+    pub fn attn_o(&self, usage: TensorUsage) -> Tensor<usize> {
         let &Self { nh, d, dh, .. } = self;
-        self.mat(d, nh * dh)
+        self.mat(d, nh * dh, usage)
     }
 
     pub fn ffn_norm(&self) -> Tensor<usize> {
         self.norm()
     }
 
-    pub fn ffn_gate_up(&self) -> Tensor<usize> {
+    pub fn ffn_gate_up(&self, usage: TensorUsage) -> Tensor<usize> {
         let &Self { d, di, .. } = self;
-        self.mat(di + di, d)
+        self.mat(di + di, d, usage)
     }
 
-    pub fn ffn_down(&self) -> Tensor<usize> {
+    pub fn ffn_down(&self, usage: TensorUsage) -> Tensor<usize> {
         let &Self { d, di, .. } = self;
-        self.mat(d, di)
+        self.mat(d, di, usage)
     }
 
     pub fn output_norm(&self) -> Tensor<usize> {
@@ -117,8 +123,16 @@ impl LlamaMeta {
         Tensor::new(dt_norm, &[d])
     }
 
-    fn mat(&self, row: usize, col: usize) -> Tensor<usize> {
-        Tensor::new(self.dt_mat, &[row, col]).transpose(&[1, 0])
+    fn mat(&self, row: usize, col: usize, usage: TensorUsage) -> Tensor<usize> {
+        Tensor::new(
+            // NOTICE: 权重矩阵以 mat 类型存储但以 embd 类型参与计算
+            match usage {
+                TensorUsage::Storage => self.dt_mat,
+                TensorUsage::Computation => self.dt_embd,
+            },
+            &[row, col],
+        )
+        .transpose(&[1, 0])
     }
 }
 

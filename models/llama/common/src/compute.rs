@@ -521,13 +521,14 @@ struct WeightDecorator<W> {
 
 impl LlamaMeta {
     fn decorator<W>(&self, weights: W) -> WeightDecorator<W> {
+        use crate::TensorUsage::Computation;
         WeightDecorator {
             attn_norm: self.attn_norm(),
-            attn_qkv: self.attn_qkv(),
-            attn_o: self.attn_o(),
+            attn_qkv: self.attn_qkv(Computation),
+            attn_o: self.attn_o(Computation),
             ffn_norm: self.ffn_norm(),
-            ffn_gate_up: self.ffn_gate_up(),
-            ffn_down: self.ffn_down(),
+            ffn_gate_up: self.ffn_gate_up(Computation),
+            ffn_down: self.ffn_down(Computation),
             output_norm: self.output_norm(),
             output: self.output(),
             weights,
