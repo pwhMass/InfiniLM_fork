@@ -115,19 +115,23 @@ impl<'w> BlkStorage<&'w [u8]> {
         assert!(0 < len && len <= count);
 
         let &LlamaMeta {
-            nh, nkvh, dh, di, ..
+            dt_mat,
+            nh,
+            nkvh,
+            d,
+            dh,
+            di,
+            ..
         } = meta;
         assert_eq!(nkvh % count, 0);
         assert_eq!(di % count, 0);
 
-        use crate::TensorUsage::Storage;
         BlkStorage {
             attn_norm: borrow(self.attn_norm),
             attn_qkv: if len == count {
                 borrow(self.attn_qkv)
             } else {
-                let t = meta
-                    .attn_qkv(Storage)
+                let t = Tensor::new(dt_mat, &[(nh + nkvh + nkvh) * dh, d])
                     .map(|_| self.attn_qkv)
                     .tile(0, &[(nh + nkvh + nkvh), dh]);
                 split!(t => q, k, v; [nh, nkvh, nkvh] @ 0);
@@ -147,16 +151,18 @@ impl<'w> BlkStorage<&'w [u8]> {
                 let qs = 0;
                 let ks = qs + k_.get();
                 let vs = ks + k_.get();
-                rearrange(&mut q_.map(|len| &mut ans[qs..len]), &q);
-                rearrange(&mut k_.map(|len| &mut ans[ks..len]), &k);
-                rearrange(&mut v_.map(|len| &mut ans[vs..len]), &v);
+                rearrange(&mut q_.map(|len| &mut ans[qs..][..len]), &q);
+                rearrange(&mut k_.map(|len| &mut ans[ks..][..len]), &k);
+                rearrange(&mut v_.map(|len| &mut ans[vs..][..len]), &v);
 
                 own(ans)
             },
             attn_o: if len == count {
                 borrow(self.attn_o)
             } else {
-                let t = meta.attn_o(Storage).map(|_| self.attn_o).tile(1, &[nh, dh]);
+                let t = Tensor::new(dt_mat, &[d, nh * dh])
+                    .map(|_| self.attn_o)
+                    .tile(1, &[nh, dh]);
 
                 let p = nh / count;
                 let t = t.slice(1, p * start, 1, p * len);
@@ -170,7 +176,7 @@ impl<'w> BlkStorage<&'w [u8]> {
             ffn_gate_up: if len == count {
                 borrow(self.ffn_gate_up)
             } else {
-                let t = meta.ffn_gate_up(Storage).map(|_| self.ffn_gate_up);
+                let t = Tensor::new(dt_mat, &[di + di, d]).map(|_| self.ffn_gate_up);
                 split!(t => g, u; [di, di] @ 0);
 
                 let p = di / count;
@@ -190,7 +196,7 @@ impl<'w> BlkStorage<&'w [u8]> {
             ffn_down: if len == count {
                 borrow(self.ffn_down)
             } else {
-                let t = meta.ffn_down(Storage).map(|_| self.ffn_down);
+                let t = Tensor::new(dt_mat, &[d, di]).map(|_| self.ffn_down);
 
                 let p = di / count;
                 let t = t.slice(1, p * start, 1, p * len);

@@ -6,7 +6,7 @@ use ggus::ggml_quants::{digit_layout::DigitLayout, DataBlock};
 use ndarray_layout::{ArrayLayout, Endian::BigEndian};
 use std::{
     ops::{Deref, DerefMut, Range},
-    slice::from_raw_parts,
+    slice::{from_raw_parts, from_raw_parts_mut},
 };
 
 pub use operators::RandomSample;
@@ -144,6 +144,15 @@ impl<T, B> Tensor<T>
 where
     T: DerefMut<Target = [B]>,
 {
+    /// # Safety
+    ///
+    /// 这个函数将在移除生命周期约束的情况下引用原始数据，对这块存储空间进行读写的安全性由开发者保证。
+    #[inline]
+    pub unsafe fn map_slice_static_mut(&mut self) -> Tensor<&'static mut [B]> {
+        self.as_mut()
+            .map(|x| unsafe { from_raw_parts_mut(x.as_mut_ptr(), x.len()) })
+    }
+
     #[inline]
     pub fn map_slice_mut(&mut self) -> Tensor<&mut [B]> {
         self.as_mut().map(|x| &mut x[..])

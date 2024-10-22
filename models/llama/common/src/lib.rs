@@ -45,8 +45,8 @@ pub enum TensorUsage {
 }
 
 impl LlamaMeta {
-    pub fn distribute(&mut self, range: impl RangeBounds<usize>, count: usize) {
-        let len = normalize(range, count).len();
+    pub fn distribute(&mut self, len: usize, count: usize) {
+        assert!(0 < len && len <= count);
         assert_eq!(self.nkvh % count, 0);
         assert_eq!(self.di % count, 0);
 

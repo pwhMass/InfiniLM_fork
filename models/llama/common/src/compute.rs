@@ -202,55 +202,57 @@ where
                 let mut q = q;
                 let mut k = k;
                 let v = v;
-                let o = x1.as_mut().tile(1, &[nh, dh]).map(|t| &mut t[..]);
 
                 self.rope(&mut q, &pos, &sin, &cos, workspace, queue_alloc)?;
                 self.rope(&mut k, &pos, &sin, &cos, workspace, queue_alloc)?;
 
-                let q = q.transpose(&[1, 0]);
-                let k = k.transpose(&[1, 0]);
-                let v = v.transpose(&[1, 0]);
-                let o = o.transpose(&[1, 0]);
-                let q = q.split(1, &req_split);
-                let k = k.split(1, &req_split);
-                let v = v.split(1, &req_split);
-                let o = o.split(1, &req_split);
+                {
+                    let q = q.map_slice_mut().transpose(&[1, 0]);
+                    let k = k.map_slice().transpose(&[1, 0]);
+                    let v = v.map_slice().transpose(&[1, 0]);
+                    let q = q.split(1, &req_split);
+                    let k = k.split(1, &req_split);
+                    let v = v.split(1, &req_split);
 
-                for (mut q, k, v, mut o, req) in izip!(q, k, v, o, &mut requests) {
-                    let cache = req
-                        .cache
-                        .as_mut() // [buf, nblk, 2, nkvh, dh]
-                        .index(1, iblk) // [buf, 2, nkvh, dh]
-                        .transpose(&[2, 0]) // [nkvh, 2, buf, dh]
-                        .map(|t| &mut t[..]);
+                    for (mut q, k, v, req) in izip!(q, k, v, &mut requests) {
+                        let cache = req
+                            .cache
+                            .as_mut() // [buf, nblk, 2, nkvh, dh]
+                            .index(1, iblk) // [buf, 2, nkvh, dh]
+                            .transpose(&[2, 0]) // [nkvh, 2, buf, dh]
+                            .map(|t| &mut t[..]);
 
-                    split!(cache => kc, vc; [1, 1] @ 1);
-                    self.attn_kv_cached(
-                        &mut q,
-                        &k,
-                        &v,
-                        &mut o,
-                        &mut kc.index(1, 0),
-                        &mut vc.index(1, 0),
-                        req.pos,
-                        workspace,
-                        queue_alloc,
-                    )?;
+                        split!(cache => kc, vc; [1, 1] @ 1);
+                        let mut o = unsafe { q.map_slice_static_mut() };
+                        self.attn_kv_cached(
+                            &mut q,
+                            &k,
+                            &v,
+                            &mut o,
+                            &mut kc.index(1, 0),
+                            &mut vc.index(1, 0),
+                            req.pos,
+                            workspace,
+                            queue_alloc,
+                        )?;
+                    }
                 }
+
+                let o = q.merge(1..3).unwrap();
+                let w = self.weights.attn_o(iblk, queue);
+                self.mat_mul(&mut x, 1., &o, &w, 1., workspace, queue_alloc)?;
+
+                self.all_reduce(&mut x, workspace, queue_alloc)?;
             }
+            {
+                let w = self.weights.ffn_norm(iblk, queue);
+                self.rms_norm(&mut x1, &x, &w, workspace, queue_alloc)?;
 
-            let w = self.weights.attn_o(iblk, queue);
-            self.mat_mul(&mut x, 1., &x1, &w, 1., workspace, queue_alloc)?;
+                #[rustfmt::skip]
+                self.mlp(&mut x, &x1, iblk, mlp_alpha, true, workspace, queue_alloc)?;
 
-            self.all_reduce(&mut x, workspace, queue_alloc)?;
-
-            let w = self.weights.ffn_norm(iblk, queue);
-            self.rms_norm(&mut x1, &x, &w, workspace, queue_alloc)?;
-
-            #[rustfmt::skip]
-            self.mlp(&mut x, &x1, iblk, mlp_alpha, true, workspace, queue_alloc)?;
-
-            self.all_reduce(&mut x, workspace, queue_alloc)?;
+                self.all_reduce(&mut x, workspace, queue_alloc)?;
+            }
         }
 
         // 集中要采样的 token
