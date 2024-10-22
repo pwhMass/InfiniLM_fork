@@ -2,13 +2,13 @@
 use gguf::ggml_quants::digit_layout::{types as ty, DigitLayout};
 use itertools::izip;
 use operators::{
-    all_reduce::{AllReduce, ReduceOp},
-    attention_kv_cached::AttnKVCached,
-    mat_mul::MatMul,
-    mlp::Mlp,
-    rearrange::Rearrange,
-    rms_norm::RmsNorm,
-    rope::{Rope, Seq, SinCosTable},
+    all_reduce::{self, AllReduce, ReduceOp},
+    attention_kv_cached::{self, AttnKVCached},
+    mat_mul::{self, MatMul},
+    mlp::{self, Mlp},
+    rearrange::{self, Rearrange},
+    rms_norm::{self, RmsNorm},
+    rope::{self, Rope, Seq, SinCosTable},
     ByteOf, Hardware, LaunchError, Operator, QueueAlloc, QueueOf, TopoNode, Workspace,
 };
 use std::ops::{Deref, DerefMut};
@@ -316,7 +316,7 @@ where
         QA: QueueAlloc<Hardware = Ops::Hardware>,
     {
         self.rms_norm.launch(
-            &operators::rms_norm::Args {
+            &rms_norm::Args {
                 y_layout: y.layout(),
                 y_base: y.base_mut(),
                 x_layout: x.layout(),
@@ -347,7 +347,7 @@ where
         QA: QueueAlloc<Hardware = Ops::Hardware>,
     {
         self.mat_mul.launch(
-            &operators::mat_mul::Args {
+            &mat_mul::Args {
                 c_layout: c.layout(),
                 c_base: c.base_mut(),
                 beta,
@@ -379,7 +379,7 @@ where
         QA: QueueAlloc<Hardware = Ops::Hardware>,
     {
         self.rope.launch(
-            &operators::rope::Args {
+            &rope::Args {
                 t_layout: t.layout(),
                 t_base: t.base_mut(),
                 p_layout: p.layout(),
@@ -417,7 +417,7 @@ where
         QA: QueueAlloc<Hardware = Ops::Hardware>,
     {
         self.attn_kv_cached.launch(
-            &operators::attention_kv_cached::Args {
+            &attention_kv_cached::Args {
                 q_layout: q.layout(),
                 q_base: q.base_mut(),
                 k_layout: k.layout(),
@@ -457,7 +457,7 @@ where
         let w_down = self.weights.ffn_down(iblk, queue);
 
         self.mlp.launch(
-            &operators::mlp::Args {
+            &mlp::Args {
                 y_layout: y.layout(),
                 y_base: y.base_mut(),
                 x_layout: x.layout(),
@@ -487,7 +487,7 @@ where
         QA: QueueAlloc<Hardware = Ops::Hardware>,
     {
         self.rearrange.launch(
-            &operators::rearrange::Args {
+            &rearrange::Args {
                 dst_layout: dst.layout(),
                 dst_base: dst.base_mut(),
                 src_layout: src.layout(),
@@ -509,11 +509,13 @@ where
         QA: QueueAlloc<Hardware = Ops::Hardware>,
     {
         self.all_reduce.launch(
-            &operators::all_reduce::Args {
-                dst_layout: x.layout(),
-                dst_base: x.base_mut(),
-                src_layout: x.layout(),
-                src_base: x.base(),
+            &all_reduce::Args {
+                pair: rearrange::Args {
+                    dst_layout: x.layout(),
+                    dst_base: x.base_mut(),
+                    src_layout: x.layout(),
+                    src_base: x.base(),
+                },
                 op: ReduceOp::Sum,
             },
             workspace,

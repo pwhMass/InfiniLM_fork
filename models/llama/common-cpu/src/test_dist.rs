@@ -30,8 +30,8 @@ fn test_dist() {
     let eos = gguf.tokenizer_ggml_eos_token_id().unwrap();
     let tokenizer = gguf.tokenizer();
 
-    let count = 2;
-    let lens = [1, 1];
+    let lens = [1; 4];
+    let count = lens.iter().sum();
 
     let (seeds, senders) = WorkerSeed::new(lens.len());
     thread::scope(|s| {

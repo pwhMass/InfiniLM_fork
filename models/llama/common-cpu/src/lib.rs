@@ -3,6 +3,7 @@ use operators::{
     all_reduce::{AllReduce, NonAllReduce},
     common_cpu::{Blob, Cpu},
     random_sample::common_cpu::Operator as RandomSampleCpu,
+    rearrange::common_cpu::Operator as Rearrange,
     ByteOf, QueueOf, TopoNode,
 };
 use std::{
@@ -10,7 +11,7 @@ use std::{
     ops::{Deref, RangeBounds},
 };
 
-pub struct Operators<N = Cpu, R = NonAllReduce<Cpu>>(PhantomData<(N, R)>);
+pub struct Operators<N = Cpu, R = NonAllReduce<Cpu, Rearrange>>(PhantomData<(N, R)>);
 
 pub type RandomSample = llama::RandomSample<Cpu, RandomSampleCpu>;
 

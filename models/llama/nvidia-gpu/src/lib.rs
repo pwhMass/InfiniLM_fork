@@ -6,6 +6,7 @@ use operators::{
     cuda::{memcpy_d2h, DevByte, DevMem, Event, HostMem, Stream},
     nvidia_gpu::Gpu,
     random_sample::nvidia_gpu::Operator as RandomSampleGpu,
+    rearrange::nvidia_gpu::Operator as Rearrange,
     ByteOf, QueueOf, TopoNode,
 };
 use std::{
@@ -14,7 +15,7 @@ use std::{
     ops::{Deref, RangeBounds},
 };
 
-pub struct Operators<N = Gpu, R = NonAllReduce<Gpu>>(PhantomData<(N, R)>);
+pub struct Operators<N = Gpu, R = NonAllReduce<Gpu, Rearrange>>(PhantomData<(N, R)>);
 
 pub type RandomSample = llama::RandomSample<Gpu, RandomSampleGpu>;
 
