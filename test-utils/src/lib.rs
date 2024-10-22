@@ -22,16 +22,11 @@ pub fn map_gguf_files() -> Option<Box<[Mmap]>> {
     Some(map_files(path))
 }
 
-pub trait CausalLM<B> {
-    fn infer(&mut self, tokens: &[utok], cache: &mut [B], pos: usize) -> utok;
-}
-
-pub fn test_infer<B>(
-    mut lm: impl CausalLM<B>,
-    cache: &mut [B],
+pub fn test_infer(
     eos: utok,
     tokenizer: Tokenizer,
     prompt: &str,
+    mut lm: impl FnMut(&[utok], usize) -> utok,
 ) {
     use cli_table::{format::Justify, print_stdout, Cell, CellStruct, Style, Table};
     macro_rules! print_now {
@@ -54,7 +49,7 @@ pub fn test_infer<B>(
     let mut pos = 0;
     loop {
         let time = Instant::now();
-        let next = lm.infer(&tokens, cache, pos);
+        let next = lm(&tokens, pos);
         let time = time.elapsed();
 
         if prefill.is_zero() {
