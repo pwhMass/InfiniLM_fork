@@ -1,6 +1,6 @@
 ﻿use crate::{normalize, LlamaMeta};
 use common::{borrow, own, Contiguous};
-use gguf::{GGufMetaError, GGufMetaMapExt, GGufModel};
+use gguf::{ggml_quants::digit_layout::DigitLayout, GGufMetaError, GGufMetaMapExt, GGufModel};
 use std::ops::{DerefMut, RangeBounds};
 use tensor::{rearrange, split, Tensor};
 
@@ -112,7 +112,7 @@ impl<'w> BlkStorage<&'w [u8]> {
         let range = normalize(range, count);
         let start = range.start;
         let len = range.len();
-        assert!(0 < len && len <= count);
+        assert!(0 < len && range.end <= count);
 
         let &LlamaMeta {
             dt_mat,
@@ -126,85 +126,87 @@ impl<'w> BlkStorage<&'w [u8]> {
         assert_eq!(nkvh % count, 0);
         assert_eq!(di % count, 0);
 
+        fn tensor<'t>(dt: DigitLayout, shape: &[usize], data: &'t [u8]) -> Tensor<&'t [u8]> {
+            Tensor::new(dt, shape).map(|size| {
+                debug_assert_eq!(size, data.len());
+                data
+            })
+        }
+
         BlkStorage {
             attn_norm: borrow(self.attn_norm),
             attn_qkv: if len == count {
                 borrow(self.attn_qkv)
             } else {
-                let t = Tensor::new(dt_mat, &[(nh + nkvh + nkvh) * dh, d])
-                    .map(|_| self.attn_qkv)
-                    .tile(0, &[(nh + nkvh + nkvh), dh]);
-                split!(t => q, k, v; [nh, nkvh, nkvh] @ 0);
+                let qkv = tensor(dt_mat, &[nh + nkvh + nkvh, dh, d], self.attn_qkv);
+                split!(qkv => q, k, v; [nh, nkvh, nkvh] @ 0);
 
-                let p = nh / count;
-                let q = q.slice(0, p * start, 1, p * len);
-                let p = nkvh / count;
-                let k = k.slice(0, p * start, 1, p * len);
-                let v = v.slice(0, p * start, 1, p * len);
-                assert!(q.is_contiguous() && k.is_contiguous() && v.is_contiguous());
+                let nh = nh / count;
+                let nkvh = nkvh / count;
 
-                let q_ = Tensor::new(q.dt(), q.shape());
-                let k_ = Tensor::new(k.dt(), k.shape());
-                let v_ = Tensor::new(v.dt(), v.shape());
-                let mut ans = f(q_.get() + k_.get() + v_.get());
+                let q = q.slice(0, nh * start, 1, nh * len);
+                let k = k.slice(0, nkvh * start, 1, nkvh * len);
+                let v = v.slice(0, nkvh * start, 1, nkvh * len);
+                debug_assert!(q.is_contiguous() && k.is_contiguous() && v.is_contiguous());
 
-                let qs = 0;
-                let ks = qs + k_.get();
-                let vs = ks + k_.get();
-                rearrange(&mut q_.map(|len| &mut ans[qs..][..len]), &q);
-                rearrange(&mut k_.map(|len| &mut ans[ks..][..len]), &k);
-                rearrange(&mut v_.map(|len| &mut ans[vs..][..len]), &v);
-
-                own(ans)
+                let mut ans = Tensor::new(dt_mat, &[(nh + nkvh + nkvh) * len, dh, d]).map(&mut f);
+                {
+                    let ans = ans.map_slice_mut();
+                    split!(ans => q_, k_, v_; [nh * len , nkvh * len, nkvh * len] @ 0);
+                    let mut q_ = q_;
+                    let mut k_ = k_;
+                    let mut v_ = v_;
+                    rearrange(&mut q_, &q);
+                    rearrange(&mut k_, &k);
+                    rearrange(&mut v_, &v);
+                }
+                own(ans.take())
             },
             attn_o: if len == count {
                 borrow(self.attn_o)
             } else {
-                let t = Tensor::new(dt_mat, &[d, nh * dh])
-                    .map(|_| self.attn_o)
-                    .tile(1, &[nh, dh]);
+                let o = tensor(dt_mat, &[d, nh, dh], self.attn_o);
+                let nh = nh / count;
+                let o = o.slice(1, nh * start, 1, nh * len);
 
-                let p = nh / count;
-                let t = t.slice(1, p * start, 1, p * len);
-
-                let mut t_ = Tensor::new(t.dt(), t.shape()).map(&mut f);
-                rearrange(&mut t_, &t);
-
-                own(t_.take())
+                let mut o_ = Tensor::new(o.dt(), o.shape()).map(&mut f);
+                rearrange(&mut o_, &o);
+                own(o_.take())
             },
             ffn_norm: borrow(self.ffn_norm),
             ffn_gate_up: if len == count {
                 borrow(self.ffn_gate_up)
             } else {
-                let t = Tensor::new(dt_mat, &[di + di, d]).map(|_| self.ffn_gate_up);
-                split!(t => g, u; [di, di] @ 0);
+                let gu = tensor(dt_mat, &[di + di, d], self.ffn_gate_up);
+                split!(gu => g, u; [di, di] @ 0);
 
-                let p = di / count;
-                let g = g.slice(0, p * start, 1, p * len);
-                let u = u.slice(0, p * start, 1, p * len);
-                assert!(g.is_contiguous() && u.is_contiguous());
+                let di = di / count;
 
-                let g_ = Tensor::new(g.dt(), g.shape());
-                let u_ = Tensor::new(u.dt(), u.shape());
-                let mut ans = f(g_.get() + u_.get());
+                let g = g.slice(0, di * start, 1, di * len);
+                let u = u.slice(0, di * start, 1, di * len);
+                debug_assert!(g.is_contiguous() && u.is_contiguous());
 
-                rearrange(&mut g_.map(|len| &mut ans[..len]), &g);
-                rearrange(&mut u_.map(|len| &mut ans[len..]), &u);
-
-                own(ans)
+                let mut ans = Tensor::new(dt_mat, &[(di + di) * len, d]).map(&mut f);
+                {
+                    let ans = ans.map_slice_mut();
+                    split!(ans => g_, u_; [di * len , di * len] @ 0);
+                    let mut g_ = g_;
+                    let mut u_ = u_;
+                    rearrange(&mut g_, &g);
+                    rearrange(&mut u_, &u);
+                }
+                own(ans.take())
             },
             ffn_down: if len == count {
                 borrow(self.ffn_down)
             } else {
-                let t = Tensor::new(dt_mat, &[d, di]).map(|_| self.ffn_down);
+                let down = tensor(dt_mat, &[d, di], self.ffn_down);
+                let di = di / count;
+                let down = down.slice(1, di * start, 1, di * len);
 
-                let p = di / count;
-                let t = t.slice(1, p * start, 1, p * len);
-
-                let mut t_ = Tensor::new(t.dt(), t.shape()).map(&mut f);
-                rearrange(&mut t_, &t);
-
-                own(t_.take())
+                let mut down_ = Tensor::new(down.dt(), down.shape()).map(&mut f);
+                rearrange(&mut down_, &down);
+                own(down_.take())
             },
         }
     }

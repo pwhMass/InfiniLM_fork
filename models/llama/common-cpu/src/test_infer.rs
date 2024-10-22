@@ -24,7 +24,7 @@ fn test_infer() {
     let tokenizer = gguf.tokenizer();
 
     let weights = Weights::new(&model, .., 1);
-    let mut worker = Worker::new(&Cpu, meta.clone(), weights);
+    let mut worker = Worker::new(&Cpu, meta.clone(), weights, true);
     let mut cache = meta.kv_cache(meta.nctx).map(Blob::new);
     let sample = RandomSample::new(&Cpu);
 

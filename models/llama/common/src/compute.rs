@@ -80,10 +80,12 @@ pub struct LlamaWorker<Ops: Operators, W> {
     mlp: Ops::Mlp,
     rearrange: Ops::Rearrange,
     all_reduce: Ops::AllReduce,
+    residual: bool,
+    pub debug: bool,
 }
 
 impl<Ops: Operators, W> LlamaWorker<Ops, W> {
-    pub fn new(node: &Ops::TopoNode, meta: LlamaMeta, weights: W) -> Self {
+    pub fn new(node: &Ops::TopoNode, meta: LlamaMeta, weights: W, residual: bool) -> Self {
         let processor = node.processor();
         Self {
             weights: meta.decorator(weights),
@@ -95,6 +97,8 @@ impl<Ops: Operators, W> LlamaWorker<Ops, W> {
             mlp: Ops::Mlp::new(processor),
             rearrange: Ops::Rearrange::new(processor),
             all_reduce: Ops::AllReduce::new(node),
+            residual,
+            debug: true,
         }
     }
 
@@ -158,6 +162,8 @@ where
             dh,
             ..
         } = self.meta;
+        let beta = if self.residual { 1. } else { 0. };
+
         let workspace_size = self.workspace_size(nt, max_seq_len, max_att_len);
         let mut workspace = Workspace::new(queue_alloc, workspace, workspace_size);
 
@@ -240,7 +246,7 @@ where
 
                 let o = q.merge(1..3).unwrap();
                 let w = self.weights.attn_o(iblk, queue);
-                self.mat_mul(&mut x, 1., &o, &w, 1., workspace, queue_alloc)?;
+                self.mat_mul(&mut x, beta, &o, &w, 1., workspace, queue_alloc)?;
 
                 self.all_reduce(&mut x, workspace, queue_alloc)?;
             }
@@ -248,8 +254,15 @@ where
                 let w = self.weights.ffn_norm(iblk, queue);
                 self.rms_norm(&mut x1, &x, &w, workspace, queue_alloc)?;
 
-                #[rustfmt::skip]
-                self.mlp(&mut x, &x1, iblk, mlp_alpha, true, workspace, queue_alloc)?;
+                self.mlp(
+                    &mut x,
+                    &x1,
+                    iblk,
+                    mlp_alpha,
+                    self.residual,
+                    workspace,
+                    queue_alloc,
+                )?;
 
                 self.all_reduce(&mut x, workspace, queue_alloc)?;
             }
