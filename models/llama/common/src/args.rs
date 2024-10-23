@@ -14,8 +14,6 @@ pub struct Args<'a, H: Hardware> {
     pub num_tokens: usize,
     pub max_seq_len: usize,
     pub max_att_len: usize,
-
-    pub mlp_alpha: f32,
 }
 
 pub struct Request<'a, H: Hardware> {

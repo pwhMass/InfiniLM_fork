@@ -91,7 +91,6 @@ fn test_dist() {
                                     num_tokens: nt,
                                     max_seq_len: nt,
                                     max_att_len: nt + pos,
-                                    mlp_alpha: 1.,
                                 },
                                 &mut [],
                                 &ThisThread,
@@ -112,7 +111,7 @@ fn test_dist() {
             let d = embd.get().len() / input.len();
             for (i, &tok) in input.iter().enumerate() {
                 embd.get_mut()[i * d..][..d]
-                    .copy_from_slice(&model.token_embed[tok as usize * d..][..d]);
+                    .copy_from_slice(&model.token_embd[tok as usize * d..][..d]);
             }
             let embd = embd.take();
 

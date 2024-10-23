@@ -47,7 +47,7 @@ fn test_infer() {
         let d = embd.get().len() / input.len();
         for (i, &tok) in input.iter().enumerate() {
             embd.get_mut()[i * d..][..d]
-                .copy_from_slice(&model.token_embed[tok as usize * d..][..d]);
+                .copy_from_slice(&model.token_embd[tok as usize * d..][..d]);
         }
 
         worker
@@ -65,7 +65,6 @@ fn test_infer() {
                     num_tokens: input.len(),
                     max_seq_len: input.len(),
                     max_att_len: pos + input.len(),
-                    mlp_alpha: 1.,
                 },
                 &mut [],
                 &ThisThread,

@@ -36,6 +36,7 @@ pub struct LlamaMeta {
 
     pub epsilon: f32,
     pub theta: f32,
+    pub res_scale: f32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -137,7 +138,7 @@ impl LlamaMeta {
 }
 
 fn normalize(range: impl RangeBounds<usize>, count: usize) -> Range<usize> {
-    use std::ops::Bound::*;
+    use std::ops::Bound::{Excluded, Included, Unbounded};
     let start = match range.start_bound() {
         Included(&i) => i,
         Excluded(&i) => i + 1,

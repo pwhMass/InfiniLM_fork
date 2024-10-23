@@ -40,7 +40,7 @@ fn test_infer() {
         gpu.apply(|ctx| {
             let stream = ctx.stream();
             let weights = Weights::new(&model, .., 1, usize::MAX, &stream);
-            let token_embd = stream.from_host(model.token_embed);
+            let token_embd = stream.from_host(model.token_embd);
             let mut worker = Worker::new(&gpu, meta.clone(), weights, true);
             let mut cache = meta
                 .kv_cache(meta.nctx)
@@ -85,7 +85,6 @@ fn test_infer() {
                             num_tokens: input.len(),
                             max_seq_len: input.len(),
                             max_att_len: pos + input.len(),
-                            mlp_alpha: 1.,
                         },
                         &mut [],
                         &stream,

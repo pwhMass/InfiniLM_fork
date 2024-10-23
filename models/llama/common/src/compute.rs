@@ -152,7 +152,6 @@ where
             num_tokens: nt,
             max_seq_len,
             max_att_len,
-            mlp_alpha,
         } = args;
         let LlamaMeta {
             dt_mat,
@@ -160,8 +159,10 @@ where
             nh,
             nkvh,
             dh,
+            res_scale,
             ..
         } = self.meta;
+        let alpha = res_scale;
         let beta = if self.residual { 1. } else { 0. };
 
         let workspace_size = self.workspace_size(nt, max_seq_len, max_att_len);
@@ -246,7 +247,7 @@ where
 
                 let o = q.merge(1..3).unwrap();
                 let w = self.weights.attn_o(iblk, queue);
-                self.mat_mul(&mut x, beta, &o, &w, 1., workspace, queue_alloc)?;
+                self.mat_mul(&mut x, beta, &o, &w, alpha, workspace, queue_alloc)?;
 
                 self.all_reduce(&mut x, workspace, queue_alloc)?;
             }
@@ -258,7 +259,7 @@ where
                     &mut x,
                     &x1,
                     iblk,
-                    mlp_alpha,
+                    alpha,
                     self.residual,
                     workspace,
                     queue_alloc,
@@ -442,7 +443,7 @@ where
         y: &mut Tensor<Y>,
         x: &Tensor<X>,
         iblk: usize,
-        down_alpha: f32,
+        alpha: f32,
         residual: bool,
         workspace: &mut [ByteOf<Ops::Hardware>],
         queue_alloc: &QA,
@@ -466,7 +467,7 @@ where
                 w_gate_up_base: w_gate_up.base(),
                 w_down_layout: w_down.layout(),
                 w_down_base: w_down.base(),
-                down_alpha,
+                down_alpha: alpha,
                 residual,
             },
             workspace,
