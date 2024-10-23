@@ -1,20 +1,30 @@
 ﻿use crate::{Operators, RandomSample, Weights};
-use gguf::{GGufMetaMapExt, GGufModel};
+use gguf::{GGufMetaMapExt, GGufModel, Message};
 use llama::{ext::f16, LlamaArgs, LlamaMeta, LlamaRequest, LlamaStorage, LlamaWorker, Tensor};
 use operators::{
     common_cpu::{Blob, Cpu, ThisThread},
     random_sample::{KVPair, SampleArgs},
 };
 use std::slice::from_raw_parts_mut;
+use test_utils::Inference;
 
 type Worker<'w> = LlamaWorker<Operators, Weights<'w>>;
 
 #[test]
 fn test_infer() {
-    let Some(shards) = test_utils::map_gguf_files() else {
+    let Some(Inference {
+        model,
+        mut prompt,
+        as_user,
+        temperature,
+        top_p,
+        top_k,
+    }) = Inference::load()
+    else {
         return;
     };
-    let gguf = GGufModel::read(shards.iter().map(|s| &**s));
+    let gguf = GGufModel::read(model.iter().map(|s| &**s));
+    let sample_args = SampleArgs::new(temperature, top_p, top_k).expect("invalid sample args");
 
     let model = LlamaStorage::from_gguf(&gguf);
     let meta = &model.meta;
@@ -22,13 +32,26 @@ fn test_infer() {
 
     let eos = gguf.tokenizer_ggml_eos_token_id().unwrap();
     let tokenizer = gguf.tokenizer();
+    if as_user {
+        if let Some(template) = gguf.chat_template(&tokenizer) {
+            prompt = template
+                .render(
+                    &[Message {
+                        role: "user",
+                        content: &prompt,
+                    }],
+                    true,
+                )
+                .unwrap()
+        }
+    }
 
     let weights = Weights::new(&model, .., 1);
     let mut worker = Worker::new(&Cpu, meta.clone(), weights, true);
     let mut cache = meta.kv_cache(meta.nctx).map(Blob::new);
     let sample = RandomSample::new(&Cpu);
 
-    test_utils::test_infer(eos, tokenizer, "Once upon a time,", |input, pos| {
+    test_utils::test_infer(eos, tokenizer, &prompt, |input, pos| {
         let &LlamaMeta {
             dt_embd,
             nctx,
@@ -81,7 +104,7 @@ fn test_infer() {
                 &mut pairs,
                 &logits,
                 &indices,
-                SampleArgs::ARG_MAX,
+                sample_args,
                 &mut [],
                 &ThisThread,
             )

@@ -9,6 +9,7 @@ use ggus::{
 use memmap2::Mmap;
 use std::{collections::HashMap, fmt::Debug, fs::File, path::Path};
 
+pub use chat_template::{ChatTemplate, Message};
 pub use ggus::{ggml_quants, GGufMetaError, GGufMetaMapExt};
 pub use tokenizer::Tokenizer;
 pub mod ext {

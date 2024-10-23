@@ -21,7 +21,7 @@ pub struct Message<'a> {
 }
 
 impl GGufModel<'_> {
-    pub fn chat_template(&self, tokenize: &Tokenizer) -> Option<ChatTemplate> {
+    pub fn chat_template(&self, tokenizer: &Tokenizer) -> Option<ChatTemplate> {
         let template = match self.tokenizer_chat_template() {
             Ok(t) => t,
             Err(GGufMetaError::NotExist) => return None,
@@ -32,8 +32,8 @@ impl GGufModel<'_> {
 
         Some(ChatTemplate::new(
             template.into(),
-            tokenize.decode(bos).into(),
-            tokenize.decode(eos).into(),
+            tokenizer.decode(bos).into(),
+            tokenizer.decode(eos).into(),
         ))
     }
 }
@@ -135,10 +135,11 @@ fn test() {
 
 #[test]
 fn test_load() {
-    let Some(shards) = test_utils::map_gguf_files() else {
+    use test_utils::Inference;
+    let Some(Inference { model, .. }) = Inference::load() else {
         return;
     };
-    let gguf = GGufModel::read(shards.iter().map(|s| &**s));
+    let gguf = GGufModel::read(model.iter().map(|s| &**s));
     let tokenizer = gguf.tokenizer();
     let chat_template = gguf.chat_template(&tokenizer);
     println!("{:?}", chat_template.map(|t| t.id.clone()));

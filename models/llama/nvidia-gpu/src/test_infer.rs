@@ -1,5 +1,5 @@
 ﻿use crate::{Operators, RandomSample, Weights};
-use gguf::{GGufMetaMapExt, GGufModel};
+use gguf::{GGufMetaMapExt, GGufModel, Message};
 use llama::{ext::f16, LlamaArgs, LlamaMeta, LlamaRequest, LlamaStorage, LlamaWorker, Tensor};
 use operators::{
     cuda::{self, memcpy_d2h, Device, NoDevice},
@@ -7,15 +7,25 @@ use operators::{
     random_sample::{KVPair, SampleArgs},
 };
 use std::{slice::from_raw_parts_mut, usize};
+use test_utils::Inference;
 
 type Worker<'w> = LlamaWorker<Operators, Weights<'w>>;
 
 #[test]
 fn test_infer() {
-    let Some(shards) = test_utils::map_gguf_files() else {
+    let Some(Inference {
+        model,
+        mut prompt,
+        as_user,
+        temperature,
+        top_p,
+        top_k,
+    }) = Inference::load()
+    else {
         return;
     };
-    let gguf = GGufModel::read(shards.iter().map(|s| &**s));
+    let gguf = GGufModel::read(model.iter().map(|s| &**s));
+    let sample_args = SampleArgs::new(temperature, top_p, top_k).expect("invalid sample args");
 
     let model = LlamaStorage::from_gguf(&gguf);
     let meta = &model.meta;
@@ -23,6 +33,19 @@ fn test_infer() {
 
     let eos = gguf.tokenizer_ggml_eos_token_id().unwrap();
     let tokenizer = gguf.tokenizer();
+    if as_user {
+        if let Some(template) = gguf.chat_template(&tokenizer) {
+            prompt = template
+                .render(
+                    &[Message {
+                        role: "user",
+                        content: &prompt,
+                    }],
+                    true,
+                )
+                .unwrap()
+        }
+    }
 
     let gpu = match cuda::init() {
         Ok(()) => Device::new(0),
@@ -58,7 +81,7 @@ fn test_infer() {
                 <Operators as llama::Operators>::build_sin_cos(dt_embd, nctx, dh, &stream);
             let indices = RandomSample::build_indices(nvoc, &stream);
 
-            test_utils::test_infer(eos, tokenizer, "Once upon a time,", |input, pos| {
+            test_utils::test_infer(eos, tokenizer, &prompt, |input, pos| {
                 let mut embd = meta.embd(input.len()).map(|len| stream.malloc::<u8>(len));
                 let mut logits = meta.logits(1).map(|len| stream.malloc::<u8>(len));
 
@@ -94,14 +117,7 @@ fn test_infer() {
                 let mut pairs = Tensor::kv_pair_vec(1, |size| stream.malloc::<u8>(size));
 
                 sample
-                    .launch(
-                        &mut pairs,
-                        &logits,
-                        &indices,
-                        SampleArgs::ARG_MAX,
-                        &mut [],
-                        &stream,
-                    )
+                    .launch(&mut pairs, &logits, &indices, sample_args, &mut [], &stream)
                     .unwrap();
 
                 let mut pair = KVPair::new(0, f16::ZERO);

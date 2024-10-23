@@ -229,10 +229,11 @@ impl<'w> BlkStorage<&'w [u8]> {
 
 #[test]
 fn test_load() {
-    let Some(shards) = test_utils::map_gguf_files() else {
+    use test_utils::Inference;
+    let Some(Inference { model, .. }) = Inference::load() else {
         return;
     };
-    let gguf = GGufModel::read(shards.iter().map(|s| &**s));
+    let gguf = GGufModel::read(model.iter().map(|s| &**s));
     let llama = Storage::from_gguf(&gguf);
     println!("{:?}", llama.meta);
 }

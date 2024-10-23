@@ -3,23 +3,48 @@ use gguf::{
     map_files, Tokenizer,
 };
 use std::{
+    env::{var, var_os},
     fmt,
     path::Path,
     time::{Duration, Instant},
     vec,
 };
 
-pub fn map_gguf_files() -> Option<Box<[Mmap]>> {
-    let Some(path) = std::env::var_os("TEST_MODEL") else {
-        println!("TEST_MODEL not set");
-        return None;
-    };
-    let path = Path::new(&path);
-    if !path.is_file() {
-        println!("{path:?} not found");
-        return None;
+pub struct Inference {
+    pub model: Box<[Mmap]>,
+    pub prompt: String,
+    pub as_user: bool,
+    pub temperature: f32,
+    pub top_p: f32,
+    pub top_k: usize,
+}
+
+impl Inference {
+    pub fn load() -> Option<Self> {
+        let Some(path) = var_os("TEST_MODEL") else {
+            println!("TEST_MODEL not set");
+            return None;
+        };
+        let path = Path::new(&path);
+        if !path.is_file() {
+            println!("{path:?} not found");
+            return None;
+        }
+        Some(Self {
+            model: map_files(path),
+            prompt: var("PROMPT").unwrap_or_else(|_| String::from("Once upon a time,")),
+            as_user: var("AS_USER").ok().map_or(false, |s| !s.is_empty()),
+            temperature: var("TEMPERATURE")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0.),
+            top_p: var("TOP_P").ok().and_then(|s| s.parse().ok()).unwrap_or(1.),
+            top_k: var("TOP_K")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(usize::MAX),
+        })
     }
-    Some(map_files(path))
 }
 
 pub fn test_infer(

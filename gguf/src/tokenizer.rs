@@ -115,10 +115,11 @@ impl<M: tokeneer::Method> Tokenize for Tokeneer<M> {
 
 #[test]
 fn test_load() {
-    let Some(shards) = test_utils::map_gguf_files() else {
+    use test_utils::Inference;
+    let Some(Inference { model, prompt, .. }) = Inference::load() else {
         return;
     };
-    let gguf = GGufModel::read(shards.iter().map(|s| &**s));
+    let gguf = GGufModel::read(model.iter().map(|s| &**s));
     let tokenizer = gguf.tokenizer();
-    println!("{:?}", tokenizer.encode("Once upon a time,"));
+    println!("{:?}", tokenizer.encode(&prompt));
 }

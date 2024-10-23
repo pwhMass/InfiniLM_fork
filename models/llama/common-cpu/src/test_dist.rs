@@ -1,5 +1,5 @@
 ﻿use crate::{Operators, RandomSample, Weights};
-use gguf::{GGufMetaMapExt, GGufModel};
+use gguf::{GGufMetaMapExt, GGufModel, Message};
 use llama::{ext::f16, LlamaRequest, LlamaStorage, LlamaWorker, Tensor};
 use operators::{
     all_reduce::common_cpu::Operator as AllReduce,
@@ -16,19 +16,43 @@ use std::{
     },
     thread,
 };
+use test_utils::Inference;
 
 type Worker<'w> = LlamaWorker<Operators<InprocNode<usize>, AllReduce>, Weights<'w>>;
 
 #[test]
 fn test_dist() {
-    let Some(shards) = test_utils::map_gguf_files() else {
+    let Some(Inference {
+        model,
+        mut prompt,
+        as_user,
+        temperature,
+        top_p,
+        top_k,
+    }) = Inference::load()
+    else {
         return;
     };
-    let gguf = GGufModel::read(shards.iter().map(|s| &**s));
+    let gguf = GGufModel::read(model.iter().map(|s| &**s));
+    let sample_args = SampleArgs::new(temperature, top_p, top_k).expect("invalid sample args");
+    println!("{sample_args:?}");
 
     let model = LlamaStorage::from_gguf(&gguf);
     let eos = gguf.tokenizer_ggml_eos_token_id().unwrap();
     let tokenizer = gguf.tokenizer();
+    if as_user {
+        if let Some(template) = gguf.chat_template(&tokenizer) {
+            prompt = template
+                .render(
+                    &[Message {
+                        role: "user",
+                        content: &prompt,
+                    }],
+                    true,
+                )
+                .unwrap()
+        }
+    }
 
     let lens = [1; 4];
     let count = lens.iter().sum();
@@ -104,7 +128,7 @@ fn test_dist() {
 
         let sample = RandomSample::new(&Cpu);
         let indices = RandomSample::build_indices(model.meta.nvoc, &ThisThread);
-        test_utils::test_infer(eos, tokenizer, "Once upon a time,", |input, pos| {
+        test_utils::test_infer(eos, tokenizer, &prompt, |input, pos| {
             let mut embd = model.meta.embd(input.len()).map(Blob::new);
             let mut logits = model.meta.logits(1).map(Blob::new);
 
@@ -139,7 +163,7 @@ fn test_dist() {
                     &mut pairs,
                     &logits,
                     &indices,
-                    SampleArgs::ARG_MAX,
+                    sample_args,
                     &mut [],
                     &ThisThread,
                 )
