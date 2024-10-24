@@ -1,13 +1,13 @@
 ﻿use crate::{Operators, RandomSample, Weights};
-use gguf::{GGufMetaMapExt, GGufModel, Message};
+use gguf::GGufModel;
 use llama::{ext::f16, LlamaArgs, LlamaMeta, LlamaRequest, LlamaStorage, LlamaWorker, Tensor};
 use operators::{
     cuda::{self, memcpy_d2h, Device, NoDevice},
     nvidia_gpu::{Config, Gpu},
     random_sample::{KVPair, SampleArgs},
 };
-use std::{slice::from_raw_parts_mut, usize};
-use test_utils::Inference;
+use std::{slice::from_raw_parts_mut, thread, usize};
+use test_utils::{Inference, TokenizerAndPrompt};
 
 type Worker<'w> = LlamaWorker<Operators, Weights<'w>>;
 
@@ -15,7 +15,7 @@ type Worker<'w> = LlamaWorker<Operators, Weights<'w>>;
 fn test_infer() {
     let Some(Inference {
         model,
-        mut prompt,
+        prompt,
         as_user,
         temperature,
         top_p,
@@ -25,27 +25,18 @@ fn test_infer() {
         return;
     };
     let gguf = GGufModel::read(model.iter().map(|s| &**s));
-    let sample_args = SampleArgs::new(temperature, top_p, top_k).expect("invalid sample args");
+
+    let TokenizerAndPrompt {
+        eos,
+        tokenizer,
+        prompt,
+    } = TokenizerAndPrompt::new(&gguf, prompt, as_user);
 
     let model = LlamaStorage::from_gguf(&gguf);
-    let meta = &model.meta;
-    println!("{meta:?}");
+    println!("{:?}", model.meta);
 
-    let eos = gguf.tokenizer_ggml_eos_token_id().unwrap();
-    let tokenizer = gguf.tokenizer();
-    if as_user {
-        if let Some(template) = gguf.chat_template(&tokenizer) {
-            prompt = template
-                .render(
-                    &[Message {
-                        role: "user",
-                        content: &prompt,
-                    }],
-                    true,
-                )
-                .unwrap()
-        }
-    }
+    let sample_args = SampleArgs::new(temperature, top_p, top_k).expect("invalid sample args");
+    println!("{sample_args:?}");
 
     let gpu = match cuda::init() {
         Ok(()) => Device::new(0),
@@ -54,33 +45,33 @@ fn test_infer() {
     let gpu = Gpu::new(gpu.context(), Config::default());
     let gpu = &gpu;
 
-    std::thread::scope(|s| {
+    let meta = &model.meta;
+    let &LlamaMeta {
+        dt_embd,
+        nctx,
+        nvoc,
+        dh,
+        ..
+    } = meta;
+
+    thread::scope(|s| {
         let sample = s.spawn(move || {
             let mut sample = RandomSample::new(gpu);
-            sample.scheme(meta.dt_embd, meta.nvoc).unwrap();
+            sample.scheme(dt_embd, nvoc).unwrap();
             sample
         });
         gpu.apply(|ctx| {
             let stream = ctx.stream();
-            let weights = Weights::new(&model, .., 1, usize::MAX, &stream);
-            let token_embd = stream.from_host(model.token_embd);
-            let mut worker = Worker::new(&gpu, meta.clone(), weights, true);
-            let mut cache = meta
-                .kv_cache(meta.nctx)
-                .map(|size| stream.malloc::<u8>(size));
-            let sample = sample.join().unwrap();
 
-            let &LlamaMeta {
-                dt_embd,
-                nctx,
-                nvoc,
-                dh,
-                ..
-            } = meta;
+            let token_embd = stream.from_host(model.token_embd);
+            let weights = Weights::new(&model, .., 1, usize::MAX, &stream);
+            let mut worker = Worker::new(&gpu, meta.clone(), weights, true);
+            let mut cache = meta.kv_cache(nctx).map(|size| stream.malloc::<u8>(size));
             let sin_cos =
                 <Operators as llama::Operators>::build_sin_cos(dt_embd, nctx, dh, &stream);
             let indices = RandomSample::build_indices(nvoc, &stream);
 
+            let sample = sample.join().unwrap();
             test_utils::test_infer(eos, tokenizer, &prompt, |input, pos| {
                 let mut embd = meta.embd(input.len()).map(|len| stream.malloc::<u8>(len));
                 let mut logits = meta.logits(1).map(|len| stream.malloc::<u8>(len));

@@ -7,7 +7,7 @@ use ggus::{
     GENERAL_ALIGNMENT,
 };
 use memmap2::Mmap;
-use std::{collections::HashMap, fmt::Debug, fs::File, path::Path};
+use std::{collections::HashMap, fmt::Debug, fs::File, path::Path, thread};
 
 pub use chat_template::{ChatTemplate, Message};
 pub use ggus::{ggml_quants, GGufMetaError, GGufMetaMapExt};
@@ -79,7 +79,7 @@ impl<'a> GGufModel<'a> {
             meta_kvs: Default::default(),
             tensors: Default::default(),
         };
-        std::thread::scope(|s| {
+        thread::scope(|s| {
             for (i, thread) in files
                 .into_iter()
                 .map(|data| s.spawn(|| GGuf::new(data)))

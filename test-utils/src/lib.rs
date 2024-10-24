@@ -1,6 +1,6 @@
 use gguf::{
     ext::{utok, Mmap},
-    map_files, Tokenizer,
+    map_files, GGufMetaMapExt, GGufModel, Message, Tokenizer,
 };
 use std::{
     env::{var, var_os},
@@ -44,6 +44,37 @@ impl Inference {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(usize::MAX),
         })
+    }
+}
+
+pub struct TokenizerAndPrompt {
+    pub eos: utok,
+    pub tokenizer: Tokenizer,
+    pub prompt: String,
+}
+
+impl TokenizerAndPrompt {
+    pub fn new(gguf: &GGufModel, mut prompt: String, as_user: bool) -> Self {
+        let eos = gguf.tokenizer_ggml_eos_token_id().unwrap();
+        let tokenizer = gguf.tokenizer();
+        if as_user {
+            if let Some(template) = gguf.chat_template(&tokenizer) {
+                prompt = template
+                    .render(
+                        &[Message {
+                            role: "user",
+                            content: &prompt,
+                        }],
+                        true,
+                    )
+                    .unwrap()
+            }
+        }
+        Self {
+            eos,
+            tokenizer,
+            prompt,
+        }
     }
 }
 

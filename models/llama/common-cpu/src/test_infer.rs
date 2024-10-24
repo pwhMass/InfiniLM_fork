@@ -1,12 +1,12 @@
 ﻿use crate::{Operators, RandomSample, Weights};
-use gguf::{GGufMetaMapExt, GGufModel, Message};
+use gguf::GGufModel;
 use llama::{ext::f16, LlamaArgs, LlamaMeta, LlamaRequest, LlamaStorage, LlamaWorker, Tensor};
 use operators::{
     common_cpu::{Blob, Cpu, ThisThread},
     random_sample::{KVPair, SampleArgs},
 };
 use std::slice::from_raw_parts_mut;
-use test_utils::Inference;
+use test_utils::{Inference, TokenizerAndPrompt};
 
 type Worker<'w> = LlamaWorker<Operators, Weights<'w>>;
 
@@ -14,7 +14,7 @@ type Worker<'w> = LlamaWorker<Operators, Weights<'w>>;
 fn test_infer() {
     let Some(Inference {
         model,
-        mut prompt,
+        prompt,
         as_user,
         temperature,
         top_p,
@@ -24,48 +24,38 @@ fn test_infer() {
         return;
     };
     let gguf = GGufModel::read(model.iter().map(|s| &**s));
-    let sample_args = SampleArgs::new(temperature, top_p, top_k).expect("invalid sample args");
+
+    let TokenizerAndPrompt {
+        eos,
+        tokenizer,
+        prompt,
+    } = TokenizerAndPrompt::new(&gguf, prompt, as_user);
 
     let model = LlamaStorage::from_gguf(&gguf);
-    let meta = &model.meta;
-    println!("{meta:?}");
+    println!("{:?}", model.meta);
 
-    let eos = gguf.tokenizer_ggml_eos_token_id().unwrap();
-    let tokenizer = gguf.tokenizer();
-    if as_user {
-        if let Some(template) = gguf.chat_template(&tokenizer) {
-            prompt = template
-                .render(
-                    &[Message {
-                        role: "user",
-                        content: &prompt,
-                    }],
-                    true,
-                )
-                .unwrap()
-        }
-    }
+    let sample_args = SampleArgs::new(temperature, top_p, top_k).expect("invalid sample args");
+    println!("{sample_args:?}");
+
+    let &LlamaMeta {
+        dt_embd,
+        nctx,
+        nvoc,
+        dh,
+        ..
+    } = &model.meta;
 
     let weights = Weights::new(&model, .., 1);
-    let mut worker = Worker::new(&Cpu, meta.clone(), weights, true);
-    let mut cache = meta.kv_cache(meta.nctx).map(Blob::new);
+    let mut worker = Worker::new(&Cpu, model.meta.clone(), weights, true);
+    let mut cache = model.meta.kv_cache(nctx).map(Blob::new);
+    let sin_cos = <Operators as llama::Operators>::build_sin_cos(dt_embd, nctx, dh, &ThisThread);
+    let indices = RandomSample::build_indices(nvoc, &ThisThread);
+
     let sample = RandomSample::new(&Cpu);
 
     test_utils::test_infer(eos, tokenizer, &prompt, |input, pos| {
-        let &LlamaMeta {
-            dt_embd,
-            nctx,
-            nvoc,
-            dh,
-            ..
-        } = meta;
-
-        let sin_cos =
-            <Operators as llama::Operators>::build_sin_cos(dt_embd, nctx, dh, &ThisThread);
-        let indices = RandomSample::build_indices(nvoc, &ThisThread);
-
-        let mut embd = meta.embd(input.len()).map(Blob::new);
-        let mut logits = meta.logits(1).map(Blob::new);
+        let mut embd = model.meta.embd(input.len()).map(Blob::new);
+        let mut logits = model.meta.logits(1).map(Blob::new);
 
         let d = embd.get().len() / input.len();
         for (i, &tok) in input.iter().enumerate() {

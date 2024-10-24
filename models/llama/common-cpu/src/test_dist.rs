@@ -1,5 +1,5 @@
 ﻿use crate::{Operators, RandomSample, Weights};
-use gguf::{GGufMetaMapExt, GGufModel, Message};
+use gguf::GGufModel;
 use llama::{ext::f16, LlamaRequest, LlamaStorage, LlamaWorker, Tensor};
 use operators::{
     all_reduce::common_cpu::Operator as AllReduce,
@@ -16,7 +16,7 @@ use std::{
     },
     thread,
 };
-use test_utils::Inference;
+use test_utils::{Inference, TokenizerAndPrompt};
 
 type Worker<'w> = LlamaWorker<Operators<InprocNode<usize>, AllReduce>, Weights<'w>>;
 
@@ -24,7 +24,7 @@ type Worker<'w> = LlamaWorker<Operators<InprocNode<usize>, AllReduce>, Weights<'
 fn test_dist() {
     let Some(Inference {
         model,
-        mut prompt,
+        prompt,
         as_user,
         temperature,
         top_p,
@@ -34,29 +34,21 @@ fn test_dist() {
         return;
     };
     let gguf = GGufModel::read(model.iter().map(|s| &**s));
+
+    let TokenizerAndPrompt {
+        eos,
+        tokenizer,
+        prompt,
+    } = TokenizerAndPrompt::new(&gguf, prompt, as_user);
+
+    let model = LlamaStorage::from_gguf(&gguf);
+    println!("{:?}", model.meta);
+
     let sample_args = SampleArgs::new(temperature, top_p, top_k).expect("invalid sample args");
     println!("{sample_args:?}");
 
-    let model = LlamaStorage::from_gguf(&gguf);
-    let eos = gguf.tokenizer_ggml_eos_token_id().unwrap();
-    let tokenizer = gguf.tokenizer();
-    if as_user {
-        if let Some(template) = gguf.chat_template(&tokenizer) {
-            prompt = template
-                .render(
-                    &[Message {
-                        role: "user",
-                        content: &prompt,
-                    }],
-                    true,
-                )
-                .unwrap()
-        }
-    }
-
     let lens = [1; 4];
     let count = lens.iter().sum();
-
     let (seeds, senders) = WorkerSeed::new(lens.len());
     thread::scope(|s| {
         let _workers = zip(lens, seeds)
