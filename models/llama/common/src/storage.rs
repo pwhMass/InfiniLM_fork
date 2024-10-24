@@ -25,12 +25,14 @@ pub struct BlkStorage<T> {
 
 impl<'a> Storage<&'a [u8]> {
     pub fn from_gguf(gguf: &GGufModel<'a>) -> Self {
+        use gguf::GGufMetaError::NotExist;
+
         let token_embd = &gguf.tensors["token_embd.weight"];
         let output_norm = &gguf.tensors["output_norm.weight"];
         let output = gguf.tensors.get("output.weight");
         let qkv0 = &gguf.tensors["blk.0.attn_qkv.weight"];
         #[rustfmt::skip]
-        let mut meta = LlamaMeta {
+        let meta = LlamaMeta {
             dt_embd:  token_embd.ty,
             dt_norm: output_norm.ty,
             dt_mat :        qkv0.ty,
@@ -44,28 +46,17 @@ impl<'a> Storage<&'a [u8]> {
             dh  : gguf.llm_rope_dimension_count   ().unwrap(),
             di  : gguf.llm_feed_forward_length    ().unwrap(),
 
-            epsilon   : 1e-5,
-            theta     : 1e4,
-            res_scale : 1.,
+            epsilon: match gguf.llm_attention_layer_norm_rms_epsilon() {
+                Ok(val) => val,
+                Err(NotExist) => 1e-5,
+                Err(e) => panic!("failed to read meta: {e:?}"),
+            },
+            theta  : match gguf.llm_rope_freq_base() {
+                Ok(val) => val,
+                Err(NotExist) => 1e4,
+                Err(e) => panic!("failed to read meta: {e:?}"),
+            },
         };
-
-        use gguf::GGufMetaError::NotExist;
-        match gguf.llm_attention_layer_norm_rms_epsilon() {
-            Ok(val) => meta.epsilon = val,
-            Err(NotExist) => {}
-            Err(e) => panic!("failed to read meta: {e:?}"),
-        }
-        match gguf.llm_rope_freq_base() {
-            Ok(val) => meta.theta = val,
-            Err(NotExist) => {}
-            Err(e) => panic!("failed to read meta: {e:?}"),
-        }
-        let llm = gguf.general_architecture().unwrap();
-        match gguf.get_f32(&format!("{llm}.res_scale")) {
-            Ok(val) => meta.res_scale = val / (meta.nblk as f32).sqrt(),
-            Err(NotExist) => {}
-            Err(e) => panic!("failed to read meta: {e:?}"),
-        }
 
         #[rustfmt::skip]
         let blocks = (0..meta.nblk)

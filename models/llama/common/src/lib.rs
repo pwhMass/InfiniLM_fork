@@ -36,7 +36,6 @@ pub struct LlamaMeta {
 
     pub epsilon: f32,
     pub theta: f32,
-    pub res_scale: f32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
