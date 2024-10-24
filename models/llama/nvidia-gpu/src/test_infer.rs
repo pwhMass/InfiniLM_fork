@@ -20,6 +20,7 @@ fn test_infer() {
         temperature,
         top_p,
         top_k,
+        max_steps,
     }) = Inference::load()
     else {
         return;
@@ -72,7 +73,7 @@ fn test_infer() {
             let indices = RandomSample::build_indices(nvoc, &stream);
 
             let sample = sample.join().unwrap();
-            test_utils::test_infer(eos, tokenizer, &prompt, |input, pos| {
+            test_utils::test_infer(eos, tokenizer, &prompt, max_steps, |input, pos| {
                 let mut embd = meta.embd(input.len()).map(|len| stream.malloc::<u8>(len));
                 let mut logits = meta.logits(1).map(|len| stream.malloc::<u8>(len));
 

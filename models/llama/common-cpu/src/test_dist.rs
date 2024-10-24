@@ -29,6 +29,7 @@ fn test_dist() {
         temperature,
         top_p,
         top_k,
+        max_steps,
     }) = Inference::load()
     else {
         return;
@@ -120,7 +121,7 @@ fn test_dist() {
 
         let sample = RandomSample::new(&Cpu);
         let indices = RandomSample::build_indices(model.meta.nvoc, &ThisThread);
-        test_utils::test_infer(eos, tokenizer, &prompt, |input, pos| {
+        test_utils::test_infer(eos, tokenizer, &prompt, max_steps, |input, pos| {
             let mut embd = model.meta.embd(input.len()).map(Blob::new);
             let mut logits = model.meta.logits(1).map(Blob::new);
 

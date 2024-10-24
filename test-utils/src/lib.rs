@@ -6,6 +6,7 @@ use std::{
     env::{var, var_os},
     fmt,
     path::Path,
+    str::FromStr,
     time::{Duration, Instant},
     vec,
 };
@@ -17,6 +18,7 @@ pub struct Inference {
     pub temperature: f32,
     pub top_p: f32,
     pub top_k: usize,
+    pub max_steps: usize,
 }
 
 impl Inference {
@@ -30,19 +32,22 @@ impl Inference {
             println!("{path:?} not found");
             return None;
         }
+
+        fn parse<T: FromStr>(name: &str, default: T) -> T {
+            var(name)
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(default)
+        }
+
         Some(Self {
             model: map_files(path),
             prompt: var("PROMPT").unwrap_or_else(|_| String::from("Once upon a time,")),
             as_user: var("AS_USER").ok().map_or(false, |s| !s.is_empty()),
-            temperature: var("TEMPERATURE")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0.),
-            top_p: var("TOP_P").ok().and_then(|s| s.parse().ok()).unwrap_or(1.),
-            top_k: var("TOP_K")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(usize::MAX),
+            temperature: parse("TEMPERATURE", 0.),
+            top_p: parse("TOP_P", 1.),
+            top_k: parse("TOP_K", usize::MAX),
+            max_steps: parse("MAX_STEPS", usize::MAX),
         })
     }
 }
@@ -82,6 +87,7 @@ pub fn test_infer(
     eos: utok,
     tokenizer: Tokenizer,
     prompt: &str,
+    max_steps: usize,
     mut lm: impl FnMut(&[utok], usize) -> utok,
 ) {
     use cli_table::{format::Justify, print_stdout, Cell, CellStruct, Style, Table};
@@ -103,7 +109,7 @@ pub fn test_infer(
     let mut decode = Duration::ZERO;
 
     let mut pos = 0;
-    loop {
+    for _ in 0..max_steps {
         let time = Instant::now();
         let next = lm(&tokens, pos);
         let time = time.elapsed();
