@@ -86,8 +86,8 @@ impl Tokenizer {
         Self {
             tokenize: Box::new(tokeneer),
             replace_space: match (space_exist, replace_exist) {
-                (true, _) => None,
-                (false, true) => Some('▁'),
+                (_, true) => Some('▁'),
+                (true, false) => None,
                 (false, false) => panic!("Unknown user-defined space"),
             },
         }
