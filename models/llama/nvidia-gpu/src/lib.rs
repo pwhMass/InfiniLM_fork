@@ -7,7 +7,7 @@ use operators::{
     nvidia_gpu::Gpu,
     random_sample::nvidia_gpu::Operator as RandomSampleGpu,
     rearrange::nvidia_gpu::Operator as Rearrange,
-    ByteOf, TopoNode,
+    ByteOf, QueueOf, TopoNode,
 };
 use std::{
     cell::{RefCell, RefMut},
@@ -50,9 +50,9 @@ impl<'ctx> RollCache<'ctx> {
         self.cache.push_back((mem, event));
     }
 
-    pub fn synchronize_first(&self) {
+    pub fn first_event(&self) -> &Event<'ctx> {
         let (_, event) = self.cache.front().unwrap();
-        event.synchronize();
+        event
     }
 }
 
@@ -73,7 +73,8 @@ impl Deref for WeightResult<'_, '_> {
     fn deref(&self) -> &Self::Target {
         match self {
             WeightResult::RollCached(roll_cache, _, _, _) => {
-                let (dev_mem, _) = &roll_cache.cache.front().unwrap();
+                let (dev_mem, _event) = &roll_cache.cache.front().unwrap();
+
                 dev_mem
             }
             WeightResult::Borrowed(dev_mem) => dev_mem,
@@ -185,10 +186,6 @@ impl<'blk> Weights<'blk> {
                 },
             );
 
-            println!(
-                "\nblks_roll_caches len is:{:?}",
-                blks_roll_caches.attn_norm.borrow().cache.len()
-            );
             Self {
                 blks: Box::new([]),
                 blks_roll_caches,
@@ -278,7 +275,12 @@ impl<'ctx> WeightLoader for Weights<'ctx> {
         Self: 's;
 
     #[inline]
-    fn load_blk(&self, which: BlkWeight, iblk: usize) -> Self::Memory<'_> {
+    fn load_blk(
+        &self,
+        which: BlkWeight,
+        iblk: usize,
+        queue: &QueueOf<Self::Hardware>,
+    ) -> Self::Memory<'_> {
         assert!(iblk < self.nblk);
         if self.pool_size < self.nblk {
             macro_rules! cases {
@@ -286,7 +288,7 @@ impl<'ctx> WeightLoader for Weights<'ctx> {
                     match which {
                         $(BlkWeight::$ty => {
                             let roll_cache = self.blks_roll_caches.$ident.borrow_mut();
-                            roll_cache.synchronize_first();
+                            queue.wait_for(roll_cache.first_event());
                             assert!(iblk == roll_cache.current_index);
                             let next_load_idx = (iblk + self.pool_size) % self.nblk;
                             let blk = &self.blk_source[next_load_idx].$ident;
@@ -318,12 +320,12 @@ impl<'ctx> WeightLoader for Weights<'ctx> {
     }
 
     #[inline]
-    fn output_norm(&self) -> Self::Memory<'_> {
+    fn output_norm(&self, _queue: &QueueOf<Self::Hardware>) -> Self::Memory<'_> {
         WeightResult::Borrowed(&self.output_norm)
     }
 
     #[inline]
-    fn output(&self) -> Self::Memory<'_> {
+    fn output(&self, _queue: &QueueOf<Self::Hardware>) -> Self::Memory<'_> {
         WeightResult::Borrowed(&self.output)
     }
 }
