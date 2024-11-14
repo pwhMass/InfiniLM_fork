@@ -9,7 +9,7 @@ use operators::{
     common_cpu::{Blob, Cpu},
     random_sample::common_cpu::Operator as RandomSampleCpu,
     rearrange::common_cpu::Operator as Rearrange,
-    ByteOf, QueueOf, TopoNode,
+    ByteOf, TopoNode,
 };
 use std::{
     cell::Ref,
@@ -194,12 +194,7 @@ impl WeightLoader for Weights<'_> {
         Self: 's;
 
     #[inline]
-    fn load_blk(
-        &self,
-        which: BlkWeight,
-        iblk: usize,
-        _queue: &QueueOf<Self::Hardware>,
-    ) -> Self::Memory<'_> {
+    fn load_blk(&self, which: BlkWeight, iblk: usize) -> Self::Memory<'_> {
         let &Self {
             ref blks,
             ref weight_cache,
@@ -275,12 +270,12 @@ impl WeightLoader for Weights<'_> {
     }
 
     #[inline]
-    fn output_norm(&self, _queue: &QueueOf<Self::Hardware>) -> Self::Memory<'_> {
+    fn output_norm(&self) -> Self::Memory<'_> {
         Dequant::Borrowed(self.output_norm)
     }
 
     #[inline]
-    fn output(&self, _queue: &QueueOf<Self::Hardware>) -> Self::Memory<'_> {
+    fn output(&self) -> Self::Memory<'_> {
         Dequant::Borrowed(self.output)
     }
 }
