@@ -1,7 +1,7 @@
 ﻿mod loader;
 mod range_collector;
 
-use crate::Progress;
+use crate::exec::Progress;
 use bytesize::ByteSize;
 use log::trace;
 use nn::{Edge, TPAction, TPTensor, Tensor};
