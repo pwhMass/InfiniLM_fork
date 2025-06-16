@@ -1,4 +1,5 @@
 ﻿use build_script_cfg::Cfg;
+use search_corex_tools::find_corex;
 use search_cuda_tools::{find_cuda_root, find_nccl_root};
 use search_maca_tools::find_maca_root;
 use std::{
@@ -17,6 +18,14 @@ fn main() {
             "htgpu_llvm/bin/htcc",
             ["-x", "hpcc", "-fPIC"],
             Some("__MACA_ARCH__"),
+        )
+    } else if let Some(corex_root) = find_corex() {
+        compile_bind(
+            corex_root,
+            "sample.cu",
+            "bin/clang++",
+            ["-x", "ivcore", "-fPIC"],
+            None,
         )
     } else if let Some(cuda_root) = find_cuda_root() {
         if find_nccl_root().is_some() {
