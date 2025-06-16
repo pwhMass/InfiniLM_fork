@@ -1,213 +1,119 @@
 ﻿mod cache_manager;
 mod error;
+mod model;
 mod openai;
 mod response;
 
-use crate::{BaseArgs, service::openai::create_chat_completion_response};
-use cache_manager::CacheManager;
+use crate::parse_gpus;
 use error::*;
 use http_body_util::{BodyExt, combinators::BoxBody};
 use hyper::{
-    Method, Request, Response,
+    Request, Response,
     body::{Bytes, Incoming},
     server::conn::http1,
     service::Service as HyperService,
 };
 use hyper_util::rt::TokioIo;
-use llama_cu::{
-    Message, Received, ReturnReason, SampleArgs, Service, SessionId, Terminal, TextBuf, utok,
-};
-use log::{debug, info, warn};
-use openai::V1_CHAT_COMPLETIONS;
-use openai_struct::{
-    ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage,
-    ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage,
-    CreateChatCompletionRequest, FinishReason,
-};
-use response::{error, text_stream};
-use serde_json::Value;
+use log::{info, warn};
+use model::Model;
+use openai::create_models;
+use openai_struct::CreateChatCompletionRequest;
+use response::error;
+use response::json;
+use std::collections::HashMap;
+use std::{ffi::c_int, fs::read_to_string, path::Path};
 use std::{
-    collections::BTreeMap,
-    ffi::c_int,
     future::Future,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-    path::PathBuf,
     pin::Pin,
-    sync::{Arc, Mutex},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    sync::Arc,
 };
-use tokio::{
-    net::TcpListener,
-    sync::mpsc::{self, UnboundedSender},
-};
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio::net::TcpListener;
 
 #[derive(Args)]
 pub struct ServiceArgs {
-    #[clap(flatten)]
-    base: BaseArgs,
+    file: String,
+
     #[clap(short, long)]
     port: u16,
+    #[clap(long)]
+    no_cuda_graph: bool,
+
+    #[clap(long)]
+    name: Option<String>,
+    #[clap(long)]
+    gpus: Option<String>,
+    #[clap(long)]
+    max_tokens: Option<usize>,
     #[clap(long)]
     think: bool,
 }
 
+#[derive(serde::Deserialize, Debug)]
+pub struct ModelConfig {
+    pub path: String,
+    pub gpus: Option<Box<[c_int]>>,
+    pub max_tokens: Option<usize>,
+    pub think: Option<bool>,
+}
+
 impl ServiceArgs {
     pub fn service(self) {
-        let Self { base, port, think } = self;
-        let gpus = base.gpus();
-        let max_steps = base.max_steps();
+        let Self {
+            file,
+            port,
+            no_cuda_graph,
+            name,
+            gpus,
+            max_tokens,
+            think,
+        } = self;
+
+        let path = Path::new(&file);
+        let model_configs = match path.extension().map(|s| s.to_str()) {
+            Some(Some("toml")) => toml::from_str(&read_to_string(path).unwrap()).unwrap(),
+            Some(Some("gguf")) => [(
+                name.as_deref()
+                    .unwrap_or_else(|| path.file_stem().unwrap().to_str().unwrap())
+                    .to_string(),
+                ModelConfig {
+                    path: file.clone(),
+                    gpus: Some(parse_gpus(gpus.as_deref())),
+                    max_tokens,
+                    think: Some(think),
+                },
+            )]
+            .into(),
+            _ => panic!("file must be a gguf model or a toml config"),
+        };
+
         tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(start_infer_service(
-                base.model,
-                port,
-                gpus,
-                max_steps,
-                !base.no_cuda_graph,
-                think,
-            ))
+            .block_on(start_infer_service(model_configs, port, !no_cuda_graph))
             .unwrap()
     }
 }
 
 async fn start_infer_service(
-    model: PathBuf,
+    model_configs: HashMap<String, ModelConfig>,
     port: u16,
-    gpus: Box<[c_int]>,
-    max_steps: usize,
     use_cuda_graph: bool,
-    think: bool,
 ) -> std::io::Result<()> {
     let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port));
     info!("start service at {addr}");
+    info!("model_name list: {:?}", model_configs.keys());
 
-    let mut service = Service::new(model, &gpus, use_cuda_graph);
-    let sessions: BTreeMap<SessionId, SessionInfo> = BTreeMap::new();
+    let mut handles = Vec::with_capacity(model_configs.len());
+    let models = model_configs
+        .into_iter()
+        .map(|(name, config)| {
+            let (model, handle) = Model::new(config, use_cuda_graph);
+            handles.push(handle);
+            (name, model)
+        })
+        .collect();
 
-    let (think, _think) = if think {
-        let &[think] = &*service.terminal().encode("<think>") else {
-            unreachable!()
-        };
-        let &[_think] = &*service.terminal().encode("</think>") else {
-            unreachable!()
-        };
-        (think, _think)
-    } else {
-        (utok::MAX, utok::MAX)
-    };
-
-    let service_manager = Arc::new(ServiceManager {
-        terminal: service.terminal().clone(),
-        max_steps,
-        sessions: Mutex::new(sessions),
-        cache_manager: Mutex::new(CacheManager::new(service.terminal().clone())),
-    });
-
-    let service_manager_for_recv = service_manager.clone();
-
-    let _response = tokio::task::spawn_blocking(move || {
-        loop {
-            let Received { sessions, outputs } = service.recv(Duration::from_millis(10));
-
-            // 先处理输出
-            for (session_id, tokens) in outputs {
-                if tokens.is_empty() {
-                    continue;
-                }
-
-                let mut sessions_guard = service_manager_for_recv.sessions.lock().unwrap();
-                let session_info = sessions_guard.get_mut(&session_id).unwrap();
-                // 更新 session_info
-                session_info.tokens.extend(&tokens);
-
-                let mut tokens = &tokens[..];
-                if tokens.first().is_some_and(|t| t == &think) {
-                    session_info.think = true;
-                    tokens = &tokens[1..]
-                }
-                let think = if session_info.think {
-                    if let Some(_think) = tokens.iter().position(|t| *t == _think) {
-                        session_info.think = false;
-                        let think = &tokens[.._think];
-                        tokens = &tokens[_think + 1..];
-                        think
-                    } else {
-                        let think = tokens;
-                        tokens = &[];
-                        think
-                    }
-                } else {
-                    &[]
-                };
-
-                let think = service_manager_for_recv
-                    .terminal
-                    .decode(think, &mut session_info.buf);
-                let text = service_manager_for_recv
-                    .terminal
-                    .decode(tokens, &mut session_info.buf);
-                debug!("解码完成：{tokens:?} -> {think:?} | {text:?}");
-
-                let response = create_chat_completion_response(
-                    session_id,
-                    session_info.created as _,
-                    session_info.model.clone(),
-                    Some(think).filter(|s| !s.is_empty()),
-                    Some(text).filter(|s| !s.is_empty()),
-                    None,
-                );
-                let message = serde_json::to_string(&response).unwrap();
-
-                if session_info.sender.send(message).is_err() {
-                    info!("{session_id:?} 客户端连接已关闭");
-                    service_manager_for_recv.terminal.stop(session_id);
-                }
-            }
-
-            // 处理会话结束
-            if !sessions.is_empty() {
-                let mut sessions_guard = service_manager_for_recv.sessions.lock().unwrap();
-                let mut cache_manager_guard =
-                    service_manager_for_recv.cache_manager.lock().unwrap();
-
-                for (session, reason) in sessions {
-                    let SessionInfo {
-                        tokens,
-                        sender,
-                        model,
-                        created,
-                        ..
-                    } = sessions_guard.remove(&session.id).unwrap();
-                    let reason = match reason {
-                        // 正常完成，插回cache
-                        ReturnReason::Finish => {
-                            cache_manager_guard.insert(tokens, session.cache);
-                            info!("{:?} 正常完成", session.id);
-                            FinishReason::Stop
-                        }
-                        ReturnReason::Overflow => {
-                            info!("{:?} 超长完成", session.id);
-                            FinishReason::Length
-                        }
-                    };
-                    let response = create_chat_completion_response(
-                        session.id,
-                        created as i32,
-                        model,
-                        None,
-                        None,
-                        Some(reason),
-                    );
-                    sender
-                        .send(serde_json::to_string(&response).unwrap())
-                        .unwrap_or_else(|_| info!("{:?} 发送正常完成失败", session.id));
-                }
-            }
-        }
-    });
-
-    let app = App(service_manager);
+    let app = App(Arc::new(models));
 
     let listener = TcpListener::bind(addr).await?;
     loop {
@@ -226,24 +132,8 @@ async fn start_infer_service(
     }
 }
 
-struct SessionInfo {
-    sender: UnboundedSender<String>,
-    buf: TextBuf,
-    think: bool,
-    tokens: Vec<utok>,
-    model: String,
-    created: u64,
-}
-
-struct ServiceManager {
-    terminal: Terminal,
-    max_steps: usize,
-    sessions: Mutex<BTreeMap<SessionId, SessionInfo>>,
-    cache_manager: Mutex<CacheManager>,
-}
-
 #[derive(Clone)]
-struct App(Arc<ServiceManager>);
+struct App(Arc<HashMap<String, Arc<Model>>>);
 
 impl HyperService<Request<Incoming>> for App {
     type Response = Response<BoxBody<Bytes, hyper::Error>>;
@@ -251,16 +141,25 @@ impl HyperService<Request<Incoming>> for App {
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
     fn call(&self, req: Request<Incoming>) -> Self::Future {
-        let service_manager = self.0.clone();
         match (req.method(), req.uri().path()) {
-            (&Method::POST, V1_CHAT_COMPLETIONS) => Box::pin(async move {
-                let whole_body = req.collect().await?.to_bytes();
-                let req = serde_json::from_slice(&whole_body);
-                Ok(match req {
-                    Ok(completions) => complete_chat(completions, service_manager),
-                    Err(e) => error(Error::WrongJson(e)),
+            openai::GET_MODELS => {
+                let json = json(create_models(self.0.keys().cloned()));
+                Box::pin(async move { Ok(json) })
+            }
+            openai::POST_CHAT_COMPLETIONS => {
+                let models = self.0.clone();
+                Box::pin(async move {
+                    let whole_body = req.collect().await?.to_bytes();
+                    let req = serde_json::from_slice::<CreateChatCompletionRequest>(&whole_body);
+                    Ok(match req {
+                        Ok(req) => match models.get(&req.model) {
+                            Some(model) => model.complete_chat(req),
+                            None => error(Error::ModelNotFound(req.model)),
+                        },
+                        Err(e) => error(Error::WrongJson(e)),
+                    })
                 })
-            }),
+            }
             // Return 404 Not Found for other routes.
             (method, uri) => {
                 let msg = Error::not_found(method, uri);
@@ -268,92 +167,6 @@ impl HyperService<Request<Incoming>> for App {
             }
         }
     }
-}
-
-fn complete_chat(
-    completions: CreateChatCompletionRequest,
-    service_manager: Arc<ServiceManager>,
-) -> Response<BoxBody<Bytes, hyper::Error>> {
-    let CreateChatCompletionRequest {
-        model,
-        messages,
-        max_tokens,
-        temperature,
-        top_p,
-        ..
-    } = completions;
-    let (sender, receiver) = mpsc::unbounded_channel();
-
-    let max_steps = max_tokens.map_or(service_manager.max_steps, |n| n as usize);
-    let sample_args =
-        SampleArgs::new(temperature.unwrap_or(0.), top_p.unwrap_or(1.), usize::MAX).unwrap();
-
-    debug!("received completions: {messages:#?}");
-
-    // 用于持有所有权
-    let mut content_list = Vec::with_capacity(messages.len());
-    for msg in &messages {
-        let msg = match msg {
-            ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
-                content: Value::String(msg),
-                ..
-            }) => msg,
-            ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
-                content: Value::String(msg),
-                ..
-            }) => msg,
-            ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
-                content: Some(Value::String(msg)),
-                ..
-            }) => msg,
-            msg => return error(Error::msg_not_supported(msg)),
-        };
-        content_list.push(msg)
-    }
-
-    let messages = messages
-        .iter()
-        .zip(&content_list)
-        .map(|(message, content)| match message {
-            ChatCompletionRequestMessage::User(_) => Message::user(content.as_str()),
-            ChatCompletionRequestMessage::System(_) => Message::system(content.as_str()),
-            ChatCompletionRequestMessage::Assistant(_) => Message::assistant(content.as_str()),
-            _ => unreachable!(),
-        })
-        .collect::<Vec<_>>();
-    debug!("received messages: {messages:#?}");
-    let text = service_manager.terminal.render(&messages);
-    debug!("received prompt: {text}");
-    let tokens = service_manager.terminal.tokenize(&text);
-
-    let (id, tokens) =
-        service_manager
-            .cache_manager
-            .lock()
-            .unwrap()
-            .send(tokens, sample_args, max_steps);
-
-    let session_info = SessionInfo {
-        sender,
-        tokens,
-        buf: TextBuf::new(),
-        think: false,
-        model,
-        created: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs(),
-    };
-    assert!(
-        service_manager
-            .sessions
-            .lock()
-            .unwrap()
-            .insert(id, session_info,)
-            .is_none()
-    );
-
-    text_stream(UnboundedReceiverStream::new(receiver))
 }
 
 #[cfg(test)]
