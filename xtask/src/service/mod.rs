@@ -14,6 +14,7 @@ use hyper::{
     service::Service as HyperService,
 };
 use hyper_util::rt::TokioIo;
+use llama_cu::Service;
 use log::{info, warn};
 use model::Model;
 use openai::create_models;
@@ -70,7 +71,7 @@ impl ServiceArgs {
         } = self;
 
         let path = Path::new(&file);
-        let model_configs = match path.extension().map(|s| s.to_str()) {
+        let model_configs: HashMap<_, _> = match path.extension().map(|s| s.to_str()) {
             Some(Some("toml")) => toml::from_str(&read_to_string(path).unwrap()).unwrap(),
             Some(Some("gguf")) => [(
                 name.as_deref()
@@ -86,34 +87,40 @@ impl ServiceArgs {
             .into(),
             _ => panic!("file must be a gguf model or a toml config"),
         };
+        info!("model_name list: {:?}", model_configs.keys());
+
+        let mut handles = Vec::with_capacity(model_configs.len());
+        let models = model_configs
+            .into_iter()
+            .map(|(name, config)| {
+                let (model, service) = Model::new(config, !no_cuda_graph);
+                let model = Arc::new(model);
+                handles.push((model.clone(), service));
+                (name, model)
+            })
+            .collect();
 
         tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(start_infer_service(model_configs, port, !no_cuda_graph))
+            .block_on(start_infer_service(models, handles, port))
             .unwrap()
     }
 }
 
 async fn start_infer_service(
-    model_configs: HashMap<String, ModelConfig>,
+    models: HashMap<String, Arc<Model>>,
+    handles: Vec<(Arc<Model>, Service)>,
     port: u16,
-    use_cuda_graph: bool,
 ) -> std::io::Result<()> {
+    let app = App(Arc::new(models));
+
+    let _handles = handles
+        .into_iter()
+        .map(|(model, mut service)| tokio::task::spawn_blocking(move || model.serve(&mut service)))
+        .collect::<Vec<_>>();
+
     let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port));
     info!("start service at {addr}");
-    info!("model_name list: {:?}", model_configs.keys());
-
-    let mut handles = Vec::with_capacity(model_configs.len());
-    let models = model_configs
-        .into_iter()
-        .map(|(name, config)| {
-            let (model, handle) = Model::new(config, use_cuda_graph);
-            handles.push(handle);
-            (name, model)
-        })
-        .collect();
-
-    let app = App(Arc::new(models));
 
     let listener = TcpListener::bind(addr).await?;
     loop {

@@ -1,16 +1,19 @@
 ﻿mod loader;
 mod range_collector;
 
+use crate::Progress;
 use bytesize::ByteSize;
-use log::{debug, trace};
+use log::trace;
 use nn::{Edge, TPAction, TPTensor, Tensor};
 use operators::cuda::{CurrentCtx, DevByte, DevMem, Stream, VirByte};
 use range_collector::RangeCollector;
 use std::{
     collections::HashSet,
     ops::Range,
-    os::raw::c_int,
-    time::{Duration, Instant},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering::SeqCst},
+    },
 };
 
 pub(crate) use loader::WeightLoader;
@@ -20,6 +23,7 @@ type VirTensor = Tensor<*const VirByte, 2>;
 
 pub(crate) fn load_weight<'ctx>(
     edges: Box<[Edge<HostTPTensor>]>,
+    progress: Option<Arc<Progress>>,
     ctx: &'ctx CurrentCtx,
 ) -> (DevMem<'ctx>, Box<[Edge<VirTensor>]>) {
     // 排布权重存储
@@ -37,8 +41,10 @@ pub(crate) fn load_weight<'ctx>(
             ranges.insert((act.clone(), val.get().as_ptr()), len)
         }
     }
+    if let Some(progress) = &progress {
+        progress.weight_size.get_or_init(|| ranges.size());
+    }
     // 权重加载
-    let time = Instant::now();
     let mut weight = ctx.malloc::<u8>(ranges.size());
     let mut loader = WeightLoader::new(
         ranges
@@ -48,6 +54,7 @@ pub(crate) fn load_weight<'ctx>(
     );
 
     let stream = ctx.stream();
+    let loaded = progress.as_ref().map(|p| &p.weight_loaded);
     let mut copied = HashSet::new();
     let edges = edges
         .into_iter()
@@ -60,12 +67,18 @@ pub(crate) fn load_weight<'ctx>(
                     &ranges,
                     &mut weight,
                     &mut copied,
+                    loaded,
                     &stream,
                 )
             }),
         })
         .collect::<Box<_>>();
-    fmt_log(ctx.dev().index(), edges.len(), weight.len(), time.elapsed());
+    stream.synchronize();
+    if let Some(progress) = progress {
+        progress
+            .weight_loaded
+            .store(*progress.weight_size.wait(), SeqCst)
+    }
     (weight, edges)
 }
 
@@ -75,13 +88,13 @@ fn load_exteranl<'ctx>(
     ranges: &RangeCollector<(Option<TPAction>, *const u8)>,
     mapped: &mut [DevByte],
     copied: &mut HashSet<Range<usize>>,
+    loaded: Option<&AtomicUsize>,
     stream: &Stream<'ctx>,
 ) -> nn::External<Tensor<*const VirByte, 2>> {
     let nn::External { name, item } = external;
-    let size = ByteSize::b(item.val.get().len() as _).display();
     trace!(
         "loading weight {:>9} @{} {name}",
-        size.to_string(),
+        ByteSize::b(item.val.get().len() as _).display(),
         stream.ctx().dev().index(),
     );
 
@@ -94,26 +107,23 @@ fn load_exteranl<'ctx>(
         item: match act.clone() {
             Some(TPAction { wt, dist }) => {
                 if copied.insert(range.clone()) {
-                    loader.load(dev, stream, |dst| wt.move_data(dist, dst, &val))
+                    let loaded_ = loader.load(dev, stream, |dst| wt.move_data(dist, dst, &val));
+                    if let Some(loaded) = loaded {
+                        loaded.fetch_add(loaded_, SeqCst);
+                    }
                 }
                 let shape = wt.split_shape(dist, val.shape());
                 Tensor::from_dim_slice(val.dt(), &shape).map(|_| ptr)
             }
             None => {
                 if copied.insert(range.clone()) {
-                    loader.load(dev, stream, |dst| dst.copy_from_slice(val.get()))
+                    let loaded_ = loader.load(dev, stream, |dst| dst.copy_from_slice(val.get()));
+                    if let Some(loaded) = loaded {
+                        loaded.fetch_add(loaded_, SeqCst);
+                    }
                 }
                 val.map(|_| ptr)
             }
         },
     }
-}
-
-fn fmt_log(dev: c_int, num: usize, size: usize, time: Duration) {
-    let speed = size as f64 / time.as_secs_f64();
-    debug!(
-        "weight loaded @{dev} in {time:.2?}, {} for {num} tensors, {}/s",
-        ByteSize::b(size as _).display(),
-        ByteSize::b(speed as _).display(),
-    );
 }

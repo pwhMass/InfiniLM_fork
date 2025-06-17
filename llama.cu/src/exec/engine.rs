@@ -23,7 +23,8 @@ use std::{
     num::NonZeroUsize,
     ops::Deref,
     sync::{
-        Arc, Barrier, Mutex, RwLock,
+        Arc, Barrier, Mutex, OnceLock, RwLock,
+        atomic::AtomicUsize,
         mpsc::{Receiver, Sender},
     },
 };
@@ -76,15 +77,28 @@ const NTOKS: [usize; 7] = [1, 8, 32, 64, 128, 256, 1024];
 const CHUNKED_PREFILL_LEN: Option<usize> = Some(256);
 const MAX_TOKS: usize = 1024;
 
+#[derive(Default)]
+pub struct Progress {
+    pub(crate) weight_size: OnceLock<usize>,
+    pub(crate) weight_loaded: AtomicUsize,
+}
+
 pub(crate) fn engine(
     llama: LLaMA<Tensor<&[u8], 2>>,
-    gpus: &[c_int],
+    workers: &[(c_int, Option<Arc<Progress>>)],
     commands: Receiver<Command>,
     outputs: Sender<Output>,
     use_cuda_graph: bool,
 ) {
-    if let &[dev] = gpus {
-        return mono(llama, Device::new(dev), commands, outputs, use_cuda_graph);
+    if let &[(gpu, progress)] = &workers {
+        return mono(
+            llama,
+            Device::new(*gpu),
+            progress.clone(),
+            commands,
+            outputs,
+            use_cuda_graph,
+        );
     }
 
     #[cfg(not(nccl))]
@@ -92,7 +106,12 @@ pub(crate) fn engine(
 
     #[cfg(nccl)]
     {
-        let mut comms = CommunicatorGroup::new(gpus).into_vec().into_iter();
+        use std::collections::HashMap;
+
+        let devlist = workers.iter().map(|(gpu, _)| *gpu).collect::<Vec<_>>();
+        let mut workers = workers.iter().cloned().collect::<HashMap<_, _>>();
+
+        let mut comms = CommunicatorGroup::new(&devlist).into_vec().into_iter();
         let first = comms.next().unwrap();
 
         let mut llama = llama;
@@ -102,26 +121,28 @@ pub(crate) fn engine(
             dist: Distribution {
                 start: 0,
                 len: 1,
-                total: gpus.len(),
+                total: devlist.len(),
             },
+            progress: workers.remove(&first.device().index()).unwrap(),
             config: ModelGroupConfig {
                 static_model_keys: NTOKS,
                 dyn_cache_size: 1,
                 use_cuda_graph,
             },
             max_toks: MAX_TOKS,
-            barrier: Some(Arc::new(Barrier::new(gpus.len()))),
+            barrier: Some(Arc::new(Barrier::new(devlist.len()))),
             task_box: Default::default(),
             chunked_prefill_len: CHUNKED_PREFILL_LEN,
         };
-
         std::thread::scope(|s| {
             let _threads = comms
                 .map(|comm| {
-                    let dist = Distribution::new(comm.rank(), 1, gpus.len());
+                    let dev = comm.device();
+                    let dist = Distribution::new(comm.rank(), 1, devlist.len());
                     let worker = Worker {
-                        dev: comm.device(),
+                        dev,
                         dist,
+                        progress: workers.remove(&dev.index()).unwrap(),
                         ..worker.clone()
                     };
                     let llama = llama.clone();
@@ -139,6 +160,7 @@ pub(crate) fn engine(
 fn mono(
     mut llama: LLaMA<Tensor<&[u8], 2>>,
     dev: Device,
+    progress: Option<Arc<Progress>>,
     commands: Receiver<Command>,
     outputs: Sender<Output>,
     use_cuda_graph: bool,
@@ -151,6 +173,7 @@ fn mono(
             len: 1,
             total: 1,
         },
+        progress,
         config: ModelGroupConfig {
             static_model_keys: NTOKS,
             dyn_cache_size: 1,
@@ -170,6 +193,7 @@ fn mono(
 struct Worker<T> {
     dev: Device,
     dist: Distribution,
+    progress: Option<Arc<Progress>>,
     config: ModelGroupConfig<T>,
     max_toks: usize,
     barrier: Option<Arc<Barrier>>,
@@ -197,6 +221,7 @@ impl<T: IntoIterator<Item = usize>> Worker<T> {
         let Self {
             dev,
             dist,
+            progress,
             config,
             max_toks,
             barrier,
@@ -210,8 +235,15 @@ impl<T: IntoIterator<Item = usize>> Worker<T> {
         gpu.apply(|ctx| {
             let mut manager = EngineManager::new(chunked_prefill_len, max_toks);
             let mut handle = handle(ctx);
-            let mut models =
-                ModelGroup::new(llama, dist, config, attn, &mut handle, barrier.as_deref());
+            let mut models = ModelGroup::new(
+                llama,
+                dist,
+                progress,
+                config,
+                attn,
+                &mut handle,
+                barrier.as_deref(),
+            );
 
             let mut output_head = OutputHead::new(output_head, ctx);
 
@@ -332,6 +364,7 @@ impl<T: IntoIterator<Item = usize>> Worker<T> {
         let Self {
             dev,
             dist,
+            progress,
             config,
             max_toks: _max_toks,
             barrier,
@@ -345,8 +378,15 @@ impl<T: IntoIterator<Item = usize>> Worker<T> {
         let barrier = barrier.unwrap();
         gpu.apply(|ctx| {
             let mut handle = Handle::with_comm(ctx, comm);
-            let mut models =
-                ModelGroup::new(llama, dist, config, attn, &mut handle, Some(&barrier));
+            let mut models = ModelGroup::new(
+                llama,
+                dist,
+                progress,
+                config,
+                attn,
+                &mut handle,
+                Some(&barrier),
+            );
 
             let stream = ctx.stream();
             loop {

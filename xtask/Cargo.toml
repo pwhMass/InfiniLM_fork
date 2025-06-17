@@ -11,6 +11,8 @@ regex.workspace = true
 log.workspace = true
 flexi_logger = "0.30"
 colored = "3.0"
+indicatif = "0.17"
+bytesize = "2.0"
 
 crossterm = "0.29"
 ratatui = "0.29"

@@ -1,4 +1,4 @@
-﻿use crate::BaseArgs;
+﻿use crate::{BaseArgs, progress_bar};
 use llama_cu::{Message, Received, Service, Session, SessionId};
 use log::info;
 use std::time::{Duration, Instant};
@@ -29,6 +29,8 @@ impl BenchArgs {
         let batch = batch.unwrap_or(1);
 
         let mut service = Service::new(base.model, &gpus, !base.no_cuda_graph);
+        progress_bar(&mut service);
+
         if use_template {
             prompt = service.terminal().render(&[Message::user(&prompt)])
         }

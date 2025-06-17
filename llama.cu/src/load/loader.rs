@@ -25,7 +25,12 @@ impl<'ctx> WeightLoader<'ctx> {
         }
     }
 
-    pub fn load(&mut self, dst: &mut [DevByte], stream: &Stream<'ctx>, f: impl FnOnce(&mut [u8])) {
+    pub fn load(
+        &mut self,
+        dst: &mut [DevByte],
+        stream: &Stream<'ctx>,
+        f: impl FnOnce(&mut [u8]),
+    ) -> usize {
         // 此次加载的任务规模
         let size = size_of_val(dst);
         // 从 slab 分配器调用
@@ -38,25 +43,27 @@ impl<'ctx> WeightLoader<'ctx> {
         stream.memcpy_h2d(dst, &host);
 
         if self.no_reuse.contains(&size) {
-            // 不使用分配器，先出队后同步等待
-            self.free_complete();
+            // 不使用分配器，同步等待
             stream.synchronize();
         } else {
             // 使用分配器，先入队再出队
-            self.queue.push_back((stream.record(), host));
-            self.free_complete()
+            self.queue.push_back((stream.record(), host))
         }
+        self.free_complete()
     }
 
-    fn free_complete(&mut self) {
+    fn free_complete(&mut self) -> usize {
+        let mut ans = 0;
         while let Some((event, host)) = self.queue.pop_front() {
             if event.is_complete() {
+                ans += host.len();
                 self.slab.put(host.len(), host)
             } else {
                 self.queue.push_front((event, host));
                 break;
             }
         }
+        ans
     }
 }
 

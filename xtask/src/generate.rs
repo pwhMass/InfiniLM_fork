@@ -1,4 +1,4 @@
-﻿use crate::{BaseArgs, macros::print_now};
+﻿use crate::{BaseArgs, macros::print_now, progress_bar};
 use llama_cu::{Message, Received, Service, Session, SessionId, TextBuf};
 use log::info;
 use std::time::{Duration, Instant};
@@ -25,6 +25,8 @@ impl GenerateArgs {
         let mut prompt = prompt.unwrap_or("Once upon a time,".into());
 
         let mut service = Service::new(base.model, &gpus, !base.no_cuda_graph);
+        progress_bar(&mut service);
+
         let session = Session {
             id: SessionId(0),
             sample_args: Default::default(),

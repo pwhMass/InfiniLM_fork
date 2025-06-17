@@ -6,21 +6,14 @@ use std::{
     time::Instant,
 };
 
-pub(crate) struct CacheManager {
-    terminal: Terminal,
-    caches: BTreeMap<Instant, (Vec<utok>, DistKVCache)>,
-}
+#[derive(Default)]
+#[repr(transparent)]
+pub(super) struct CacheManager(BTreeMap<Instant, (Vec<utok>, DistKVCache)>);
 
 impl CacheManager {
-    pub fn new(terminal: Terminal) -> Self {
-        Self {
-            terminal,
-            caches: Default::default(),
-        }
-    }
-
     pub fn send(
         &mut self,
+        terminal: &Terminal,
         tokens: Vec<utok>,
         sample_args: SampleArgs,
         max_tokens: usize,
@@ -30,21 +23,21 @@ impl CacheManager {
 
         let use_cache = &tokens[..tokens.len() - 1];
         let best_cache = self
-            .caches
+            .0
             .iter()
             .map(|(key, (history, _))| (*key, common_len(history, use_cache)))
             .max_by_key(|&(_, len)| len);
 
         let cache = match best_cache {
             Some((key, pos)) => {
-                let (_, mut cache) = self.caches.remove(&key).unwrap();
+                let (_, mut cache) = self.0.remove(&key).unwrap();
                 cache.pos = pos;
                 cache
             }
-            None => self.terminal.new_cache(),
+            None => terminal.new_cache(),
         };
         let pos = cache.pos;
-        self.terminal.start(
+        terminal.start(
             Session {
                 id,
                 sample_args,
@@ -57,11 +50,7 @@ impl CacheManager {
     }
 
     pub fn insert(&mut self, tokens: Vec<utok>, cache: DistKVCache) {
-        assert!(
-            self.caches
-                .insert(Instant::now(), (tokens, cache))
-                .is_none()
-        )
+        assert!(self.0.insert(Instant::now(), (tokens, cache)).is_none())
     }
 }
 

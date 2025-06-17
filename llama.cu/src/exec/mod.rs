@@ -22,6 +22,7 @@ use tokeneer::utok;
 #[allow(non_camel_case_types)]
 type upos = u32;
 
+pub use engine::Progress;
 pub(crate) use engine::engine;
 
 pub(crate) enum Command {

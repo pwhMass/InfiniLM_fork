@@ -4,9 +4,20 @@ mod generate;
 mod logger;
 mod service;
 
+use bytesize::ByteSize;
 use clap::Parser;
+use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
+use llama_cu::Service;
+use log::info;
 use regex::Regex;
-use std::{ffi::c_int, path::PathBuf, sync::LazyLock};
+use std::{
+    collections::HashMap,
+    ffi::c_int,
+    fmt::Write,
+    path::PathBuf,
+    sync::LazyLock,
+    time::{Duration, Instant},
+};
 
 #[macro_use]
 extern crate clap;
@@ -74,6 +85,44 @@ fn parse_gpus(config: Option<&str>) -> Box<[c_int]> {
                 .collect()
         })
         .unwrap_or_else(|| [0].into())
+}
+
+fn progress_bar(service: &mut Service) {
+    let m = MultiProgress::new();
+    let style = ProgressStyle::with_template(
+        "{spinner:.green} [{elapsed_precise}] [{bar:50}] {bytes}/{total_bytes} ({eta})",
+    )
+    .unwrap()
+    .with_key("eta", |state: &ProgressState, w: &mut dyn Write| {
+        write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap()
+    });
+
+    let mut pbs = HashMap::new();
+
+    let time = Instant::now();
+    service.wait_loading(Duration::from_millis(40), |p| {
+        for &(id, pos, len) in p {
+            if len > 0 {
+                pbs.entry(id)
+                    .or_insert_with(|| {
+                        m.add(ProgressBar::new((len + 1) as _).with_style(style.clone()))
+                    })
+                    .set_position(pos as _)
+            }
+        }
+    });
+    let time = time.elapsed();
+    service.wait_until_ready();
+    m.clear().unwrap();
+
+    let size = pbs.values().map(|pb| pb.length().unwrap()).sum::<u64>();
+    let speed = size as f64 / time.as_secs_f64();
+    info!(
+        "weight loaded to {} gpus in {time:.2?}, total = {}, speed = {}/s",
+        pbs.len(),
+        ByteSize::b(size as _).display(),
+        ByteSize::b(speed as _).display(),
+    )
 }
 
 mod macros {

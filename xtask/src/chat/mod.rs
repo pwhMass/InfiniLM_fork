@@ -1,10 +1,9 @@
 ﻿mod app_session;
 mod tui;
 
-use std::time::Duration;
-
-use crate::{BaseArgs, macros::print_now};
+use crate::{BaseArgs, macros::print_now, progress_bar};
 use llama_cu::{Message, Received, Service, Session, SessionId, TextBuf};
+use std::time::Duration;
 
 #[derive(Args)]
 pub struct ChatArgs {
@@ -23,7 +22,9 @@ impl ChatArgs {
         let gpus = base.gpus();
         let max_steps = base.max_steps();
 
-        let service = Service::new(base.model, &gpus, !base.no_cuda_graph);
+        let mut service = Service::new(base.model, &gpus, !base.no_cuda_graph);
+        progress_bar(&mut service);
+
         if !advanced {
             simple(service, max_steps)
         } else {

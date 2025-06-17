@@ -19,9 +19,11 @@ use operators::cuda::{self, Device};
 use std::{
     collections::{BTreeMap, HashSet},
     ffi::c_int,
+    iter::zip,
     path::Path,
     sync::{
         Arc, OnceLock,
+        atomic::Ordering::SeqCst,
         mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError},
     },
     time::{Duration, Instant},
@@ -29,12 +31,14 @@ use std::{
 use tokeneer::{Bpe, Tokeneer};
 
 pub use crate::op::random_sample::SampleArgs;
-pub use exec::{DistKVCache, Session, SessionId};
+pub use exec::{DistKVCache, Progress, Session, SessionId};
 pub use model::Message;
 pub use tokeneer::{TextBuf, utok};
 
 pub struct Service {
     handle: Option<(Receiver<Output>, std::thread::JoinHandle<()>)>,
+    ready: bool,
+    progress: Vec<(c_int, Arc<Progress>)>,
     terminal: Terminal,
     forbid: HashSet<SessionId>,
 }
@@ -72,8 +76,14 @@ impl Service {
         let (sender, commands) = mpsc::channel();
         // 从文件加载权重
         let maps = map_files(model);
-        let gpus = gpus.to_vec();
-        let gpus_ = gpus.clone();
+        let progress = gpus
+            .iter()
+            .map(|x| (*x, Arc::new(Progress::default())))
+            .collect::<Vec<_>>();
+        let workers = progress
+            .iter()
+            .map(|(gpu, progress)| (*gpu, Some(progress.clone())))
+            .collect::<Vec<_>>();
         // 启动推理引擎
         assert!(cuda::init().is_ok());
         let once = Arc::new(OnceLock::new());
@@ -96,13 +106,13 @@ impl Service {
             drop(once_);
 
             let llama = gguf.llama();
-            engine(llama, &gpus_, commands, outputs, use_cuda_grpah)
+            engine(llama, &workers, commands, outputs, use_cuda_grpah)
         });
         once.wait();
-        assert!(matches!(receiver.recv().unwrap(), Output::Ready));
-        info!("ready for inference");
         Self {
             handle: Some((receiver, handle)),
+            ready: false,
+            progress,
             terminal: Terminal {
                 sender,
                 cache_parts: gpus.iter().map(|&i| (Device::new(i), 1)).collect(),
@@ -114,6 +124,46 @@ impl Service {
 
     pub const fn terminal(&self) -> &Terminal {
         &self.terminal
+    }
+
+    pub fn wait_loading(&self, period: Duration, mut f: impl FnMut(&[(c_int, usize, usize)])) {
+        let mut record = self
+            .progress
+            .iter()
+            .map(|p| (p.0, 0, p.1.weight_size.get().copied().unwrap_or(0)))
+            .collect::<Vec<_>>();
+        let mut next = Instant::now() + period;
+        loop {
+            let mut remain = record.len();
+            for (rec, p) in zip(&mut record, &self.progress) {
+                if rec.2 == 0 {
+                    rec.2 = p.1.weight_size.get().copied().unwrap_or(0)
+                }
+                if rec.2 > 0 {
+                    if rec.1 < rec.2 {
+                        rec.1 = p.1.weight_loaded.load(SeqCst)
+                    }
+                    if rec.1 == rec.2 {
+                        remain -= 1
+                    }
+                }
+            }
+            f(&record);
+            if remain == 0 {
+                break;
+            }
+            std::thread::sleep(next.saturating_duration_since(Instant::now()));
+            next = Instant::now() + period
+        }
+    }
+
+    pub fn wait_until_ready(&mut self) {
+        if !self.ready {
+            assert!(matches!(
+                self.handle.as_ref().unwrap().0.recv(),
+                Ok(Output::Ready)
+            ))
+        }
     }
 
     pub fn recv(&mut self, timeout: Duration) -> Received {
@@ -189,7 +239,7 @@ impl Service {
                     received.sessions.push((s, ReturnReason::Finish))
                 }
             }
-            Output::Ready => unreachable!(),
+            Output::Ready => self.ready = true,
         }
     }
 }

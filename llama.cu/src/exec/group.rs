@@ -1,6 +1,5 @@
-﻿use super::{KVCache, model::ModelExec};
+﻿use super::{KVCache, Progress, model::ModelExec};
 use crate::{exec::upos, handle::Handle, load::load_weight, memory::MemPages};
-use log::debug;
 use nn::{
     Distribution, Graph, GraphBuilder, LLaMA, NNGraph, Tensor, TensorMeta, digit_layout::types, op,
 };
@@ -12,7 +11,6 @@ use std::{
     collections::BTreeMap,
     num::{NonZero, NonZeroUsize},
     sync::{Arc, Barrier, Mutex},
-    time::Instant,
 };
 use tokeneer::utok;
 
@@ -41,6 +39,7 @@ impl<'ctx> ModelGroup<'ctx> {
     pub fn new<T: IntoIterator<Item = usize>>(
         llama: LLaMA<Tensor<&[u8], 2>>,
         dist: Distribution,
+        progress: Option<Arc<Progress>>,
 
         config: ModelGroupConfig<T>,
 
@@ -67,13 +66,11 @@ impl<'ctx> ModelGroup<'ctx> {
         // 加载权重
         let dev = handle.ctx.dev();
         let mut pages = MemPages::new(dev);
-        let (_weight, edges) = load_weight(edges, handle.ctx);
+        let (_weight, edges) = load_weight(edges, progress, handle.ctx);
         // 构建 cuda graph
         let graph = NNGraph(Graph { topo, nodes, edges });
-        debug!("compiling model group @{}", dev.index());
         let static_models = if use_cuda_graph {
-            let time = Instant::now();
-            let models = static_model_keys
+            static_model_keys
                 .into_iter()
                 .map(|n_tok| {
                     if let Some(b) = barrier {
@@ -83,14 +80,7 @@ impl<'ctx> ModelGroup<'ctx> {
                     let exec = ModelExec::new(graph.clone(), n_tok, handle, &mut pages, true);
                     (key, exec)
                 })
-                .collect::<BTreeMap<_, _>>();
-            debug!(
-                "group ({} models) compiled @{} in {:.02?}",
-                models.len(),
-                dev.index(),
-                time.elapsed(),
-            );
-            models
+                .collect::<BTreeMap<_, _>>()
         } else {
             dyn_cache_size += static_model_keys.into_iter().count();
             Default::default()
