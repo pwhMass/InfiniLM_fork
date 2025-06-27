@@ -110,7 +110,7 @@ Options:
 [model-name]
 path = "model-path"
 gpus = [0, 1, 2, 3]
-max-steps = 4096
+max-tokens = 4096
 think = true
 temperature = 0.9
 top-p = 0.6

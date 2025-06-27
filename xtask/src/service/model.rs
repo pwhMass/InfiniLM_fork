@@ -139,7 +139,7 @@ impl Model {
                             info!("{:?} 正常完成", session.id);
                             FinishReason::Stop
                         }
-                        ReturnReason::Overflow => {
+                        ReturnReason::Length | ReturnReason::CacheOverflow => {
                             info!("{:?} 超长完成", session.id);
                             FinishReason::Length
                         }

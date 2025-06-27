@@ -69,6 +69,7 @@ pub struct ServiceArgs {
 pub struct ModelConfig {
     pub path: String,
     pub gpus: Option<Box<[c_int]>>,
+    #[serde(rename = "max-tokens")]
     pub max_tokens: Option<usize>,
     pub temperature: Option<f32>,
     #[serde(rename = "top-p")]

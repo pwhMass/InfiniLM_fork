@@ -52,7 +52,8 @@ pub struct Terminal {
 
 pub enum ReturnReason {
     Finish,
-    Overflow,
+    Length,
+    CacheOverflow,
 }
 
 #[derive(Default)]
@@ -207,7 +208,7 @@ impl Service {
             Output::Overflow(overflow) => {
                 for s in overflow {
                     self.forbid.remove(&s.id);
-                    received.sessions.push((s, ReturnReason::Overflow))
+                    received.sessions.push((s, ReturnReason::CacheOverflow))
                 }
             }
             Output::Removed(s) => {
@@ -240,7 +241,7 @@ impl Service {
                 }
                 for s in finished {
                     self.forbid.remove(&s.id);
-                    received.sessions.push((s, ReturnReason::Finish))
+                    received.sessions.push((s, ReturnReason::Length))
                 }
             }
             Output::Ready => self.ready = true,
