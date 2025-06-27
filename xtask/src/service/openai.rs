@@ -1,6 +1,7 @@
 ﻿use hyper::Method;
 use openai_struct::{
-    ChatCompletionStreamResponseDelta, CreateChatCompletionStreamResponse,
+    ChatCompletionResponseMessage, ChatCompletionStreamResponseDelta, CreateChatCompletionResponse,
+    CreateChatCompletionResponseChoices, CreateChatCompletionStreamResponse,
     CreateChatCompletionStreamResponseChoices, FinishReason, Model,
 };
 use serde::Serialize;
@@ -30,7 +31,34 @@ pub(crate) fn create_models(models: impl IntoIterator<Item = String>) -> impl Se
     }
 }
 
-pub(crate) fn create_chat_completion_stream_response(
+pub(crate) fn chat_completion_response(
+    id: usize,
+    created: i32,
+    model: String,
+    think: Option<String>,
+    answer: Option<String>,
+    finish_reason: Option<FinishReason>,
+) -> CreateChatCompletionResponse {
+    let choices = vec![CreateChatCompletionResponseChoices {
+        message: ChatCompletionResponseMessage {
+            content: answer.unwrap(),
+            reasoning_content: think,
+            ..Default::default()
+        },
+        finish_reason,
+        ..Default::default()
+    }];
+    CreateChatCompletionResponse {
+        id: format!("InfiniLM-Service-chatcmpl-{id:#08x}"),
+        object: CHAT_COMPLETION_OBJECT.to_string(),
+        model,
+        choices,
+        created,
+        ..Default::default()
+    }
+}
+
+pub(crate) fn chat_completion_response_stream(
     id: usize,
     created: i32,
     model: String,
@@ -42,14 +70,10 @@ pub(crate) fn create_chat_completion_stream_response(
         delta: ChatCompletionStreamResponseDelta {
             reasoning_content: think,
             content: answer,
-            function_call: None,
-            refusal: None,
-            role: None,
-            tool_calls: None,
+            ..Default::default()
         },
         finish_reason,
-        index: 0,
-        logprobs: None,
+        ..Default::default()
     }];
     CreateChatCompletionStreamResponse {
         id: format!("InfiniLM-Service-chatcmpl-{id:#08x}"),
@@ -57,8 +81,6 @@ pub(crate) fn create_chat_completion_stream_response(
         created,
         model,
         choices,
-        system_fingerprint: None,
-        usage: None,
-        service_tier: None,
+        ..Default::default()
     }
 }

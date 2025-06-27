@@ -5,11 +5,11 @@ use llama_cu::{
 };
 use log::{debug, info};
 use openai_struct::{
-    ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage,
-    ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage,
-    CreateChatCompletionRequest, FinishReason,
+    ChatCompletionRequestAssistantMessage, ChatCompletionRequestAssistantMessageContent,
+    ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage,
+    ChatCompletionRequestSystemMessageContent, ChatCompletionRequestUserMessage,
+    ChatCompletionRequestUserMessageContent, CreateChatCompletionRequest, FinishReason,
 };
-use serde_json::Value;
 use std::{collections::BTreeMap, sync::Mutex, time::Duration};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
@@ -181,16 +181,16 @@ impl Model {
         for msg in &messages {
             let msg = match msg {
                 ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
-                    content: Value::String(msg),
+                    content: ChatCompletionRequestUserMessageContent::Text(msg),
                     ..
                 }) => msg,
                 ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
-                    content: Value::String(msg),
+                    content: ChatCompletionRequestSystemMessageContent::Text(msg),
                     ..
                 }) => msg,
                 ChatCompletionRequestMessage::Assistant(
                     ChatCompletionRequestAssistantMessage {
-                        content: Some(Value::String(msg)),
+                        content: Some(ChatCompletionRequestAssistantMessageContent::Text(msg)),
                         ..
                     },
                 ) => msg,

@@ -1573,8 +1573,8 @@ checksum = "a4895175b425cb1f87721b59f0f286c2092bd4af812243672510e1ac53e2e0ad"
 
 [[package]]
 name = "openai-struct"
-version = "0.0.2"
-source = "git+https://github.com/YdrMaster/openai-struct?rev=13f73ab#13f73ab678806ab3d5919375bd0ac16f2fbe9777"
+version = "0.0.4"
+source = "git+https://github.com/YdrMaster/openai-struct?rev=1b1089e#1b1089e9ed12ab4c8c7db463108e0e01146b007e"
 dependencies = [
  "serde",
  "serde_derive",

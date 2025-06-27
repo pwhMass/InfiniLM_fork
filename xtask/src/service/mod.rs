@@ -6,7 +6,10 @@ mod response;
 
 use crate::{
     parse_gpus,
-    service::{openai::create_chat_completion_stream_response, response::text_stream},
+    service::{
+        openai::{chat_completion_response, chat_completion_response_stream},
+        response::text_stream,
+    },
 };
 use error::*;
 use http_body_util::{BodyExt, combinators::BoxBody};
@@ -211,7 +214,7 @@ impl HyperService<Request<Incoming>> for App {
                             move |output| {
                                 let response = match output {
                                     model::Output::Text { think, content } => {
-                                        create_chat_completion_stream_response(
+                                        chat_completion_response_stream(
                                             id,
                                             created,
                                             model_name.clone(),
@@ -221,7 +224,7 @@ impl HyperService<Request<Incoming>> for App {
                                         )
                                     }
                                     model::Output::Finish(reason) => {
-                                        create_chat_completion_stream_response(
+                                        chat_completion_response_stream(
                                             id,
                                             created,
                                             model_name.clone(),
@@ -251,7 +254,15 @@ impl HyperService<Request<Incoming>> for App {
                         }
                     }
 
-                    todo!()
+                    let response = chat_completion_response(
+                        id,
+                        created,
+                        model_name,
+                        Some(think_).filter(|s| !s.is_empty()),
+                        Some(content_).filter(|s| !s.is_empty()),
+                        reason_,
+                    );
+                    Ok(json(response))
                 })
             }
             // Return 404 Not Found for other routes.

@@ -1,7 +1,8 @@
 ﻿use super::openai::POST_CHAT_COMPLETIONS;
 use log::{info, trace, warn};
 use openai_struct::{
-    ChatCompletionRequestMessage, CreateChatCompletionRequest, CreateChatCompletionStreamResponse,
+    ChatCompletionRequestMessage, ChatCompletionRequestUserMessageContent,
+    CreateChatCompletionRequest, CreateChatCompletionStreamResponse,
 };
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 use std::{env::VarError, time::Instant};
@@ -15,7 +16,7 @@ fn requset_body_chat(prompt: &str) -> String {
         model: "model".into(),
         messages: vec![ChatCompletionRequestMessage::User(
             openai_struct::ChatCompletionRequestUserMessage {
-                content: serde_json::Value::String(prompt.into()),
+                content: ChatCompletionRequestUserMessageContent::Text(prompt.into()),
                 name: None,
             },
         )],
