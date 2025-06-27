@@ -1,14 +1,5 @@
-﻿use super::{
-    cache_manager::CacheManager,
-    error::Error,
-    response::{error, text_stream},
-};
-use crate::{
-    progress_bar,
-    service::{ModelConfig, openai::create_chat_completion_response},
-};
-use http_body_util::combinators::BoxBody;
-use hyper::{Response, body::Bytes};
+﻿use super::{cache_manager::CacheManager, error::Error};
+use crate::{progress_bar, service::ModelConfig};
 use llama_cu::{
     Message, Received, ReturnReason, SampleArgs, Service, SessionId, Terminal, TextBuf, utok,
 };
@@ -19,13 +10,8 @@ use openai_struct::{
     CreateChatCompletionRequest, FinishReason,
 };
 use serde_json::Value;
-use std::{
-    collections::BTreeMap,
-    sync::Mutex,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
-use tokio::sync::mpsc::{self, UnboundedSender};
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use std::{collections::BTreeMap, sync::Mutex, time::Duration};
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 pub(super) struct Model {
     max_tokens: usize,
@@ -37,13 +23,16 @@ pub(super) struct Model {
     cache_manager: Mutex<CacheManager>,
 }
 
+pub(super) enum Output {
+    Text { think: String, content: String },
+    Finish(FinishReason),
+}
+
 struct SessionInfo {
-    sender: UnboundedSender<String>,
+    sender: UnboundedSender<Output>,
     buf: TextBuf,
     think: bool,
     tokens: Vec<utok>,
-    model: String,
-    created: u64,
 }
 
 impl Model {
@@ -122,20 +111,14 @@ impl Model {
                 };
 
                 let think = self.terminal.decode(think, &mut session_info.buf);
-                let text = self.terminal.decode(tokens, &mut session_info.buf);
-                debug!("解码完成：{tokens:?} -> {think:?} | {text:?}");
+                let content = self.terminal.decode(tokens, &mut session_info.buf);
+                debug!("解码完成：{tokens:?} -> {think:?} | {content:?}");
 
-                let response = create_chat_completion_response(
-                    session_id,
-                    session_info.created as _,
-                    session_info.model.clone(),
-                    Some(think).filter(|s| !s.is_empty()),
-                    Some(text).filter(|s| !s.is_empty()),
-                    None,
-                );
-                let message = serde_json::to_string(&response).unwrap();
-
-                if session_info.sender.send(message).is_err() {
+                if session_info
+                    .sender
+                    .send(Output::Text { think, content })
+                    .is_err()
+                {
                     info!("{session_id:?} 客户端连接已关闭");
                     self.terminal.stop(session_id);
                 }
@@ -144,16 +127,11 @@ impl Model {
             // 处理会话结束
             if !sessions.is_empty() {
                 for (session, reason) in sessions {
-                    let SessionInfo {
-                        tokens,
-                        sender,
-                        model,
-                        created,
-                        ..
-                    } = sessions_guard.remove(&session.id).unwrap();
+                    let SessionInfo { tokens, sender, .. } =
+                        sessions_guard.remove(&session.id).unwrap();
                     let reason = match reason {
-                        // 正常完成，插回cache
                         ReturnReason::Finish => {
+                            // 正常完成，插回 cache
                             self.cache_manager
                                 .lock()
                                 .unwrap()
@@ -166,16 +144,9 @@ impl Model {
                             FinishReason::Length
                         }
                     };
-                    let response = create_chat_completion_response(
-                        session.id,
-                        created as i32,
-                        model,
-                        None,
-                        None,
-                        Some(reason),
-                    );
+
                     sender
-                        .send(serde_json::to_string(&response).unwrap())
+                        .send(Output::Finish(reason))
                         .unwrap_or_else(|_| info!("{:?} 发送正常完成失败", session.id));
                 }
             }
@@ -185,9 +156,8 @@ impl Model {
     pub fn complete_chat(
         &self,
         req: CreateChatCompletionRequest,
-    ) -> Response<BoxBody<Bytes, hyper::Error>> {
+    ) -> Result<UnboundedReceiver<Output>, Error> {
         let CreateChatCompletionRequest {
-            model,
             messages,
             max_tokens,
             temperature,
@@ -224,7 +194,7 @@ impl Model {
                         ..
                     },
                 ) => msg,
-                msg => return error(Error::msg_not_supported(msg)),
+                msg => return Err(Error::msg_not_supported(msg)),
             };
             content_list.push(msg)
         }
@@ -256,11 +226,6 @@ impl Model {
             tokens,
             buf: TextBuf::new(),
             think: false,
-            model,
-            created: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
         };
         assert!(
             self.sessions
@@ -270,6 +235,6 @@ impl Model {
                 .is_none()
         );
 
-        text_stream(UnboundedReceiverStream::new(receiver))
+        Ok(receiver)
     }
 }

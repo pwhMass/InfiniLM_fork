@@ -4,7 +4,10 @@ mod model;
 mod openai;
 mod response;
 
-use crate::parse_gpus;
+use crate::{
+    parse_gpus,
+    service::{openai::create_chat_completion_stream_response, response::text_stream},
+};
 use error::*;
 use http_body_util::{BodyExt, combinators::BoxBody};
 use hyper::{
@@ -21,7 +24,11 @@ use openai::create_models;
 use openai_struct::CreateChatCompletionRequest;
 use response::error;
 use response::json;
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::atomic::{AtomicUsize, Ordering::SeqCst},
+    time::{SystemTime, UNIX_EPOCH},
+};
 use std::{ffi::c_int, fs::read_to_string, path::Path};
 use std::{
     future::Future,
@@ -30,6 +37,7 @@ use std::{
     sync::Arc,
 };
 use tokio::net::TcpListener;
+use tokio_stream::{StreamExt, wrappers::UnboundedReceiverStream};
 
 #[derive(Args)]
 pub struct ServiceArgs {
@@ -170,14 +178,80 @@ impl HyperService<Request<Incoming>> for App {
                 let models = self.0.clone();
                 Box::pin(async move {
                     let whole_body = req.collect().await?.to_bytes();
-                    let req = serde_json::from_slice::<CreateChatCompletionRequest>(&whole_body);
-                    Ok(match req {
-                        Ok(req) => match models.get(&req.model) {
-                            Some(model) => model.complete_chat(req),
-                            None => error(Error::ModelNotFound(req.model)),
-                        },
-                        Err(e) => error(Error::WrongJson(e)),
-                    })
+
+                    let req: CreateChatCompletionRequest = match serde_json::from_slice(&whole_body)
+                    {
+                        Ok(req) => req,
+                        Err(e) => return Ok(error(Error::WrongJson(e))),
+                    };
+
+                    let model_name = req.model.clone();
+                    let stream = req.stream.unwrap_or(true);
+
+                    let model = match models.get(&model_name) {
+                        Some(model) => model,
+                        None => return Ok(error(Error::ModelNotFound(model_name))),
+                    };
+
+                    let mut receiver = match model.complete_chat(req) {
+                        Ok(receiver) => receiver,
+                        Err(e) => return Ok(error(e)),
+                    };
+
+                    static ID: AtomicUsize = AtomicUsize::new(0);
+
+                    let id = ID.fetch_add(1, SeqCst);
+                    let created = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs() as i32;
+
+                    if stream {
+                        return Ok(text_stream(UnboundedReceiverStream::new(receiver).map(
+                            move |output| {
+                                let response = match output {
+                                    model::Output::Text { think, content } => {
+                                        create_chat_completion_stream_response(
+                                            id,
+                                            created,
+                                            model_name.clone(),
+                                            Some(think).filter(|s| !s.is_empty()),
+                                            Some(content).filter(|s| !s.is_empty()),
+                                            None,
+                                        )
+                                    }
+                                    model::Output::Finish(reason) => {
+                                        create_chat_completion_stream_response(
+                                            id,
+                                            created,
+                                            model_name.clone(),
+                                            None,
+                                            None,
+                                            Some(reason),
+                                        )
+                                    }
+                                };
+                                serde_json::to_string(&response).unwrap()
+                            },
+                        )));
+                    }
+
+                    let mut think_ = String::new();
+                    let mut content_ = String::new();
+                    let mut reason_ = None;
+                    while let Some(output) = receiver.recv().await {
+                        match output {
+                            model::Output::Text { think, content } => {
+                                think_.push_str(&think);
+                                content_.push_str(&content);
+                            }
+                            model::Output::Finish(reason) => {
+                                assert!(reason_.replace(reason).is_none())
+                            }
+                        }
+                    }
+
+                    todo!()
                 })
             }
             // Return 404 Not Found for other routes.

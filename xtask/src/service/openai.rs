@@ -1,5 +1,4 @@
 ﻿use hyper::Method;
-use llama_cu::SessionId;
 use openai_struct::{
     ChatCompletionStreamResponseDelta, CreateChatCompletionStreamResponse,
     CreateChatCompletionStreamResponseChoices, FinishReason, Model,
@@ -31,8 +30,8 @@ pub(crate) fn create_models(models: impl IntoIterator<Item = String>) -> impl Se
     }
 }
 
-pub(crate) fn create_chat_completion_response(
-    id: SessionId,
+pub(crate) fn create_chat_completion_stream_response(
+    id: usize,
     created: i32,
     model: String,
     think: Option<String>,
@@ -53,7 +52,7 @@ pub(crate) fn create_chat_completion_response(
         logprobs: None,
     }];
     CreateChatCompletionStreamResponse {
-        id: format!("InfiniLM-Service-chatcmpl-{:#08x}", id.0),
+        id: format!("InfiniLM-Service-chatcmpl-{id:#08x}"),
         object: CHAT_COMPLETION_OBJECT.to_string(),
         created,
         model,
