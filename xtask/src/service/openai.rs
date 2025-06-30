@@ -2,13 +2,16 @@
 use openai_struct::{
     ChatCompletionResponseMessage, ChatCompletionStreamResponseDelta, CreateChatCompletionResponse,
     CreateChatCompletionResponseChoices, CreateChatCompletionStreamResponse,
-    CreateChatCompletionStreamResponseChoices, FinishReason, Model,
+    CreateChatCompletionStreamResponseChoices, CreateCompletionResponse,
+    CreateCompletionResponseChoices, CreateCompletionResponseLogprobs, FinishReason, Model,
 };
 use serde::Serialize;
 
 const CHAT_COMPLETION_OBJECT: &str = "chat.completion.chunk";
+const COMPLETION_OBJECT: &str = "text_completion";
 pub(crate) const GET_MODELS: (&Method, &str) = (&Method::GET, "/models");
 pub(crate) const POST_CHAT_COMPLETIONS: (&Method, &str) = (&Method::POST, "/chat/completions");
+pub(crate) const POST_COMPLETIONS: (&Method, &str) = (&Method::POST, "/completions");
 
 pub(crate) fn create_models(models: impl IntoIterator<Item = String>) -> impl Serialize {
     #[derive(Serialize)]
@@ -82,5 +85,43 @@ pub(crate) fn chat_completion_response_stream(
         model,
         choices,
         ..Default::default()
+    }
+}
+
+pub(crate) fn create_completion_response(
+    id: usize,
+    created: i32,
+    model: String,
+    text: String,
+    finish_reason: Option<FinishReason>,
+) -> CreateCompletionResponse {
+    let finish_reason = match finish_reason {
+        Some(FinishReason::Stop) => "stop",
+        Some(FinishReason::Length) => "length",
+        Some(FinishReason::ContentFilter) => "content_filter",
+        Some(FinishReason::ToolCalls) => "tool_calls",
+        Some(FinishReason::FunctionCall) => "function_call",
+        None => "",
+    }
+    .to_string();
+    let choices = vec![CreateCompletionResponseChoices {
+        text,
+        finish_reason,
+        index: 0,
+        logprobs: CreateCompletionResponseLogprobs {
+            text_offset: None,
+            token_logprobs: None,
+            tokens: None,
+            top_logprobs: None,
+        },
+    }];
+    CreateCompletionResponse {
+        id: format!("InfiniLM-Service-cmpl-{id:#08x}"),
+        object: COMPLETION_OBJECT.to_string(),
+        created,
+        model,
+        choices,
+        system_fingerprint: None,
+        usage: None,
     }
 }

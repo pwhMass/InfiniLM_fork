@@ -7,7 +7,9 @@ mod response;
 use crate::{
     parse_gpus,
     service::{
-        openai::{chat_completion_response, chat_completion_response_stream},
+        openai::{
+            chat_completion_response, chat_completion_response_stream, create_completion_response,
+        },
         response::text_stream,
     },
 };
@@ -24,7 +26,7 @@ use llama_cu::Service;
 use log::{info, warn};
 use model::Model;
 use openai::create_models;
-use openai_struct::CreateChatCompletionRequest;
+use openai_struct::{CreateChatCompletionRequest, CreateCompletionRequest};
 use response::error;
 use response::json;
 use std::{
@@ -177,6 +179,85 @@ impl HyperService<Request<Incoming>> for App {
             openai::GET_MODELS => {
                 let json = json(create_models(self.0.keys().cloned()));
                 Box::pin(async move { Ok(json) })
+            }
+            openai::POST_COMPLETIONS => {
+                let models = self.0.clone();
+                Box::pin(async move {
+                    let whole_body = req.collect().await?.to_bytes();
+                    let req: CreateCompletionRequest = match serde_json::from_slice(&whole_body) {
+                        Ok(req) => req,
+                        Err(e) => return Ok(error(Error::WrongJson(e))),
+                    };
+                    let model_name = match &req.model {
+                        serde_json::Value::String(s) => s.clone(),
+                        _ => {
+                            return Ok(error(Error::ModelNotFound(
+                                "model field must be a string".to_string(),
+                            )));
+                        }
+                    };
+                    let stream = req.stream.unwrap_or(true);
+                    let model = match models.get(&model_name) {
+                        Some(model) => model,
+                        None => return Ok(error(Error::ModelNotFound(model_name))),
+                    };
+                    let mut receiver = match model.complete(req) {
+                        Ok(receiver) => receiver,
+                        Err(e) => return Ok(error(e)),
+                    };
+
+                    static ID: AtomicUsize = AtomicUsize::new(0);
+                    let id = ID.fetch_add(1, SeqCst);
+                    let created = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs() as i32;
+
+                    if stream {
+                        return Ok(text_stream(UnboundedReceiverStream::new(receiver).map(
+                            move |output| {
+                                let response = match output {
+                                    model::Output::Text { content, .. } => {
+                                        create_completion_response(
+                                            id,
+                                            created,
+                                            model_name.clone(),
+                                            content,
+                                            None,
+                                        )
+                                    }
+                                    model::Output::Finish(reason) => create_completion_response(
+                                        id,
+                                        created,
+                                        model_name.clone(),
+                                        String::new(),
+                                        Some(reason),
+                                    ),
+                                };
+                                serde_json::to_string(&response).unwrap()
+                            },
+                        )));
+                    }
+
+                    let mut think_ = String::new();
+                    let mut content_ = String::new();
+                    let mut reason_ = None;
+                    while let Some(output) = receiver.recv().await {
+                        match output {
+                            model::Output::Text { think, content } => {
+                                think_.push_str(&think);
+                                content_.push_str(&content);
+                            }
+                            model::Output::Finish(reason) => {
+                                assert!(reason_.replace(reason).is_none())
+                            }
+                        }
+                    }
+
+                    let response =
+                        create_completion_response(id, created, model_name, content_, reason_);
+                    Ok(json(response))
+                })
             }
             openai::POST_CHAT_COMPLETIONS => {
                 let models = self.0.clone();

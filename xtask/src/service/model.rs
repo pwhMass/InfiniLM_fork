@@ -8,8 +8,10 @@ use openai_struct::{
     ChatCompletionRequestAssistantMessage, ChatCompletionRequestAssistantMessageContent,
     ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage,
     ChatCompletionRequestSystemMessageContent, ChatCompletionRequestUserMessage,
-    ChatCompletionRequestUserMessageContent, CreateChatCompletionRequest, FinishReason,
+    ChatCompletionRequestUserMessageContent, CreateChatCompletionRequest, CreateCompletionRequest,
+    FinishReason,
 };
+use serde_json::Value;
 use std::{collections::BTreeMap, sync::Mutex, time::Duration};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
@@ -213,6 +215,61 @@ impl Model {
         let text = self.terminal.render(&messages);
         debug!("received prompt: {text}");
         let tokens = self.terminal.tokenize(&text);
+
+        let (id, tokens) = self.cache_manager.lock().unwrap().send(
+            &self.terminal,
+            tokens,
+            sample_args,
+            max_tokens,
+        );
+
+        let session_info = SessionInfo {
+            sender,
+            tokens,
+            buf: TextBuf::new(),
+            think: false,
+        };
+        assert!(
+            self.sessions
+                .lock()
+                .unwrap()
+                .insert(id, session_info,)
+                .is_none()
+        );
+
+        Ok(receiver)
+    }
+
+    pub fn complete(
+        &self,
+        req: CreateCompletionRequest,
+    ) -> Result<UnboundedReceiver<Output>, Error> {
+        let CreateCompletionRequest {
+            prompt,
+            max_tokens,
+            temperature,
+            top_p,
+            ..
+        } = req;
+
+        let prompt_text = match &prompt {
+            Value::String(s) => s.clone(),
+            Value::Array(arr) => arr
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join("\n"),
+            _ => return Err(Error::msg_not_supported(&prompt)),
+        };
+
+        let max_tokens = max_tokens.map_or(self.max_tokens, |n| n as _);
+        let sample_args =
+            SampleArgs::new(temperature.unwrap_or(0.), top_p.unwrap_or(1.), usize::MAX).unwrap();
+
+        debug!("received completion prompt: {prompt_text:?}");
+        let tokens = self.terminal.tokenize(&prompt_text);
+
+        let (sender, receiver) = mpsc::unbounded_channel();
 
         let (id, tokens) = self.cache_manager.lock().unwrap().send(
             &self.terminal,
