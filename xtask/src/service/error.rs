@@ -51,7 +51,7 @@ impl Error {
             Self::WrongJson(e) => e.to_string(),
             Self::NotFound(e) => serde_json::to_string(&e).unwrap(),
             Self::MsgNotSupported(e) => serde_json::to_string(&e).unwrap(),
-            Self::ModelNotFound(model) => format!("Model not found: {}", model),
+            Self::ModelNotFound(model) => format!("Model not found: {model}"),
         }
     }
 }
@@ -59,10 +59,10 @@ impl Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::WrongJson(e) => write!(f, "Invalid JSON: {}", e),
+            Error::WrongJson(e) => write!(f, "Invalid JSON: {e}"),
             Error::NotFound(e) => write!(f, "Not Found: {} {}", e.method, e.uri),
             Error::MsgNotSupported(e) => write!(f, "Message type not supported: {:?}", e.message),
-            Error::ModelNotFound(model) => write!(f, "Model not found: {}", model),
+            Error::ModelNotFound(model) => write!(f, "Model not found: {model}"),
         }
     }
 }

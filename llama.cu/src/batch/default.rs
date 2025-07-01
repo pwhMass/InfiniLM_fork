@@ -81,7 +81,7 @@ impl<T: 'static + Clone> BatchStrategy<T> for DefaultStrategy<T> {
                 } else {
                     // 正常prefill
                     if seq != prompt.len() {
-                        log::debug!("{:?} chunked prefil finished", id);
+                        log::debug!("{id:?} chunked prefil finished")
                     }
                     ans.tokens.extend(prompt[prompt.len() - seq..].to_owned());
 

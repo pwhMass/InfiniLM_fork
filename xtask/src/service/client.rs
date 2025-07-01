@@ -71,7 +71,7 @@ async fn send_single_request(
     let index = index.unwrap_or(0);
 
     if index > 0 {
-        trace!("任务 {} 开始", index);
+        trace!("任务 {index} 开始")
     }
 
     let req = client
@@ -88,20 +88,18 @@ async fn send_single_request(
             let status = res.status();
             if index > 0 {
                 info!(
-                    "任务 {} - 响应状态: {}, 耗时: {:?}",
-                    index,
-                    status,
+                    "任务 {index} - 响应状态: {status}, 耗时: {:?}",
                     task_start.elapsed()
-                );
+                )
             } else {
-                info!("响应状态: {}, header={:#?}", status, res.headers());
+                info!("响应状态: {status}, header={:#?}", res.headers())
             }
 
             if status.is_success() {
                 if index > 0 {
-                    trace!("任务 {} 开始读取流式响应...", index);
+                    trace!("任务 {index} 开始读取流式响应...")
                 } else {
-                    trace!("开始读取流式响应...");
+                    trace!("开始读取流式响应...")
                 }
 
                 let mut stream = res.bytes_stream();
@@ -117,14 +115,11 @@ async fn send_single_request(
                             buffer.push_str(text);
 
                             if index > 0 {
-                                trace!(
-                                    "任务 {} 收到第 {} 个数据块: {:?}",
-                                    index, chunk_count, text
-                                );
+                                trace!("任务 {index} 收到第 {chunk_count} 个数据块: {text:?}")
                             } else {
                                 let now = Instant::now();
-                                trace!("收到第 {} 个数据块 - 时间: {:?}", chunk_count, now);
-                                trace!("原始数据: {:?}", text);
+                                trace!("收到第 {chunk_count} 个数据块 - 时间: {now:?}");
+                                trace!("原始数据: {text:?}")
                             }
 
                             // 处理可能跨越多个数据块的SSE消息
@@ -147,19 +142,18 @@ async fn send_single_request(
                                                 for choice in &response.choices {
                                                     if let Some(content) = &choice.delta.content {
                                                         accumulated_content.push_str(content);
-                                                        trace!("提取到文本内容: {:?}", content)
+                                                        trace!("提取到文本内容: {content:?}")
                                                     }
                                                 }
                                             }
                                             Err(e) => {
                                                 if index == 0 {
                                                     trace!(
-                                                        "响应解析失败: {} - 原始数据: {:?}",
-                                                        e, data_line
-                                                    );
+                                                        "响应解析失败: {e} - 原始数据: {data_line:?}"
+                                                    )
                                                 }
                                                 // 如果不是有效的响应格式，可能是纯文本内容
-                                                accumulated_content.push_str(data_line);
+                                                accumulated_content.push_str(data_line)
                                             }
                                         }
                                     }
@@ -167,7 +161,7 @@ async fn send_single_request(
                             }
                         }
                         Err(e) => {
-                            warn!("任务 {} 读取流时出错: {:?}", index, e);
+                            warn!("任务 {index} 读取流时出错: {e:?}");
                             break;
                         }
                     }
@@ -175,15 +169,13 @@ async fn send_single_request(
 
                 if index > 0 {
                     info!(
-                        "任务 {} 完成 - 总耗时: {:?}, 数据块数: {}, 内容长度: {}",
-                        index,
+                        "任务 {index} 完成 - 总耗时: {:?}, 数据块数: {chunk_count}, 内容长度: {}",
                         task_start.elapsed(),
-                        chunk_count,
                         accumulated_content.len()
-                    );
+                    )
                 } else {
-                    println!("流式响应结束，共收到 {} 个数据块", chunk_count);
-                    println!("完整生成内容: {}", accumulated_content);
+                    println!("流式响应结束，共收到 {chunk_count} 个数据块");
+                    println!("完整生成内容: {accumulated_content}")
                 }
 
                 Ok((
@@ -195,21 +187,18 @@ async fn send_single_request(
             } else {
                 let error_text = res.text().await.unwrap_or_default();
                 if index > 0 {
-                    warn!(
-                        "任务 {} 失败 - 状态: {}, 错误: {}",
-                        index, status, error_text
-                    );
+                    warn!("任务 {index} 失败 - 状态: {status}, 错误: {error_text}")
                 } else {
-                    println!("body: {}", error_text);
+                    println!("body: {error_text}")
                 }
-                Err(format!("HTTP错误: {}", status))
+                Err(format!("HTTP错误: {status}"))
             }
         }
         Err(e) => {
             if index > 0 {
-                warn!("任务 {} 请求失败: {:?}", index, e);
+                warn!("任务 {index} 请求失败: {e:?}")
             }
-            Err(format!("请求错误: {:?}", e))
+            Err(format!("请求错误: {e:?}"))
         }
     }
 }
@@ -265,7 +254,7 @@ fn test_post_send_multi() {
                 .collect::<Vec<_>>();
 
             let start_time = Instant::now();
-            info!("开始发送 {} 个并发请求", CONCURRENT_REQUESTS);
+            info!("开始发送 {CONCURRENT_REQUESTS} 个并发请求");
 
             // 创建并发任务
             let tasks = request_bodies
@@ -299,33 +288,33 @@ fn test_post_send_multi() {
                         total_text_length += content.len();
                         max_duration = max_duration.max(duration);
                         min_duration = min_duration.min(duration);
-                        trace!("任务 {} 成功完成", index);
+                        trace!("任务 {index} 成功完成")
                     }
                     Ok(Err(e)) => {
                         failed_count += 1;
-                        warn!("任务失败: {}", e);
+                        warn!("任务失败: {e}")
                     }
                     Err(e) => {
                         failed_count += 1;
-                        warn!("任务执行出错: {:?}", e);
+                        warn!("任务执行出错: {e:?}")
                     }
                 }
             }
 
             // 输出统计信息
             println!("\n=== 并发测试统计 ===");
-            println!("总请求数: {}", CONCURRENT_REQUESTS);
-            println!("成功请求数: {}", successful_count);
-            println!("失败请求数: {}", failed_count);
-            println!("总耗时: {:?}", total_elapsed);
-            println!("最快请求: {:?}", min_duration);
-            println!("最慢请求: {:?}", max_duration);
+            println!("总请求数: {CONCURRENT_REQUESTS}");
+            println!("成功请求数: {successful_count}");
+            println!("失败请求数: {failed_count}");
+            println!("总耗时: {total_elapsed:?}");
+            println!("最快请求: {min_duration:?}");
+            println!("最慢请求: {max_duration:?}");
             println!(
                 "平均每请求耗时: {:?}",
                 total_elapsed / CONCURRENT_REQUESTS as u32
             );
-            println!("总数据块数: {}", total_chunks);
-            println!("总文本长度: {}", total_text_length);
+            println!("总数据块数: {total_chunks}");
+            println!("总文本长度: {total_text_length}");
             println!(
                 "成功率: {:.1}%",
                 (successful_count as f64 / CONCURRENT_REQUESTS as f64) * 100.0
