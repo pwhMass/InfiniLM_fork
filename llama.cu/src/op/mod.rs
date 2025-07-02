@@ -3,6 +3,7 @@
 mod all_reduce;
 mod embedding;
 mod fast_embedding;
+mod gelu;
 mod linear;
 mod rms_norm;
 mod rope;
@@ -21,6 +22,7 @@ pub mod random_sample;
 pub use all_reduce::AllReduce;
 pub use embedding::Embedding;
 pub use fast_embedding::FastEmbedding;
+pub use gelu::Gelu;
 pub use linear::Linear;
 pub use rms_norm::RmsNorm;
 pub use rope::Rope;
