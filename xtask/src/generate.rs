@@ -28,18 +28,21 @@ impl GenerateArgs {
         let mut service = Service::new(base.model, &gpus, !base.no_cuda_graph);
         progress_bar(&mut service);
 
+        let term = service.terminal();
+
+        if use_template {
+            prompt = term.render(&[Message::user(&prompt)])
+        }
+        print_now!("{prompt}");
+
         let session = Session {
             id: SessionId(0),
             sample_args,
-            cache: service.terminal().new_cache(),
+            cache: term.new_cache(),
         };
-        print_now!("{prompt}");
-        if use_template {
-            prompt = service.terminal().render(&[Message::user(&prompt)])
-        }
-        service
-            .terminal()
-            .start(session, &service.terminal().tokenize(&prompt), max_steps);
+        let tokens = term.tokenize(&prompt);
+
+        term.start(session, &tokens, max_steps);
 
         let mut prefill = Duration::ZERO;
         let mut decode = Duration::ZERO;

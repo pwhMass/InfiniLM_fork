@@ -2,7 +2,8 @@
 mod gguf;
 
 use crate::utils::{Blob, Data, meta};
-use ggus::{GGufFileName, GGufMetaMapExt};
+use ggus::{GGufFileName, GGufMetaError, GGufMetaMapExt};
+use log::info;
 use memmap2::Mmap;
 use nn::{
     Activation, Attention, Embedding, LLaMA, Linear, Mlp, NormType, Normalization, OutputHead,
@@ -53,7 +54,28 @@ impl GGufModel<'_> {
         let dh = meta![self => llm_rope_dimension_count; d / nh];
         let theta = meta![self => llm_rope_freq_base; 1e4];
 
-        let [sin, cos] = build_sin_cos(nctx, dh, theta);
+        let arch = meta![self => general_architecture];
+        let [sin, cos] = match self.get_str(&format!("{arch}.rope.scaling.type")) {
+            Ok("longrope") => {
+                let ctx_scale = 1.;
+
+                let factors = &self.tensors["rope_factors_long.weight"];
+                assert_eq!(factors.dt(), types::F32);
+                assert_eq!(factors.shape(), [dh / 2]);
+                let factors = unsafe {
+                    std::slice::from_raw_parts(factors.get().as_ptr().cast::<f32>(), dh / 2)
+                };
+
+                info!("detected longrope, ctx scale = {ctx_scale}, scale factor = {factors:.2?}");
+                build_sin_cos(nctx, dh, theta, |pos, i| {
+                    pos as f32 * ctx_scale / factors[i]
+                })
+            }
+            Err(GGufMetaError::NotExist) => build_sin_cos(nctx, dh, theta, |pos, _| pos as _),
+            Ok(ty) => panic!("Unsupported rope scaling `{ty}`"),
+            Err(e) => panic!("{e:?}"),
+        };
+
         self.tensors.insert("sin_table", sin);
         self.tensors.insert("cos_table", cos);
     }
@@ -188,31 +210,32 @@ fn build_sin_cos<'a, const N: usize>(
     nctx: usize,
     dh: usize,
     theta: f32,
+    mut pos_scaling: impl FnMut(usize, usize) -> f32,
 ) -> [Tensor<Data<'a>, N>; 2] {
+    let d = dh / 2;
     let ty = types::F32;
-    let mut sin = Blob::new(nctx * dh / 2 * ty.nbytes());
-    let mut cos = Blob::new(nctx * dh / 2 * ty.nbytes());
+    let mut sin = Blob::new(nctx * d * ty.nbytes());
+    let mut cos = Blob::new(nctx * d * ty.nbytes());
+    let theta = theta.powf(-(d as f32).recip());
 
     {
-        let ([], sin, []) = (unsafe { sin.align_to_mut::<f32>() }) else {
+        let ([], sin, []) = (unsafe { sin.align_to_mut() }) else {
             unreachable!()
         };
-        let ([], cos, []) = (unsafe { cos.align_to_mut::<f32>() }) else {
+        let ([], cos, []) = (unsafe { cos.align_to_mut() }) else {
             unreachable!()
         };
         for pos in 0..nctx {
-            for i in 0..dh / 2 {
-                let theta = theta.powf(-((2 * i) as f32 / dh as f32));
-                let freq = pos as f32 * theta;
-                let (sin_, cos_) = freq.sin_cos();
-                sin[pos * dh / 2 + i] = sin_;
-                cos[pos * dh / 2 + i] = cos_;
+            for i in 0..d {
+                let (sin_, cos_) = (pos_scaling(pos, i) * theta.powi(i as _)).sin_cos();
+                sin[pos * d + i] = sin_;
+                cos[pos * d + i] = cos_;
             }
         }
     }
 
     let tensor = |data: Blob| {
-        Tensor::from_dim_slice(ty, [nctx, dh / 2]).map(|len| {
+        Tensor::from_dim_slice(ty, [nctx, d]).map(|len| {
             assert_eq!(len, data.len());
             data.into()
         })
