@@ -1,4 +1,4 @@
-﻿use super::gguf::GGufModel;
+﻿use super::GGufModel;
 use ggus::{GGufMetaError, GGufMetaMapExt};
 use minijinja::Environment;
 use serde::Serialize;
