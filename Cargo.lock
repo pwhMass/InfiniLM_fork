@@ -159,6 +159,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "bindgen"
+version = "0.72.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f72209734318d0b619a5e0f5129918b848c416e122a3c4ce054e03cb87b726f"
+dependencies = [
+ "bitflags",
+ "cexpr",
+ "clang-sys",
+ "itertools 0.13.0",
+ "log",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash",
+ "shlex",
+ "syn",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -463,12 +483,12 @@ name = "cublas"
 version = "0.0.0"
 source = "git+https://github.com/YdrMaster/cuda-driver?rev=b0148c0#b0148c0b2005f868f3ff2dd6b9d66cd2308b15ac"
 dependencies = [
- "bindgen",
+ "bindgen 0.71.1",
  "build-script-cfg 0.1.0",
  "cuda",
  "find_cuda_helper",
  "half",
- "search-corex-tools",
+ "search-corex-tools 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=b0148c0)",
 ]
 
 [[package]]
@@ -476,13 +496,21 @@ name = "cuda"
 version = "0.0.0"
 source = "git+https://github.com/YdrMaster/cuda-driver?rev=b0148c0#b0148c0b2005f868f3ff2dd6b9d66cd2308b15ac"
 dependencies = [
- "bindgen",
+ "bindgen 0.71.1",
  "build-script-cfg 0.1.0",
  "context-spore",
  "find_cuda_helper",
  "log",
- "search-corex-tools",
- "search-maca-tools",
+ "search-corex-tools 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=b0148c0)",
+ "search-maca-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=b0148c0)",
+]
+
+[[package]]
+name = "cuda-cc"
+version = "0.0.0"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=c535e9f#c535e9f3324749ffec0ef93779efefdacedf8dec"
+dependencies = [
+ "bindgen 0.72.0",
 ]
 
 [[package]]
@@ -1286,9 +1314,9 @@ checksum = "b4ce301924b7887e9d637144fdade93f9dfff9b60981d4ac161db09720d39aa5"
 name = "llama-cu"
 version = "0.0.0"
 dependencies = [
- "bindgen",
  "build-script-cfg 0.1.0",
  "bytesize",
+ "cuda-cc",
  "ggus",
  "log",
  "lru 0.14.0",
@@ -1298,9 +1326,9 @@ dependencies = [
  "operators",
  "rand",
  "regex",
- "search-corex-tools",
- "search-cuda-tools",
- "search-maca-tools",
+ "search-corex-tools 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=c535e9f)",
+ "search-cuda-tools 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=c535e9f)",
+ "search-maca-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=c535e9f)",
  "serde",
  "tokeneer",
 ]
@@ -1448,12 +1476,12 @@ name = "nccl"
 version = "0.0.0"
 source = "git+https://github.com/YdrMaster/cuda-driver?rev=b0148c0#b0148c0b2005f868f3ff2dd6b9d66cd2308b15ac"
 dependencies = [
- "bindgen",
+ "bindgen 0.71.1",
  "build-script-cfg 0.1.0",
  "cuda",
  "digit-layout",
- "search-corex-tools",
- "search-cuda-tools",
+ "search-corex-tools 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=b0148c0)",
+ "search-cuda-tools 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=b0148c0)",
 ]
 
 [[package]]
@@ -1656,8 +1684,8 @@ dependencies = [
  "num-traits",
  "rayon",
  "search-cl-tools",
- "search-corex-tools",
- "search-cuda-tools",
+ "search-corex-tools 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=b0148c0)",
+ "search-cuda-tools 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=b0148c0)",
  "search-infini-tools",
 ]
 
@@ -2064,9 +2092,22 @@ version = "0.0.0"
 source = "git+https://github.com/YdrMaster/cuda-driver?rev=b0148c0#b0148c0b2005f868f3ff2dd6b9d66cd2308b15ac"
 
 [[package]]
+name = "search-corex-tools"
+version = "0.0.0"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=c535e9f#c535e9f3324749ffec0ef93779efefdacedf8dec"
+
+[[package]]
 name = "search-cuda-tools"
 version = "0.0.0"
 source = "git+https://github.com/YdrMaster/cuda-driver?rev=b0148c0#b0148c0b2005f868f3ff2dd6b9d66cd2308b15ac"
+dependencies = [
+ "find_cuda_helper",
+]
+
+[[package]]
+name = "search-cuda-tools"
+version = "0.0.0"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=c535e9f#c535e9f3324749ffec0ef93779efefdacedf8dec"
 dependencies = [
  "find_cuda_helper",
 ]
@@ -2080,6 +2121,11 @@ source = "git+https://github.com/InfiniTensor/infini-toolkit?rev=e8362c3#e8362c3
 name = "search-maca-tools"
 version = "0.1.0"
 source = "git+https://github.com/YdrMaster/cuda-driver?rev=b0148c0#b0148c0b2005f868f3ff2dd6b9d66cd2308b15ac"
+
+[[package]]
+name = "search-maca-tools"
+version = "0.1.0"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=c535e9f#c535e9f3324749ffec0ef93779efefdacedf8dec"
 
 [[package]]
 name = "security-framework"

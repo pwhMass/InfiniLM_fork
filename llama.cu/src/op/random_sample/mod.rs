@@ -1,6 +1,6 @@
 #[allow(warnings)]
 mod bindings {
-    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+    include!(concat!(env!("OUT_DIR"), "/random_sample_bindings.rs"));
 
     #[macro_export]
     macro_rules! check {
