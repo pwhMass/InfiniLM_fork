@@ -5,7 +5,7 @@ use std::{cmp::min, collections::BTreeMap, iter::repeat_n, mem::take};
 pub(crate) struct DefaultStrategy<T> {
     sess: BTreeMap<SessionId, SessionStub<T>>,
     pre_output: BTreeMap<SessionId, usize>,
-    // 每次prefill的最大长度
+    // 每次 prefill 的最大长度
     chunked_prefill_max_len: Option<usize>,
     max_toks: usize,
 }
@@ -49,7 +49,7 @@ impl<T: 'static + Clone> BatchStrategy<T> for DefaultStrategy<T> {
             let mut out = stub.state.out;
             let mut end = pos + seq;
             assert_eq!(out, 1, "TODO: 投机采样");
-            //验证缓存是否溢出
+            // 验证缓存是否溢出
             if end > max {
                 warn!("cache overflow {end} > {max}");
                 // 缓存溢出，不再推理
@@ -57,7 +57,7 @@ impl<T: 'static + Clone> BatchStrategy<T> for DefaultStrategy<T> {
                 continue;
             }
 
-            // 用于限制每次tokens总数
+            // 用于限制每次 tokens 总数
             let remain_tok_num = self.max_toks - ans.tokens.len();
             assert!(remain_tok_num > 0);
 
@@ -77,16 +77,16 @@ impl<T: 'static + Clone> BatchStrategy<T> for DefaultStrategy<T> {
                         .extend(prompt.iter().skip(prompt.len() - stub.state.seq).take(seq));
 
                     //更新stub信息
-                    stub.state.seq -= seq;
+                    stub.state.seq -= seq
                 } else {
-                    // 正常prefill
+                    // 正常 prefill
                     if seq != prompt.len() {
                         log::debug!("{id:?} chunked prefil finished")
                     }
                     ans.tokens.extend(prompt[prompt.len() - seq..].to_owned());
 
                     stub.state.seq = 1;
-                    stub.prompt = None;
+                    stub.prompt = None
                 }
             } else {
                 // decode
@@ -108,8 +108,8 @@ impl<T: 'static + Clone> BatchStrategy<T> for DefaultStrategy<T> {
                 seq,
             });
 
-            //输出处理
-            //不会溢出 因为 out <= 1
+            // 输出处理
+            // 不会溢出 因为 out <= 1
             stub.state.remain_steps -= out;
             if stub.state.remain_steps == 0 {
                 // 生成结束
@@ -123,7 +123,7 @@ impl<T: 'static + Clone> BatchStrategy<T> for DefaultStrategy<T> {
             }
             out_idx += out;
 
-            // 如果剩余tokens总数等于0，则退出循环
+            // 如果剩余 tokens 总数等于 0，则退出循环
             if self.max_toks == ans.tokens.len() {
                 break;
             }

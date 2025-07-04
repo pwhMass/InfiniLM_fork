@@ -13,7 +13,7 @@ pub trait BatchStrategy<T: 'static> {
     fn take_stubs(&mut self) -> Vec<SessionStub<T>>;
 }
 
-// 目前在有prompt的情况下，state.seq 的长度代表prompt还有多少未prefill，也就是 `prompt[prompt.len() - state.seq..]` 代表未prefill的prompt
+// 目前在有 prompt 的情况下，state.seq 的长度代表 prompt 还有多少未 prefill，也就是 `prompt[prompt.len() - state.seq..]` 代表未 prefill 的 prompt
 pub(super) struct SessionStub<T> {
     pub session: Session<T>,
     pub state: State,
