@@ -1,4 +1,4 @@
-use super::GGufModel;
+use super::{GGufModel, llama::build_sin_cos};
 use crate::utils::meta;
 use ggus::GGufMetaMapExt;
 use nn::{
@@ -122,4 +122,39 @@ impl GGufModel<'_> {
             },
         }
     }
+
+    /// 插入用于 MRoPE 的 sin cos 表张量
+    pub fn _insert_sin_cos_qw2vl(&mut self) {
+        let nctx = meta![self => llm_context_length; 34]; // todo: from image
+        let d = meta![self => llm_embedding_length];
+        let nh = meta![self => llm_attention_head_count];
+        let dh = meta![self => llm_rope_dimension_count; d / nh];
+        let dh_div_2 = dh / 2; // h, w 维度均分 dh_div_2
+        let theta = meta![self => llm_rope_freq_base; 1e4];
+        let [sin, cos] = build_sin_cos(nctx, dh_div_2, theta, |pos, _| pos as _);
+        self.tensors.insert("sin_table", sin);
+        self.tensors.insert("cos_table", cos);
+    }
+}
+
+/// 构造 pos_ids 表
+pub fn _build_pos_ids(h: usize, w: usize, d_patch: usize) -> Vec<u32> {
+    let hp = h / d_patch;
+    let wp = w / d_patch;
+    let mut pos = vec![0; hp * wp * 2];
+
+    let mut ptr = 0;
+    for y in (0..hp).step_by(2) {
+        for x in (0..wp).step_by(2) {
+            for dy in 0..2 {
+                for dx in 0..2 {
+                    pos[ptr * 2] = (y + dy) as u32;
+                    pos[ptr * 2 + 1] = (x + dx) as u32;
+                    ptr += 1;
+                }
+            }
+        }
+    }
+
+    pos
 }

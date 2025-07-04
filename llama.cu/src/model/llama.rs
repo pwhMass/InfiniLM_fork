@@ -169,7 +169,7 @@ impl GGufModel<'_> {
 }
 
 /// 构造 sin cos 表张量
-fn build_sin_cos<'a, const N: usize>(
+pub fn build_sin_cos<'a, const N: usize>(
     nctx: usize,
     dh: usize,
     theta: f32,
