@@ -1,5 +1,6 @@
 ﻿mod chat_template;
 mod llama;
+mod qw2vl_mmproj;
 
 use crate::utils::Data;
 use ggus::{
