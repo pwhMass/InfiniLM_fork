@@ -1,5 +1,5 @@
-﻿use super::GGufModel;
-use crate::utils::{Blob, Data, meta};
+﻿use super::{GGufModel, build_sin_cos};
+use crate::utils::meta;
 use ggus::{GGufMetaError, GGufMetaMapExt};
 use log::info;
 use nn::{
@@ -166,42 +166,4 @@ impl GGufModel<'_> {
         let dh = meta![self => llm_rope_dimension_count; d / nh];
         Tensor::from_dim_slice(dt, [nctx, nblk, 2, nkvh, dh])
     }
-}
-
-/// 构造 sin cos 表张量
-pub fn build_sin_cos<'a, const N: usize>(
-    nctx: usize,
-    dh: usize,
-    theta: f32,
-    mut pos_scaling: impl FnMut(usize, usize) -> f32,
-) -> [Tensor<Data<'a>, N>; 2] {
-    let d = dh / 2;
-    let ty = types::F32;
-    let mut sin = Blob::new(nctx * d * ty.nbytes());
-    let mut cos = Blob::new(nctx * d * ty.nbytes());
-    let theta = theta.powf(-(d as f32).recip());
-
-    {
-        let ([], sin, []) = (unsafe { sin.align_to_mut() }) else {
-            unreachable!()
-        };
-        let ([], cos, []) = (unsafe { cos.align_to_mut() }) else {
-            unreachable!()
-        };
-        for pos in 0..nctx {
-            for i in 0..d {
-                let (sin_, cos_) = (pos_scaling(pos, i) * theta.powi(i as _)).sin_cos();
-                sin[pos * d + i] = sin_;
-                cos[pos * d + i] = cos_;
-            }
-        }
-    }
-
-    let tensor = |data: Blob| {
-        Tensor::from_dim_slice(ty, [nctx, d]).map(|len| {
-            assert_eq!(len, data.len());
-            data.into()
-        })
-    };
-    [tensor(sin), tensor(cos)]
 }

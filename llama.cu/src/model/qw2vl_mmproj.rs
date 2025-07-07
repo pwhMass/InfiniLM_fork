@@ -1,4 +1,4 @@
-use super::{GGufModel, llama::build_sin_cos};
+use super::{GGufModel, build_sin_cos};
 use crate::utils::meta;
 use ggus::GGufMetaMapExt;
 use nn::{
