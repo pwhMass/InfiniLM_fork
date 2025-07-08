@@ -66,6 +66,8 @@ struct BaseArgs {
     temperature: Option<f32>,
     #[clap(long)]
     top_p: Option<f32>,
+    #[clap(long)]
+    repetition_penalty: Option<f32>,
 }
 
 impl BaseArgs {
@@ -82,6 +84,7 @@ impl BaseArgs {
             self.temperature.unwrap_or(0.),
             self.top_p.unwrap_or(1.),
             usize::MAX,
+            self.repetition_penalty.unwrap_or(1.),
         )
         .unwrap()
     }

@@ -111,7 +111,7 @@ impl Service {
             drop(once_);
 
             let llama = gguf.llama();
-            engine(llama, &workers, commands, outputs, use_cuda_grpah)
+            engine(llama, eos, &workers, commands, outputs, use_cuda_grpah)
         });
         once.wait();
         Self {

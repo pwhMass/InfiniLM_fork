@@ -4,6 +4,7 @@ mod group;
 mod kv_cache;
 mod model;
 mod output_head;
+mod sample_manager;
 mod step;
 
 use crate::{

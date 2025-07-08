@@ -28,7 +28,7 @@ pub struct Round<T> {
     pub overflow: Vec<Session<T>>,
     pub tokens: Vec<utok>,
     pub reqs: Vec<Req<T>>,
-    pub sample: Vec<SampleArgs>,
+    pub sample: Vec<(SessionId, SampleInfo)>,
     pub output: Vec<(SessionId, usize)>,
     pub fast_map: Vec<(utok, utok)>,
     pub finished: Vec<Session<T>>,
@@ -48,6 +48,13 @@ impl<T> Default for Round<T> {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct SampleInfo {
+    pub args: SampleArgs,
+    pub input_idx: usize,
+    pub decode_len: usize,
+}
+
 pub struct Session<T> {
     pub id: SessionId,
     pub sample_args: SampleArgs,
@@ -64,7 +71,8 @@ pub struct Cache<T> {
 pub(super) struct State {
     pub seq: usize,
     pub out: usize,
-    pub remain_steps: usize,
+    pub decode_len: usize,
+    pub max_steps: usize,
 }
 
 #[derive(Clone)]

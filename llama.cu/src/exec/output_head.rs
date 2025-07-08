@@ -1,10 +1,7 @@
 ﻿use crate::{
     handle::Handle,
     load::WeightLoader,
-    op::{
-        self, Operator as _,
-        random_sample::{KV_PAIR, KVPair, RandomSample, SampleArgs},
-    },
+    op::{self, Operator as _},
     utils::dims,
 };
 use nn::{Arg, Linear, NormType, Normalization, Tensor, digit_layout::types};
@@ -15,7 +12,6 @@ pub(super) struct OutputHead<'ctx> {
     norm: Tensor<DevMem<'ctx>, 2>,
     linear: Tensor<DevMem<'ctx>, 2>,
     epsilon: Option<Arg>,
-    sample: RandomSample<'ctx>,
 }
 
 impl<'ctx> OutputHead<'ctx> {
@@ -28,8 +24,6 @@ impl<'ctx> OutputHead<'ctx> {
             NormType::RmsNorm { scale, .. } => scale,
             NormType::LayerNorm { .. } => todo!(),
         };
-
-        dims!([nvoc, _] = weight);
 
         let stream = ctx.stream();
         let mut loader = WeightLoader::new([]);
@@ -46,25 +40,27 @@ impl<'ctx> OutputHead<'ctx> {
             norm: load(norm),
             linear: load(weight),
             epsilon: Some(epsilon.into()),
-            sample: RandomSample::new(nvoc, ctx),
         }
     }
 }
 
 impl OutputHead<'_> {
+    pub fn nvoc(&self) -> usize {
+        dims!([ans, _] = self.linear);
+        ans
+    }
+
     pub fn launch<'ctx>(
         &mut self,
         x: Tensor<*const VirByte, 2>,
         out_idx: &[utok],
-        config: impl IntoIterator<Item = SampleArgs>,
         handle: &mut Handle,
         stream: &Stream<'ctx>,
-    ) -> DevMem<'ctx> {
+    ) -> Tensor<DevMem<'ctx>, 2> {
         let Self {
             norm,
             linear,
             epsilon,
-            sample,
         } = self;
         dims!([_, d] = x);
         let out_len = out_idx.len();
@@ -91,27 +87,8 @@ impl OutputHead<'_> {
             Tensor::new(out.dt(), [out_len, nvoc]).map(|len| stream.malloc::<u8>(len));
         let logits = logits_.as_mut().map(|mem| mem.as_ptr().cast());
         let lm_head = linear.as_ref().map(|mem| mem.as_ptr().cast());
-        op::Linear::launch(
-            handle,
-            Some(false.into()),
-            [out, lm_head],
-            [logits.clone()],
-            stream,
-        );
+        op::Linear::launch(handle, Some(false.into()), [out, lm_head], [logits], stream);
         stream.free(out_.take());
-        // sample
-        let kv_pair = stream.malloc::<KVPair>(out_len);
-        for (i, config) in config.into_iter().enumerate() {
-            let logits = logits.clone().transform(|layout| layout.index(0, i));
-            let kv_pair = Tensor::from_dim_slice(KV_PAIR, [])
-                .map(|_| kv_pair[i * size_of::<KVPair>()..].as_ptr().cast());
-            if config.is_argmax() {
-                sample.argmax(kv_pair, logits, stream)
-            } else {
-                sample.sample(kv_pair, logits, config, rand::random(), stream)
-            }
-        }
-        stream.free(logits_.take());
-        kv_pair
+        logits_
     }
 }

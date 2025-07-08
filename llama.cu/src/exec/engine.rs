@@ -5,7 +5,7 @@
 use crate::{
     CacheParts,
     batch::{Req, Round, SessionStub, State},
-    exec::{group::ModelGroupConfig, upos},
+    exec::{group::ModelGroupConfig, sample_manager::SampleManager, upos},
     handle::Handle,
     op::{FastEmbedding, random_sample::KVPair},
 };
@@ -47,7 +47,8 @@ impl Request {
             state: State {
                 seq: prompt.len(),
                 out,
-                remain_steps: max_steps,
+                decode_len: 0,
+                max_steps,
             },
             prompt: Some(prompt),
         }
@@ -72,6 +73,7 @@ pub struct Progress {
 
 pub(crate) fn engine(
     llama: LLaMA<Tensor<&[u8], 2>>,
+    eos: utok,
     workers: &[(c_int, Option<Arc<Progress>>)],
     commands: Receiver<Command>,
     outputs: Sender<Output>,
@@ -80,6 +82,7 @@ pub(crate) fn engine(
     if let &[(gpu, progress)] = &workers {
         return mono(
             llama,
+            eos,
             Device::new(*gpu),
             progress.clone(),
             commands,
@@ -137,7 +140,7 @@ pub(crate) fn engine(
                 })
                 .collect::<Vec<_>>();
 
-            worker.lead(llama, output_head, commands, outputs, |ctx| {
+            worker.lead(llama, eos, output_head, commands, outputs, |ctx| {
                 Handle::with_comm(ctx, first)
             })
         })
@@ -146,6 +149,7 @@ pub(crate) fn engine(
 
 fn mono(
     mut llama: LLaMA<Tensor<&[u8], 2>>,
+    eos: utok,
     dev: Device,
     progress: Option<Arc<Progress>>,
     commands: Receiver<Command>,
@@ -171,7 +175,7 @@ fn mono(
         task_box: Default::default(),
         chunked_prefill_len: CHUNKED_PREFILL_LEN,
     }
-    .lead(llama, output_head, commands, outputs, |ctx| {
+    .lead(llama, eos, output_head, commands, outputs, |ctx| {
         Handle::new(ctx)
     })
 }
@@ -200,6 +204,7 @@ impl<T: IntoIterator<Item = usize>> Worker<T> {
     fn lead(
         self,
         llama: LLaMA<Tensor<&[u8], 2>>,
+        eos: utok,
         output_head: nn::OutputHead<Tensor<&[u8], 2>>,
         commands: Receiver<Command>,
         outputs: Sender<Output>,
@@ -233,6 +238,7 @@ impl<T: IntoIterator<Item = usize>> Worker<T> {
             );
 
             let mut output_head = OutputHead::new(output_head, ctx);
+            let mut sample_manager = SampleManager::new(output_head.nvoc(), eos, ctx);
 
             let max_tok = max_toks;
             let mut fast_embd = FastEmbedding::new(max_tok, ctx);
@@ -246,7 +252,6 @@ impl<T: IntoIterator<Item = usize>> Worker<T> {
             let mut pos_buf = BufN::<upos>::new(len, BUF_LEVEL, ctx);
             let mut out_idx_buf = BufN::<utok>::new(len, BUF_LEVEL, ctx);
             let mut fast_embd_buf = BufN::<(utok, utok)>::new(len, BUF_LEVEL, ctx);
-
             if outputs.send(Output::Ready).is_ok() {
                 while manager.receive(&commands, &outputs).is_ok() {
                     // 组织请求
@@ -292,6 +297,8 @@ impl<T: IntoIterator<Item = usize>> Worker<T> {
                         &mut handle,
                         &stream,
                     );
+                    let mut input = stream.malloc::<utok>(tok.len() / size_of::<utok>());
+                    stream.memcpy_d2d(&mut input, tok);
                     // 通知协处理单元
                     #[cfg(nccl)]
                     if let Some(barrier) = &barrier {
@@ -304,31 +311,30 @@ impl<T: IntoIterator<Item = usize>> Worker<T> {
                     }
                     // 推理
                     let x = models.launch(key, &reqs, &mut handle, &stream);
-
                     // 如果没有输出，则跳过
-                    if !out_idx.is_empty() {
-                        let output = output
-                            .into_iter()
-                            .filter_map(|(id, len)| if len > 0 { Some((id, len)) } else { None })
-                            .collect::<Vec<_>>();
-                        let kv_pairs = output_head.launch(
-                            x,
-                            &out_idx_buf[..out_idx.len()],
-                            sample,
-                            &mut handle,
-                            &stream,
-                        );
-                        stream.memcpy_d2d(&mut pre_kv_pairs[..kv_pairs.len()], &kv_pairs);
-
-                        let output = Output::Complete {
-                            output: output.into(),
-                            kv_pair: kv_pairs.sporulate(),
-                            event: stream.record().sporulate(),
-                            finished: finished.into(),
-                        };
-                        if outputs.send(output).is_err() {
-                            break;
-                        }
+                    if out_idx.is_empty() {
+                        continue;
+                    }
+                    // 计算输出头
+                    let logits =
+                        output_head.launch(x, &out_idx_buf[..out_idx.len()], &mut handle, &stream);
+                    // 采样
+                    let kv_pairs = sample_manager.sample(logits, &input, &sample, &stream);
+                    stream.free(input);
+                    stream.memcpy_d2d(&mut pre_kv_pairs[..kv_pairs.len()], &kv_pairs);
+                    // 生成并发送输出
+                    let output = output
+                        .into_iter()
+                        .filter_map(|(id, len)| if len > 0 { Some((id, len)) } else { None })
+                        .collect();
+                    let output = Output::Complete {
+                        output,
+                        kv_pair: kv_pairs.sporulate(),
+                        event: stream.record().sporulate(),
+                        finished: finished.into(),
+                    };
+                    if outputs.send(output).is_err() {
+                        break;
                     }
                 }
             }

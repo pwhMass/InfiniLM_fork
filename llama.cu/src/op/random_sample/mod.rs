@@ -1,3 +1,5 @@
+mod modifier;
+
 #[allow(warnings)]
 mod bindings {
     include!(concat!(env!("OUT_DIR"), "/random_sample_bindings.rs"));
@@ -26,6 +28,8 @@ use nn::{
 use operators::cuda::{AsRaw, CurrentCtx, DevMem, Stream, VirByte};
 use std::ffi::c_uint;
 
+pub(crate) use modifier::LogitsModifier;
+
 #[derive(Clone, Copy)]
 #[repr(C)]
 pub struct KVPair {
@@ -47,11 +51,13 @@ pub struct SampleArgs {
     pub temperature: f32,
     pub top_p: f32,
     pub top_k: usize,
+    pub repetition_penalty: f32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SampleArgsError {
     NegativeTemperature,
+    NegativePenalty,
     NonPositiveTop,
 }
 
@@ -67,11 +73,20 @@ impl SampleArgs {
         temperature: 0.,
         top_p: 1.,
         top_k: usize::MAX,
+        repetition_penalty: 1.,
     };
 
-    pub fn new(temperature: f32, top_p: f32, top_k: usize) -> Result<Self, SampleArgsError> {
-        if temperature < 0. {
+    pub fn new(
+        temperature: f32,
+        top_p: f32,
+        top_k: usize,
+        repetition_penalty: f32,
+    ) -> Result<Self, SampleArgsError> {
+        if temperature.is_sign_negative() {
             return Err(SampleArgsError::NegativeTemperature);
+        }
+        if repetition_penalty.is_sign_negative() {
+            return Err(SampleArgsError::NegativePenalty);
         }
         if top_k == 0 || top_p <= 0. {
             return Err(SampleArgsError::NonPositiveTop);
@@ -80,6 +95,7 @@ impl SampleArgs {
             temperature,
             top_p: f32::min(top_p, 1.),
             top_k,
+            repetition_penalty,
         })
     }
 

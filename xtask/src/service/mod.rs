@@ -64,6 +64,8 @@ pub struct ServiceArgs {
     #[clap(long)]
     top_p: Option<f32>,
     #[clap(long)]
+    repetition_penalty: Option<f32>,
+    #[clap(long)]
     think: bool,
 }
 
@@ -76,6 +78,8 @@ pub struct ModelConfig {
     pub temperature: Option<f32>,
     #[serde(rename = "top-p")]
     pub top_p: Option<f32>,
+    #[serde(rename = "repetition-penalty")]
+    pub repetition_penalty: Option<f32>,
     pub think: Option<bool>,
 }
 
@@ -90,6 +94,7 @@ impl ServiceArgs {
             max_tokens,
             temperature,
             top_p,
+            repetition_penalty,
             think,
         } = self;
 
@@ -106,6 +111,7 @@ impl ServiceArgs {
                     max_tokens,
                     temperature,
                     top_p,
+                    repetition_penalty,
                     think: Some(think),
                 },
             )]

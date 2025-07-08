@@ -12,13 +12,12 @@ use openai_struct::{
     FinishReason,
 };
 use serde_json::Value;
-use std::{collections::BTreeMap, sync::Mutex, time::Duration};
+use std::{collections::BTreeMap, sync::Mutex, time::Duration, usize};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 pub(super) struct Model {
     max_tokens: usize,
-    temperature: f32,
-    top_p: f32,
+    sampling: SampleArgs,
     think: [utok; 2],
     terminal: Terminal,
     sessions: Mutex<BTreeMap<SessionId, SessionInfo>>,
@@ -45,6 +44,7 @@ impl Model {
             max_tokens,
             temperature,
             top_p,
+            repetition_penalty,
             think,
         } = config;
 
@@ -65,8 +65,13 @@ impl Model {
 
         let model = Model {
             max_tokens: max_tokens.unwrap_or(2 << 10),
-            temperature: temperature.unwrap_or(0.),
-            top_p: top_p.unwrap_or(1.),
+            sampling: SampleArgs::new(
+                temperature.unwrap_or(0.),
+                top_p.unwrap_or(1.),
+                usize::MAX,
+                repetition_penalty.unwrap_or(1.),
+            )
+            .unwrap(),
             think,
             terminal: service.terminal().clone(),
             sessions: Default::default(),
@@ -164,15 +169,17 @@ impl Model {
             max_tokens,
             temperature,
             top_p,
+            frequency_penalty,
             ..
         } = req;
         let (sender, receiver) = mpsc::unbounded_channel();
 
         let max_tokens = max_tokens.map_or(self.max_tokens, |n| n as _);
         let sample_args = SampleArgs::new(
-            temperature.unwrap_or(self.temperature),
-            top_p.unwrap_or(self.top_p),
-            usize::MAX,
+            temperature.unwrap_or(self.sampling.temperature),
+            top_p.unwrap_or(self.sampling.top_p),
+            self.sampling.top_k,
+            frequency_penalty.unwrap_or(self.sampling.repetition_penalty),
         )
         .unwrap();
 
@@ -249,6 +256,7 @@ impl Model {
             max_tokens,
             temperature,
             top_p,
+            frequency_penalty,
             ..
         } = req;
 
@@ -263,8 +271,13 @@ impl Model {
         };
 
         let max_tokens = max_tokens.map_or(self.max_tokens, |n| n as _);
-        let sample_args =
-            SampleArgs::new(temperature.unwrap_or(0.), top_p.unwrap_or(1.), usize::MAX).unwrap();
+        let sample_args = SampleArgs::new(
+            temperature.unwrap_or(self.sampling.temperature),
+            top_p.unwrap_or(self.sampling.top_p),
+            self.sampling.top_k,
+            frequency_penalty.unwrap_or(self.sampling.repetition_penalty),
+        )
+        .unwrap();
 
         debug!("received completion prompt: {prompt_text:?}");
         let tokens = self.terminal.tokenize(&prompt_text);

@@ -1,4 +1,5 @@
 ﻿use super::Blob;
+use crate::op::random_sample::{KV_PAIR, KVPair};
 use ggus::ggml_quants::f16;
 use nn::{Tensor, digit_layout::types};
 use operators::cuda::{CurrentCtx, DevByte, VirByte, memcpy_d2h};
@@ -32,6 +33,7 @@ impl<const N: usize> fmt::Display for Fmt<'_, N> {
             types::F32 => display!(f32),
             types::U32 => display!(u32),
             types::U64 => display!(u64),
+            KV_PAIR => display!(KVPair),
             _ => todo!(),
         }
     }
@@ -78,5 +80,11 @@ impl fmt::Display for DataFmt<u64> {
         } else {
             write!(f, "{:>6}", self.0)
         }
+    }
+}
+
+impl fmt::Display for DataFmt<KVPair> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:>6} {:>9.3e}", self.0.idx, self.0.val.to_f32())
     }
 }
