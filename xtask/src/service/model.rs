@@ -12,7 +12,7 @@ use openai_struct::{
     FinishReason,
 };
 use serde_json::Value;
-use std::{collections::BTreeMap, sync::Mutex, time::Duration, usize};
+use std::{collections::BTreeMap, sync::Mutex, time::Duration};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 pub(super) struct Model {

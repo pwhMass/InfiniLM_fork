@@ -14,6 +14,7 @@ impl GGufModel<'_> {
         let dt_bias = match arch {
             "llama" => None,
             "qwen2" => Some(self.tensors["blk.0.attn_qkv.bias"].dt()),
+            "qwen3" => None,
             arch => panic!("unsupported arch {arch}"),
         };
 
@@ -23,7 +24,12 @@ impl GGufModel<'_> {
         let d = meta![self => llm_embedding_length];
         let nh = meta![self => llm_attention_head_count];
         let nkvh = meta![self => llm_attention_head_count_kv; nh];
-        let dh = meta![self => llm_rope_dimension_count; d / nh];
+        let dh = match arch {
+            "qwen3" => self.tensors["blk.0.attn_qkv.weight"].shape()[0]
+                .checked_div(nh + nkvh + nkvh)
+                .unwrap(),
+            _ => meta![self => llm_rope_dimension_count; d / nh],
+        };
         let di = meta![self => llm_feed_forward_length];
         let epsilon = meta![self => llm_attention_layer_norm_rms_epsilon; 1e-5];
         let dt_linear = self.tensors["blk.0.attn_qkv.weight"].dt();
@@ -68,8 +74,36 @@ impl GGufModel<'_> {
                                 get(&format!("blk.{iblk}.attn_qkv.weight")),
                                 dt_bias.map(|dt| (dt, get(&format!("blk.{iblk}.attn_qkv.bias")))),
                             ),
-                            q_norm: None,
-                            k_norm: None,
+                            q_norm: if self
+                                .tensors
+                                .contains_key(format!("blk.{iblk}.attn_q_norm.weight").as_str())
+                            {
+                                Some(Normalization {
+                                    d: dh,
+                                    epsilon: epsilon as _,
+                                    items: NormType::RmsNorm {
+                                        dt: out_norm.dt(),
+                                        scale: get(&format!("blk.{iblk}.attn_q_norm.weight")),
+                                    },
+                                })
+                            } else {
+                                None
+                            },
+                            k_norm: if self
+                                .tensors
+                                .contains_key(format!("blk.{iblk}.attn_k_norm.weight").as_str())
+                            {
+                                Some(Normalization {
+                                    d: dh,
+                                    epsilon: epsilon as _,
+                                    items: NormType::RmsNorm {
+                                        dt: out_norm.dt(),
+                                        scale: get(&format!("blk.{iblk}.attn_k_norm.weight")),
+                                    },
+                                })
+                            } else {
+                                None
+                            },
                             rope: Some(RoPE {
                                 multimodal: false,
                                 nctx,
@@ -125,13 +159,19 @@ impl GGufModel<'_> {
 
     /// 插入用于 RoPE 的 sin cos 表张量
     pub fn insert_rope_sin_cos(&mut self) {
+        let arch = meta![self => general_architecture];
         let nctx = meta![self => llm_context_length];
         let d = meta![self => llm_embedding_length];
         let nh = meta![self => llm_attention_head_count];
-        let dh = meta![self => llm_rope_dimension_count; d / nh];
+        let nkvh = meta![self => llm_attention_head_count_kv; nh];
+        let dh = match arch {
+            "qwen3" => self.tensors["blk.0.attn_qkv.weight"].shape()[0]
+                .checked_div(nh + nkvh + nkvh)
+                .unwrap(),
+            _ => meta![self => llm_rope_dimension_count; d / nh],
+        };
         let theta = meta![self => llm_rope_freq_base; 1e4];
 
-        let arch = meta![self => general_architecture];
         let [sin, cos] = match self.get_str(&format!("{arch}.rope.scaling.type")) {
             Ok("longrope") => {
                 let ctx_scale = 1.;
@@ -159,13 +199,19 @@ impl GGufModel<'_> {
 
     /// 构造语言模型的 kv cache 张量
     pub fn lm_kv_cache<const N: usize>(&self) -> Tensor<usize, N> {
+        let arch = meta![self => general_architecture];
         let dt = self.tensors["token_embd.weight"].dt();
         let nblk = meta![self => llm_block_count];
         let nctx = meta![self => llm_context_length];
         let d = meta![self => llm_embedding_length];
         let nh = meta![self => llm_attention_head_count];
         let nkvh = meta![self => llm_attention_head_count_kv; nh];
-        let dh = meta![self => llm_rope_dimension_count; d / nh];
+        let dh = match arch {
+            "qwen3" => self.tensors["blk.0.attn_qkv.weight"].shape()[0]
+                .checked_div(nh + nkvh + nkvh)
+                .unwrap(),
+            _ => meta![self => llm_rope_dimension_count; d / nh],
+        };
         Tensor::from_dim_slice(dt, [nctx, nblk, 2, nkvh, dh])
     }
 }
