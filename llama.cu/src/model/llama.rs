@@ -12,9 +12,8 @@ impl GGufModel<'_> {
     pub fn llama(&self) -> nn::LLaMA<Tensor<&[u8], 2>> {
         let arch = meta![self => general_architecture];
         let dt_bias = match arch {
-            "llama" => None,
+            "llama" | "qwen3" => None,
             "qwen2" => Some(self.tensors["blk.0.attn_qkv.bias"].dt()),
-            "qwen3" => None,
             arch => panic!("unsupported arch {arch}"),
         };
 
@@ -24,12 +23,9 @@ impl GGufModel<'_> {
         let d = meta![self => llm_embedding_length];
         let nh = meta![self => llm_attention_head_count];
         let nkvh = meta![self => llm_attention_head_count_kv; nh];
-        let dh = match arch {
-            "qwen3" => self.tensors["blk.0.attn_qkv.weight"].shape()[0]
-                .checked_div(nh + nkvh + nkvh)
-                .unwrap(),
-            _ => meta![self => llm_rope_dimension_count; d / nh],
-        };
+        let dh = meta![self => llm_rope_dimension_count; d / nh];
+        let dk = meta![self => llm_attention_key_length; dh];
+        let dv = meta![self => llm_attention_value_length; dh];
         let di = meta![self => llm_feed_forward_length];
         let epsilon = meta![self => llm_attention_layer_norm_rms_epsilon; 1e-5];
         let dt_linear = self.tensors["blk.0.attn_qkv.weight"].dt();
@@ -70,7 +66,7 @@ impl GGufModel<'_> {
                             nkvh,
                             qkv: Linear::new(
                                 dt_linear,
-                                [(nh + nkvh + nkvh) * dh, d],
+                                [(nh + nkvh) * dk + nkvh * dv, d],
                                 get(&format!("blk.{iblk}.attn_qkv.weight")),
                                 dt_bias.map(|dt| (dt, get(&format!("blk.{iblk}.attn_qkv.bias")))),
                             ),
@@ -79,7 +75,7 @@ impl GGufModel<'_> {
                                 .contains_key(format!("blk.{iblk}.attn_q_norm.weight").as_str())
                             {
                                 Some(Normalization {
-                                    d: dh,
+                                    d: dk,
                                     epsilon: epsilon as _,
                                     items: NormType::RmsNorm {
                                         dt: out_norm.dt(),
@@ -94,7 +90,7 @@ impl GGufModel<'_> {
                                 .contains_key(format!("blk.{iblk}.attn_k_norm.weight").as_str())
                             {
                                 Some(Normalization {
-                                    d: dh,
+                                    d: dk,
                                     epsilon: epsilon as _,
                                     items: NormType::RmsNorm {
                                         dt: out_norm.dt(),
@@ -112,7 +108,7 @@ impl GGufModel<'_> {
                             }),
                             output: Linear::new(
                                 dt_linear,
-                                [d, nh * dh],
+                                [d, nh * dv],
                                 get(&format!("blk.{iblk}.attn_output.weight")),
                                 None,
                             ),
@@ -163,13 +159,8 @@ impl GGufModel<'_> {
         let nctx = meta![self => llm_context_length];
         let d = meta![self => llm_embedding_length];
         let nh = meta![self => llm_attention_head_count];
-        let nkvh = meta![self => llm_attention_head_count_kv; nh];
-        let dh = match arch {
-            "qwen3" => self.tensors["blk.0.attn_qkv.weight"].shape()[0]
-                .checked_div(nh + nkvh + nkvh)
-                .unwrap(),
-            _ => meta![self => llm_rope_dimension_count; d / nh],
-        };
+        let dh = meta![self => llm_rope_dimension_count; d / nh];
+        let dk = meta![self => llm_attention_key_length; dh];
         let theta = meta![self => llm_rope_freq_base; 1e4];
 
         let [sin, cos] = match self.get_str(&format!("{arch}.rope.scaling.type")) {
@@ -178,17 +169,17 @@ impl GGufModel<'_> {
 
                 let factors = &self.tensors["rope_factors_long.weight"];
                 assert_eq!(factors.dt(), types::F32);
-                assert_eq!(factors.shape(), [dh / 2]);
+                assert_eq!(factors.shape(), [dk / 2]);
                 let factors = unsafe {
-                    std::slice::from_raw_parts(factors.get().as_ptr().cast::<f32>(), dh / 2)
+                    std::slice::from_raw_parts(factors.get().as_ptr().cast::<f32>(), dk / 2)
                 };
 
                 info!("detected longrope, ctx scale = {ctx_scale}, scale factor = {factors:.2?}");
-                build_sin_cos(nctx, dh, theta, |pos, i| {
+                build_sin_cos(nctx, dk, theta, |pos, i| {
                     pos as f32 * ctx_scale / factors[i]
                 })
             }
-            Err(GGufMetaError::NotExist) => build_sin_cos(nctx, dh, theta, |pos, _| pos as _),
+            Err(GGufMetaError::NotExist) => build_sin_cos(nctx, dk, theta, |pos, _| pos as _),
             Ok(ty) => panic!("Unsupported rope scaling `{ty}`"),
             Err(e) => panic!("{e:?}"),
         };
