@@ -225,7 +225,6 @@ impl<T: IntoIterator<Item = usize>> Worker<T> {
         let gpu = Gpu::new(dev.retain_primary(), Default::default());
         let attn = Attn::new(&gpu);
         gpu.apply(|ctx| {
-            let mut manager = EngineManager::new(chunked_prefill_len, max_toks);
             let mut handle = handle(ctx);
             let mut models = ModelGroup::new(
                 llama,
@@ -237,6 +236,7 @@ impl<T: IntoIterator<Item = usize>> Worker<T> {
                 barrier.as_deref(),
             );
 
+            let mut manager = EngineManager::new(chunked_prefill_len, max_toks);
             let mut output_head = OutputHead::new(output_head, ctx);
             let mut sample_manager = SampleManager::new(output_head.nvoc(), eos, ctx);
 
@@ -253,7 +253,9 @@ impl<T: IntoIterator<Item = usize>> Worker<T> {
             let mut out_idx_buf = BufN::<utok>::new(len, BUF_LEVEL, ctx);
             let mut fast_embd_buf = BufN::<(utok, utok)>::new(len, BUF_LEVEL, ctx);
             if outputs.send(Output::Ready).is_ok() {
-                while manager.receive(&commands, &outputs).is_ok() {
+                while let Ok(removed) = manager.receive(&commands, &outputs) {
+                    // 处理已移除会话
+                    sample_manager.remove(removed);
                     // 组织请求
                     let Round {
                         overflow,
@@ -264,11 +266,14 @@ impl<T: IntoIterator<Item = usize>> Worker<T> {
                         fast_map,
                         finished,
                     } = manager.prepare();
+                    // 处理缓存溢出
+                    sample_manager.remove(overflow.iter().map(|s| s.id));
                     if !overflow.is_empty()
                         && outputs.send(Output::Overflow(overflow.into())).is_err()
                     {
                         break;
                     }
+                    // 如果不需要推理
                     if tokens.is_empty() {
                         assert!(
                             reqs.is_empty()
@@ -279,6 +284,7 @@ impl<T: IntoIterator<Item = usize>> Worker<T> {
                         );
                         continue;
                     }
+                    // 更新 host 多级缓存
                     let out_idx = out_idx(&reqs, output.iter().map(|(_, len)| *len));
                     events[out_idx_buf.index()].synchronize();
                     tok_buf.save(&tokens);
@@ -322,6 +328,8 @@ impl<T: IntoIterator<Item = usize>> Worker<T> {
                     let kv_pairs = sample_manager.sample(logits, &input, &sample, &stream);
                     stream.free(input);
                     stream.memcpy_d2d(&mut pre_kv_pairs[..kv_pairs.len()], &kv_pairs);
+                    // 处理推理结束
+                    sample_manager.remove(finished.iter().map(|s| s.id));
                     // 生成并发送输出
                     let output = output
                         .into_iter()

@@ -1,7 +1,6 @@
 ﻿//! <https://zhuanlan.zhihu.com/p/667025336>
 
 use crate::utils::offset_ptr;
-use ggus::ggml_quants::f16;
 use log::warn;
 use nn::Tensor;
 use operators::cuda::{CurrentCtx, DevByte, DevMem, Module, Ptx, Stream, VirByte, params};
@@ -26,13 +25,13 @@ impl<'ctx> LogitsModifier<'ctx> {
 
 impl LogitsModifier<'_> {
     pub fn new_state<'ctx>(&self, stream: &Stream<'ctx>) -> DevMem<'ctx> {
-        stream.malloc::<f16>(self.n)
+        stream.malloc::<u32>(self.n)
     }
 
     pub unsafe fn next<const N: usize>(
         &self,
         logits: &Tensor<*const VirByte, N>,
-        scale: *mut DevByte,
+        records: *mut DevByte,
         tok: *const DevByte,
         mut temperature: f32,
         penalty: f32,
@@ -47,12 +46,12 @@ impl LogitsModifier<'_> {
             (n.div_ceil(256), 256, 0),
             &params![
                 offset_ptr(logits),
-                scale,
+                records,
                 n,
+                self.eos,
                 temperature,
-                penalty.recip(),
-                tok,
-                self.eos
+                penalty,
+                tok
             ]
             .to_ptrs(),
         );
@@ -61,19 +60,21 @@ impl LogitsModifier<'_> {
     fn compile<'ctx>(ctx: &'ctx CurrentCtx) -> Module<'ctx> {
         const CODE: &str = include_str!("modify.cuh");
         let code = format!(
-            r#"
-{CODE}
+            r#"{CODE}
 
 extern "C" __global__ void next(
-    half *logits,
-    half *scale,
-    unsigned int const n,
-    float const temperature,
-    float const penalty,
-    unsigned int const *tok,
-    unsigned int const eos
+    // 采样分布和状态
+    half *logits,          // 概率分布
+    unsigned int *records, // 每个 token 的出现次数
+    // 词表信息
+    unsigned int const n,   // 词表长度
+    unsigned int const eos, // 结束符
+    // 采样参数
+    float const temperature, // 温度
+    float const penalty,     // 重复惩罚
+    unsigned int const *tok  // 上一次采样结果
 ) {{
-    next_kernel(logits, scale, n, temperature, penalty, tok, eos);
+    next_kernel(logits, records, n, eos, temperature, penalty, tok);
 }}"#
         );
         let (ptx, log) = Ptx::compile(code, ctx.dev().compute_capability());

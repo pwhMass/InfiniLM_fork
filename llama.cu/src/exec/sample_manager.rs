@@ -39,6 +39,7 @@ impl<'ctx> SampleManager<'ctx> {
         let logits = logits_.as_mut().map(|mem| mem.as_ptr().cast());
         dims!([out_len, _nvoc] = logits);
 
+        let kv_pair_template = Tensor::from_dim_slice(KV_PAIR, []);
         let kv_pair = stream.malloc::<KVPair>(out_len);
         for (i, (id, info)) in config.into_iter().enumerate() {
             let logits = logits.clone().transform(|layout| layout.index(0, i));
@@ -48,7 +49,7 @@ impl<'ctx> SampleManager<'ctx> {
                 decode_len,
             } = info;
 
-            let scale = state
+            let state = state
                 .entry(*id)
                 .or_insert_with(|| modifier.new_state(stream));
             let tok = if *decode_len == 0 {
@@ -60,23 +61,30 @@ impl<'ctx> SampleManager<'ctx> {
             unsafe {
                 modifier.next(
                     &logits,
-                    scale.as_mut_ptr(),
+                    state.as_mut_ptr(),
                     tok,
                     args.temperature,
                     args.repetition_penalty,
                     stream,
                 )
-            };
+            }
 
-            let kv_pair = Tensor::from_dim_slice(KV_PAIR, [])
+            let kv_pair = kv_pair_template
+                .as_ref()
                 .map(|_| kv_pair[i * size_of::<KVPair>()..].as_ptr().cast());
             if args.is_argmax() {
-                sample.argmax(kv_pair.clone(), logits, stream)
+                sample.argmax(kv_pair, logits, stream)
             } else {
-                sample.sample(kv_pair.clone(), logits, *args, rand::random(), stream)
+                sample.sample(kv_pair, logits, *args, rand::random(), stream)
             }
         }
         stream.free(logits_.take());
         kv_pair
+    }
+
+    pub fn remove(&mut self, id: impl IntoIterator<Item = SessionId>) {
+        for id in id {
+            self.state.remove(&id);
+        }
     }
 }

@@ -1,9 +1,12 @@
 ﻿use super::{Command, Output};
 use crate::{
-    CacheParts,
+    CacheParts, SessionId,
     batch::{BatchStrategy, DefaultStrategy, Round, SessionStub},
 };
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::{
+    collections::BTreeSet,
+    sync::mpsc::{Receiver, Sender, TryRecvError},
+};
 
 pub(super) struct EngineManager(DefaultStrategy<CacheParts>);
 
@@ -26,12 +29,13 @@ impl EngineManager {
         &mut self,
         commands: &Receiver<Command>,
         outputs: &Sender<Output>,
-    ) -> Result<(), E> {
+    ) -> Result<BTreeSet<SessionId>, E> {
+        let mut removed = BTreeSet::new();
         loop {
             // 总是尝试进行非阻塞接收
             loop {
                 match commands.try_recv() {
-                    Ok(cmd) => self.apply(cmd, outputs)?,
+                    Ok(cmd) => self.apply(cmd, outputs, &mut removed)?,
                     Err(TryRecvError::Disconnected) => return Err(E::ReceiveError),
                     Err(TryRecvError::Empty) => break,
                 }
@@ -40,14 +44,15 @@ impl EngineManager {
             if self.0.is_empty() {
                 // 也没有待处理的任务，阻塞等待
                 match commands.recv() {
-                    Ok(cmd) => self.apply(cmd, outputs)?,
-                    Err(_) => break Err(E::ReceiveError),
+                    Ok(cmd) => self.apply(cmd, outputs, &mut removed)?,
+                    Err(_) => return Err(E::ReceiveError),
                 }
             } else {
                 // 有待处理的任务，退出循环
-                break Ok(());
+                break;
             }
         }
+        Ok(removed)
     }
 
     /// 准备推理
@@ -59,7 +64,12 @@ impl EngineManager {
         self.0.take_stubs()
     }
 
-    fn apply(&mut self, cmd: Command, outputs: &Sender<Output>) -> Result<(), CommandError> {
+    fn apply(
+        &mut self,
+        cmd: Command,
+        outputs: &Sender<Output>,
+        removed: &mut BTreeSet<SessionId>,
+    ) -> Result<(), CommandError> {
         match cmd {
             Command::ShutDown => Err(CommandError::ShutDown),
             Command::Insert(req) => {
@@ -67,14 +77,13 @@ impl EngineManager {
                 Ok(())
             }
             Command::Remove(id) => {
-                if self
-                    .0
-                    .remove(&id)
-                    .is_none_or(|stub| outputs.send(Output::Removed(stub.session)).is_ok())
-                {
-                    Ok(())
+                if let Some(stub) = self.0.remove(&id) {
+                    removed.insert(stub.session.id);
+                    outputs
+                        .send(Output::Removed(stub.session))
+                        .map_err(|_| CommandError::SendError)
                 } else {
-                    Err(CommandError::SendError)
+                    Ok(())
                 }
             }
         }
