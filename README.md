@@ -115,3 +115,12 @@ think = true
 temperature = 0.9
 top-p = 0.6
 ```
+
+## 模型支持
+
+### qwen3
+
+使用qwen3的模型需要对官方gguf进行变换，需要使用 [gguf-utils](https://crates.io/crates/gguf-utils) ，变换指令如下：
+```
+cargo convert `<model.gguf>` -x "cast:linear:f16,norm:f32->permute-qk->merge-linear->sort" `[--log trace]`
+```

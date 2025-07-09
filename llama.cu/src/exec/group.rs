@@ -243,6 +243,8 @@ fn builder() -> GraphBuilder {
         .register_op("swiglu", op::activation::SwiGLU)
         .register_op("concat", op::concat::Concat)
         .register_op("split", op::split::Split)
+        .register_op("tile", op::tile::Tile)
+        .register_op("merge", op::merge::Merge)
         .register_op("all-reduce", op::all_reduce::AllReduce);
     ans
 }
