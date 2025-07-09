@@ -68,6 +68,8 @@ impl GGufModel<'_> {
                                 get(&format!("blk.{iblk}.attn_qkv.weight")),
                                 dt_bias.map(|dt| (dt, get(&format!("blk.{iblk}.attn_qkv.bias")))),
                             ),
+                            q_norm: None,
+                            k_norm: None,
                             rope: Some(RoPE {
                                 multimodal: false,
                                 nctx,
