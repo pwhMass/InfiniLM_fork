@@ -12,6 +12,24 @@
 
 ## 使用说明
 
+## 模型支持
+
+InfiniLM 可读取 gguf 格式存储的 LLaMa/Qwen 架构大语言模型。[HuggingFace 文档](https://hugging-face.cn/docs/hub/gguf)提供对 gguf 格式的介绍以及从 HuggingFace 查找 gguf 模型的方法。
+
+为了提升推理性能，InfiniLM 要求用户使用 [gguf-utils 工具](https://crates.io/crates/gguf-utils) 变换模型到适宜推理的形式：
+
+- llama
+
+  ```shell
+  cargo convert `<model.gguf>` -x "cast:linear:f16,norm:f32->merge-linear->sort" `[--log trace]`
+  ```
+
+- qwen2/qwen3
+
+  ```shell
+  cargo convert `<model.gguf>` -x "cast:linear:f16,norm:f32->permute-qk->merge-linear->sort" `[--log trace]`
+  ```
+
 ### 帮助信息
 
 ```shell
@@ -114,13 +132,4 @@ max-tokens = 4096
 think = true
 temperature = 0.9
 top-p = 0.6
-```
-
-## 模型支持
-
-### qwen3
-
-使用qwen3的模型需要对官方gguf进行变换，需要使用 [gguf-utils](https://crates.io/crates/gguf-utils) ，变换指令如下：
-```
-cargo convert `<model.gguf>` -x "cast:linear:f16,norm:f32->permute-qk->merge-linear->sort" `[--log trace]`
 ```
