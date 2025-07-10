@@ -1,5 +1,5 @@
 template <typename T>
-__global__ void next_kernel(
+__device__ void next_kernel(
     // 采样分布和状态
     T *logits,             // 概率分布
     unsigned int *records, // 每个 token 的出现次数

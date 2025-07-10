@@ -106,7 +106,7 @@ fn code_2d(dev: &Device, ta: DigitLayout, tw: DigitLayout, d: usize) -> (String,
     let block_size = dev.block_limit().max_threads;
     let (body, n_thread_block) = if d <= block_size {
         (
-            format!("padding<{d}>(y, stride_y, x, stride_x, w, epsilon)"),
+            format!("padding_2d<{d}>(y, stride_y, x, stride_x, w, epsilon)"),
             d,
         )
     } else {
@@ -118,7 +118,7 @@ fn code_2d(dev: &Device, ta: DigitLayout, tw: DigitLayout, d: usize) -> (String,
         let num_items_thread = (d / n_threads_warp).div_ceil(num_warps_block);
         (
             format!(
-                "folding<{num_threads_block}, {num_items_thread}>(y, stride_y, x, stride_x, w, epsilon, {d})"
+                "folding_2d<{num_threads_block}, {num_items_thread}>(y, stride_y, x, stride_x, w, epsilon, {d})"
             ),
             num_threads_block,
         )
