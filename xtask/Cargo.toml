@@ -7,6 +7,7 @@ edition.workspace = true
 llama-cu.path = "../llama.cu"
 clap = { version = "4.5", features = ["derive"] }
 regex.workspace = true
+aho-corasick = "1.1"
 
 log.workspace = true
 flexi_logger = "0.30"
