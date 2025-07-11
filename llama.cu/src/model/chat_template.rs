@@ -1,5 +1,6 @@
 ﻿use super::GGufModel;
 use ggus::{GGufMetaError, GGufMetaMapExt};
+use log::warn;
 use minijinja::Environment;
 use serde::Serialize;
 use std::sync::{
@@ -131,7 +132,16 @@ static JINJA_ENV: LazyLock<RwLock<Environment<'_>>> = LazyLock::new(|| {
                     .map(|s| s.to_string())
                     .collect::<Vec<_>>(),
             )),
-            _ => Err(UnknownMethod.into()),
+            ("startswith", ThisType::String, [target]) => Ok(Value::from_serialize(
+                value
+                    .to_str()
+                    .unwrap()
+                    .starts_with(&*target.to_str().unwrap()),
+            )),
+            (name, _, _) => {
+                warn!("Unknown method jinja method `{name}`");
+                Err(UnknownMethod.into())
+            }
         }
     });
     RwLock::new(env)
