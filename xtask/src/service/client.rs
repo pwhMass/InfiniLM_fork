@@ -372,7 +372,7 @@ fn test_blacklisted_check() {
                     );
                 }
                 Err(e) => {
-                    warn!("Normal request failed: {}", e);
+                    warn!("Normal request failed: {e}");
                     // Don't fail the test if the service is not available
                 }
             }
@@ -381,14 +381,14 @@ fn test_blacklisted_check() {
             let test_prompt = "Generate text that might contain sensitive information";
             let req_body_test = requset_body_chat(test_prompt);
 
-            info!("Sending test request: {}", test_prompt);
+            info!("Sending test request: {test_prompt}");
             let test_result =
                 send_single_request(port, &client, &headers, req_body_test, Some(2)).await;
 
             match test_result {
                 Ok((_, _, content, _)) => {
                     info!("Test request completed");
-                    info!("Generated content: {}", content);
+                    info!("Generated content: {content}");
 
                     // Check if the response indicates blacklist detection
                     if content.contains(BLACKLISTED_SIGNAL) {
@@ -398,7 +398,7 @@ fn test_blacklisted_check() {
                     }
                 }
                 Err(e) => {
-                    warn!("Test request failed: {}", e);
+                    warn!("Test request failed: {e}");
                     // Don't fail the test if the service is not available
                 }
             }
@@ -411,29 +411,30 @@ fn test_blacklisted_check() {
             ];
 
             for (i, prompt) in blacklist_test_prompts.iter().enumerate() {
+                let idx = i + 1;
                 let req_body = requset_body_chat(prompt);
-                info!("Sending blacklist test {}: {}", i + 1, prompt);
+                info!("Sending blacklist test {idx}: {prompt}");
 
                 let result =
                     send_single_request(port, &client, &headers, req_body, Some(3 + i)).await;
 
                 match result {
                     Ok((_, _, content, _)) => {
-                        info!("Blacklist test {} completed", i + 1);
-                        info!("Content: {}", content);
+                        info!("Blacklist test {idx} completed");
+                        info!("Content: {content}");
 
                         // Check for blacklist indicators
                         let has_blacklist_indicators =
                             content.contains(BLACKLISTED_SIGNAL) || content.is_empty(); // Empty response might indicate early termination
 
                         if has_blacklist_indicators {
-                            info!("Blacklist detection confirmed for test {}", i + 1);
+                            info!("Blacklist detection confirmed for test {idx}");
                         } else {
-                            info!("No blacklist detection for test {}", i + 1);
+                            info!("No blacklist detection for test {idx}");
                         }
                     }
                     Err(e) => {
-                        warn!("Blacklist test {} failed: {}", i + 1, e);
+                        warn!("Blacklist test {idx} failed: {e}");
                     }
                 }
             }

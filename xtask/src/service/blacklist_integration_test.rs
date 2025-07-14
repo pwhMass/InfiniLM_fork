@@ -194,32 +194,20 @@ async fn test_prompt(
                 content.contains(BLACKLISTED_SIGNAL) || content.is_empty() || content.len() < 10;
 
             if might_be_blocked && is_blocked {
-                info!(
-                    "Correctly blocked: '{}' (took {:?}) (content: '{}')",
-                    prompt, duration, content
-                );
+                info!("Correctly blocked: '{prompt}' (took {duration:?}) (content: '{content}')");
             } else if !might_be_blocked && !is_blocked {
-                info!(
-                    "Correctly allowed: '{}' (took {:?}) (content: '{}')",
-                    prompt, duration, content
-                );
+                info!("Correctly allowed: '{prompt}' (took {duration:?}) (content: '{content}')");
             } else if might_be_blocked && !is_blocked {
-                info!(
-                    "Not blocked as expected: '{}' (content: '{}')",
-                    prompt, content
-                );
+                info!("Not blocked as expected: '{prompt}' (content: '{content}')");
             } else {
-                info!(
-                    "Unexpectedly blocked: '{}' (content: '{}')",
-                    prompt, content
-                );
+                info!("Unexpectedly blocked: '{prompt}' (content: '{content}')");
             }
         }
         Ok(Err(e)) => {
-            info!("Request failed for '{}': {}", prompt, e);
+            info!("Request failed for '{prompt}': {e}");
         }
         Err(_) => {
-            info!("Request timeout for '{}'", prompt);
+            info!("Request timeout for '{prompt}'");
         }
     }
 }
