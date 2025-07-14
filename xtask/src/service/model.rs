@@ -1,5 +1,8 @@
 ﻿use super::{blacklist_checker::BlacklistChecker, cache_manager::CacheManager, error::Error};
-use crate::{progress_bar, service::ModelConfig};
+use crate::{
+    progress_bar,
+    service::{ModelConfig, openai::BLACKLISTED_SIGNAL},
+};
 use llama_cu::{
     Message, Received, ReturnReason, SampleArgs, Service, SessionId, Terminal, TextBuf, utok,
 };
@@ -36,7 +39,6 @@ struct SessionInfo {
     think: bool,
     tokens: Vec<utok>,
     accumulated_content: String, // Track all generated content for blacklist detection
-    blacklist_detected: bool,    // Flag to prevent duplicate blacklist signals
 }
 
 impl Model {
@@ -136,34 +138,40 @@ impl Model {
                 let content = self.terminal.decode(tokens, &mut session_info.buf);
                 debug!("解码完成：{tokens:?} -> {think:?} | {content:?}");
 
-                // Accumulate content for blacklist detection (keep only suffix of max blacklist word length)
+                // Accumulate content for blacklist detection
                 session_info.accumulated_content.push_str(&content);
-                let max_word_length = self.get_max_blacklist_word_length();
-                if session_info.accumulated_content.len() > max_word_length {
-                    // Use character-based indexing to avoid cutting through UTF-8 characters
-                    let chars: Vec<char> = session_info.accumulated_content.chars().collect();
-                    let start = 0.max(chars.len().saturating_sub(max_word_length));
-                    session_info.accumulated_content = chars[start..].iter().collect();
+
+                // Truncate accumulated_content to save memory, keeping a suffix long enough
+                // for the longest blacklisted word.
+                let max_word_len = self.get_max_blacklist_word_length();
+                let current_len = session_info.accumulated_content.len();
+                if current_len > max_word_len {
+                    let mut truncate_pos = current_len - max_word_len;
+                    // Ensure we don't slice in the middle of a UTF-8 character.
+                    while !session_info
+                        .accumulated_content
+                        .is_char_boundary(truncate_pos)
+                    {
+                        truncate_pos += 1;
+                    }
+                    if truncate_pos < current_len {
+                        session_info.accumulated_content.drain(..truncate_pos);
+                    }
                 }
 
                 // Check for blacklisted content in the accumulated content
-                if !session_info.blacklist_detected
-                    && self.contains_blacklisted_word(&session_info.accumulated_content)
-                {
+                if self.contains_blacklisted_word(&session_info.accumulated_content) {
                     debug!(
                         "🚨 Blacklisted content detected in session {:?}: {}",
                         session_id, session_info.accumulated_content
                     );
 
-                    // Mark as detected to prevent duplicate signals
-                    session_info.blacklist_detected = true;
-
-                    // Send <Blacklisted> marker before stopping
+                    // Send BLACKLISTED_SIGNAL before stopping
                     if session_info
                         .sender
                         .send(Output::Text {
                             think: String::new(),
-                            content: "<Blacklisted>".to_string(),
+                            content: BLACKLISTED_SIGNAL.to_string(),
                         })
                         .is_err()
                     {
@@ -298,7 +306,6 @@ impl Model {
             buf: TextBuf::new(),
             think: false,
             accumulated_content: String::new(),
-            blacklist_detected: false,
         };
         assert!(
             self.sessions
@@ -361,7 +368,6 @@ impl Model {
             buf: TextBuf::new(),
             think: false,
             accumulated_content: String::new(),
-            blacklist_detected: false,
         };
         assert!(
             self.sessions

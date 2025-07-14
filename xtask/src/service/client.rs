@@ -1,4 +1,6 @@
-﻿use super::openai::POST_CHAT_COMPLETIONS;
+﻿use crate::service::openai::BLACKLISTED_SIGNAL;
+
+use super::openai::POST_CHAT_COMPLETIONS;
 use log::{info, trace, warn};
 use openai_struct::{
     ChatCompletionRequestMessage, ChatCompletionRequestUserMessageContent,
@@ -389,7 +391,7 @@ fn test_blacklisted_check() {
                     info!("Generated content: {}", content);
 
                     // Check if the response indicates blacklist detection
-                    if content.contains("🚨") || content.contains("<Blacklisted>") {
+                    if content.contains("🚨") || content.contains(BLACKLISTED_SIGNAL) {
                         info!("🎯 Blacklist detection triggered!");
                     } else {
                         info!("ℹ️ No blacklist detection in this response");
@@ -422,7 +424,7 @@ fn test_blacklisted_check() {
 
                         // Check for blacklist indicators
                         let has_blacklist_indicators = content.contains("🚨")
-                            || content.contains("<Blacklisted>")
+                            || content.contains(BLACKLISTED_SIGNAL)
                             || content.is_empty(); // Empty response might indicate early termination
 
                         if has_blacklist_indicators {
