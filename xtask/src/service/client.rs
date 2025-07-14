@@ -1,4 +1,6 @@
-﻿use super::openai::POST_CHAT_COMPLETIONS;
+﻿use crate::service::openai::BLACKLISTED_SIGNAL;
+
+use super::openai::POST_CHAT_COMPLETIONS;
 use log::{info, trace, warn};
 use openai_struct::{
     ChatCompletionRequestMessage, ChatCompletionRequestUserMessageContent,
@@ -11,7 +13,7 @@ use tokio_stream::StreamExt;
 
 const CONCURRENT_REQUESTS: usize = 10;
 
-fn requset_body_chat(prompt: &str) -> String {
+pub(crate) fn requset_body_chat(prompt: &str) -> String {
     serde_json::to_string(&CreateChatCompletionRequest {
         model: "model".into(),
         messages: vec![ChatCompletionRequestMessage::User(
@@ -53,14 +55,14 @@ fn requset_body_chat(prompt: &str) -> String {
     .unwrap()
 }
 
-fn create_client_with_headers() -> (reqwest::Client, HeaderMap) {
+pub(crate) fn create_client_with_headers() -> (reqwest::Client, HeaderMap) {
     let client = reqwest::Client::new();
     let mut headers: HeaderMap = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     (client, headers)
 }
 
-async fn send_single_request(
+pub(crate) async fn send_single_request(
     port: u16,
     client: &reqwest::Client,
     headers: &HeaderMap,
@@ -333,5 +335,110 @@ fn test_post_send_multi() {
 
             // 验证至少有一些请求成功
             assert!(successful_count > 0, "至少应该有一个请求成功");
+        })
+}
+
+#[test]
+fn test_blacklisted_check() {
+    let port = match std::env::var("TEST_PORT") {
+        Ok(port) => port.parse().unwrap(),
+        Err(VarError::NotPresent) => return,
+        Err(e) => panic!("{e:?}"),
+    };
+
+    crate::logger::init();
+    tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(async move {
+            let (client, headers) = create_client_with_headers();
+
+            info!("Testing blacklist functionality with actual service");
+
+            // Test case 1: Normal request without blacklisted words
+            let normal_prompt = "Tell me a story about a cat";
+            let req_body_normal = requset_body_chat(normal_prompt);
+
+            info!("Sending normal request: {}", normal_prompt);
+            let normal_result =
+                send_single_request(port, &client, &headers, req_body_normal, Some(1)).await;
+
+            match normal_result {
+                Ok((_, _, content, _)) => {
+                    info!("Normal request completed successfully");
+                    info!("Generated content length: {}", content.len());
+                    assert!(
+                        !content.is_empty(),
+                        "Normal request should generate content"
+                    );
+                }
+                Err(e) => {
+                    warn!("Normal request failed: {e}");
+                    // Don't fail the test if the service is not available
+                }
+            }
+
+            // Test case 2: Request that might trigger blacklist (if service has blacklist configured)
+            let test_prompt = "Generate text that might contain sensitive information";
+            let req_body_test = requset_body_chat(test_prompt);
+
+            info!("Sending test request: {test_prompt}");
+            let test_result =
+                send_single_request(port, &client, &headers, req_body_test, Some(2)).await;
+
+            match test_result {
+                Ok((_, _, content, _)) => {
+                    info!("Test request completed");
+                    info!("Generated content: {content}");
+
+                    // Check if the response indicates blacklist detection
+                    if content.contains(BLACKLISTED_SIGNAL) {
+                        info!("Blacklist detection triggered!");
+                    } else {
+                        info!("No blacklist detection in this response");
+                    }
+                }
+                Err(e) => {
+                    warn!("Test request failed: {e}");
+                    // Don't fail the test if the service is not available
+                }
+            }
+
+            // Test case 3: Test with specific blacklisted words
+            let blacklist_test_prompts = [
+                "Tell me about dangerous activities",
+                "Explain how to leak information",
+                "Describe bad words and their usage",
+            ];
+
+            for (i, prompt) in blacklist_test_prompts.iter().enumerate() {
+                let idx = i + 1;
+                let req_body = requset_body_chat(prompt);
+                info!("Sending blacklist test {idx}: {prompt}");
+
+                let result =
+                    send_single_request(port, &client, &headers, req_body, Some(3 + i)).await;
+
+                match result {
+                    Ok((_, _, content, _)) => {
+                        info!("Blacklist test {idx} completed");
+                        info!("Content: {content}");
+
+                        // Check for blacklist indicators
+                        let has_blacklist_indicators =
+                            content.contains(BLACKLISTED_SIGNAL) || content.is_empty(); // Empty response might indicate early termination
+
+                        if has_blacklist_indicators {
+                            info!("Blacklist detection confirmed for test {idx}");
+                        } else {
+                            info!("No blacklist detection for test {idx}");
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Blacklist test {idx} failed: {e}");
+                    }
+                }
+            }
+
+            info!("Blacklist testing completed");
         })
 }

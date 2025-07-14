@@ -1,5 +1,8 @@
-﻿use super::{cache_manager::CacheManager, error::Error};
-use crate::{progress_bar, service::ModelConfig};
+﻿use super::{blacklist_checker::BlacklistChecker, cache_manager::CacheManager, error::Error};
+use crate::{
+    progress_bar,
+    service::{ModelConfig, openai::BLACKLISTED_SIGNAL},
+};
 use llama_cu::{
     Message, Received, ReturnReason, SampleArgs, Service, SessionId, Terminal, TextBuf, utok,
 };
@@ -22,6 +25,7 @@ pub(super) struct Model {
     terminal: Terminal,
     sessions: Mutex<BTreeMap<SessionId, SessionInfo>>,
     cache_manager: Mutex<CacheManager>,
+    blacklist_checker: Option<BlacklistChecker>,
 }
 
 pub(super) enum Output {
@@ -34,6 +38,7 @@ struct SessionInfo {
     buf: TextBuf,
     think: bool,
     tokens: Vec<utok>,
+    accumulated_content: String, // Track all generated content for blacklist detection
 }
 
 impl Model {
@@ -46,6 +51,7 @@ impl Model {
             top_p,
             repetition_penalty,
             think,
+            blacklist,
         } = config;
 
         let mut service = Service::new(path, &gpus.unwrap_or(Box::new([0])), use_cuda_graph);
@@ -63,6 +69,12 @@ impl Model {
             [utok::MAX; 2]
         };
 
+        let blacklist = blacklist
+            .unwrap_or_default()
+            .into_iter()
+            .map(|s| s.to_lowercase())
+            .collect::<Vec<String>>();
+
         let model = Model {
             max_tokens: max_tokens.unwrap_or(2 << 10),
             sampling: SampleArgs::new(
@@ -76,6 +88,11 @@ impl Model {
             terminal: service.terminal().clone(),
             sessions: Default::default(),
             cache_manager: Default::default(),
+            blacklist_checker: if blacklist.is_empty() {
+                None
+            } else {
+                Some(BlacklistChecker::new(blacklist))
+            },
         };
 
         (model, service)
@@ -120,6 +137,57 @@ impl Model {
                 let think = self.terminal.decode(think, &mut session_info.buf);
                 let content = self.terminal.decode(tokens, &mut session_info.buf);
                 debug!("解码完成：{tokens:?} -> {think:?} | {content:?}");
+
+                // Truncate accumulated_content to save memory, keeping a suffix long enough
+                // for the longest blacklisted word.
+                let max_word_len = self.get_max_blacklist_word_length();
+                if max_word_len > 0 {
+                    // Accumulate content for blacklist detection only when blacklist is not empty
+                    session_info.accumulated_content.push_str(&content);
+
+                    let current_len = session_info.accumulated_content.len();
+                    if current_len > max_word_len {
+                        let start_pos = current_len - max_word_len;
+                        // Find the first character boundary at or after `start_pos`.
+                        // This is guaranteed to succeed because `is_char_boundary(len)` is always true.
+                        let truncate_pos = (start_pos..=current_len)
+                            .find(|&i| session_info.accumulated_content.is_char_boundary(i))
+                            .unwrap();
+                        session_info.accumulated_content.drain(..truncate_pos);
+                    }
+                }
+
+                // Check for blacklisted content in the accumulated content
+                if self.contains_blacklisted_word(&session_info.accumulated_content) {
+                    debug!(
+                        "Blacklisted content detected in session {:?}: {}",
+                        session_id, session_info.accumulated_content
+                    );
+
+                    // Send BLACKLISTED_SIGNAL before stopping
+                    if session_info
+                        .sender
+                        .send(Output::Text {
+                            think: String::new(),
+                            content: BLACKLISTED_SIGNAL.to_string(),
+                        })
+                        .is_err()
+                    {
+                        info!("{session_id:?} 客户端连接已关闭");
+                    }
+
+                    // Stop the session immediately
+                    self.terminal.stop(session_id);
+                    // Send finish signal
+                    if session_info
+                        .sender
+                        .send(Output::Finish(FinishReason::Stop))
+                        .is_err()
+                    {
+                        info!("{session_id:?} 客户端连接已关闭");
+                    }
+                    continue;
+                }
 
                 if session_info
                     .sender
@@ -235,6 +303,7 @@ impl Model {
             tokens,
             buf: TextBuf::new(),
             think: false,
+            accumulated_content: String::new(),
         };
         assert!(
             self.sessions
@@ -296,6 +365,7 @@ impl Model {
             tokens,
             buf: TextBuf::new(),
             think: false,
+            accumulated_content: String::new(),
         };
         assert!(
             self.sessions
@@ -306,5 +376,21 @@ impl Model {
         );
 
         Ok(receiver)
+    }
+
+    /// Get the maximum length of any blacklisted word (in characters, not bytes)
+    pub fn get_max_blacklist_word_length(&self) -> usize {
+        self.blacklist_checker
+            .as_ref()
+            .map(|checker| checker.get_max_word_length())
+            .unwrap_or(0)
+    }
+
+    /// Check if text contains any blacklisted words
+    pub fn contains_blacklisted_word(&self, text: &str) -> bool {
+        self.blacklist_checker
+            .as_ref()
+            .map(|checker| checker.contains_word(text))
+            .unwrap_or(false)
     }
 }

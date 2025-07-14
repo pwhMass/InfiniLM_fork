@@ -13,6 +13,8 @@ pub(crate) const GET_MODELS: (&Method, &str) = (&Method::GET, "/models");
 pub(crate) const POST_CHAT_COMPLETIONS: (&Method, &str) = (&Method::POST, "/chat/completions");
 pub(crate) const POST_COMPLETIONS: (&Method, &str) = (&Method::POST, "/completions");
 
+pub(crate) const BLACKLISTED_SIGNAL: &str = "<Blacklisted>";
+
 pub(crate) fn create_models(models: impl IntoIterator<Item = String>) -> impl Serialize {
     #[derive(Serialize)]
     struct Response {

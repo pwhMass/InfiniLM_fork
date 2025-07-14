@@ -1,4 +1,5 @@
-﻿mod cache_manager;
+﻿mod blacklist_checker;
+mod cache_manager;
 mod error;
 mod model;
 mod openai;
@@ -81,6 +82,7 @@ pub struct ModelConfig {
     #[serde(rename = "repetition-penalty")]
     pub repetition_penalty: Option<f32>,
     pub think: Option<bool>,
+    pub blacklist: Option<Vec<String>>,
 }
 
 impl ServiceArgs {
@@ -113,6 +115,7 @@ impl ServiceArgs {
                     top_p,
                     repetition_penalty,
                     think: Some(think),
+                    blacklist: None,
                 },
             )]
             .into(),
@@ -362,5 +365,7 @@ impl HyperService<Request<Incoming>> for App {
     }
 }
 
+#[cfg(test)]
+mod blacklist_integration_test;
 #[cfg(test)]
 mod client;
