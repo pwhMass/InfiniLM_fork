@@ -1,6 +1,7 @@
 use super::client::{create_client_with_headers, send_single_request};
 use super::{ModelConfig, ServiceArgs};
 use crate::logger;
+use crate::service::openai::BLACKLISTED_SIGNAL;
 use log::info;
 use openai_struct::{
     ChatCompletionRequestMessage, ChatCompletionRequestUserMessageContent,
@@ -30,14 +31,14 @@ fn test_blacklist_integration() {
     logger::init();
 
     Runtime::new().unwrap().block_on(async move {
-        info!("🔧 Testing blacklist integration with service");
+        info!("Testing blacklist integration with service");
 
         let (client, headers) = create_client_with_headers();
 
         // Test scenarios for blacklist functionality
         test_blacklist_scenarios(port, &client, &headers).await;
 
-        info!("✅ Blacklist integration test completed");
+        info!("Blacklist integration test completed");
     });
 }
 
@@ -46,7 +47,7 @@ async fn test_blacklist_scenarios(
     client: &reqwest::Client,
     headers: &reqwest::header::HeaderMap,
 ) {
-    info!("📋 Running blacklist scenarios");
+    info!("Running blacklist scenarios");
 
     // Scenario 1: Test normal content (should not be blocked)
     info!("Scenario 1: Testing normal content");
@@ -189,38 +190,36 @@ async fn test_prompt(
     .await
     {
         Ok(Ok((_, _, content, duration))) => {
-            let is_blocked = content.contains("🚨")
-                || content.contains("<Blacklisted>")
-                || content.is_empty()
-                || content.len() < 10; // Very short responses might indicate early termination
+            let is_blocked =
+                content.contains(BLACKLISTED_SIGNAL) || content.is_empty() || content.len() < 10;
 
             if might_be_blocked && is_blocked {
                 info!(
-                    "✅ Correctly blocked: '{}' (took {:?}) (content: '{}')",
+                    "Correctly blocked: '{}' (took {:?}) (content: '{}')",
                     prompt, duration, content
                 );
             } else if !might_be_blocked && !is_blocked {
                 info!(
-                    "✅ Correctly allowed: '{}' (took {:?}) (content: '{}')",
+                    "Correctly allowed: '{}' (took {:?}) (content: '{}')",
                     prompt, duration, content
                 );
             } else if might_be_blocked && !is_blocked {
                 info!(
-                    "⚠️ Not blocked as expected: '{}' (content: '{}')",
+                    "Not blocked as expected: '{}' (content: '{}')",
                     prompt, content
                 );
             } else {
                 info!(
-                    "⚠️ Unexpectedly blocked: '{}' (content: '{}')",
+                    "Unexpectedly blocked: '{}' (content: '{}')",
                     prompt, content
                 );
             }
         }
         Ok(Err(e)) => {
-            info!("❌ Request failed for '{}': {}", prompt, e);
+            info!("Request failed for '{}': {}", prompt, e);
         }
         Err(_) => {
-            info!("⏰ Request timeout for '{}'", prompt);
+            info!("Request timeout for '{}'", prompt);
         }
     }
 }
@@ -262,7 +261,7 @@ fn create_blacklist_config() -> ModelConfig {
 fn test_blacklist_configuration() {
     logger::init();
 
-    info!("🔧 Testing blacklist configuration");
+    info!("Testing blacklist configuration");
 
     let config = create_blacklist_config();
 
@@ -287,7 +286,7 @@ fn test_blacklist_configuration() {
     assert!(blacklist.contains(&"supercalifragilisticexpialidocious".to_string()));
     assert!(blacklist.contains(&"pneumonoultramicroscopicsilicovolcanoconiosiss".to_string()));
 
-    info!("✅ Blacklist configuration is correct");
+    info!("Blacklist configuration is correct");
 
     // Test case sensitivity for English words
     let test_words = vec!["DANGER", "LeAk", "BADWORD"];
@@ -301,7 +300,7 @@ fn test_blacklist_configuration() {
         );
     }
 
-    info!("✅ Blacklist case sensitivity test passed");
+    info!("Blacklist case sensitivity test passed");
 
     // Test that we have words of varying lengths
     let word_lengths: Vec<usize> = blacklist.iter().map(|w| w.chars().count()).collect();
@@ -317,7 +316,7 @@ fn test_blacklist_configuration() {
         "Should have words longer than 10 characters for suffix optimization test"
     );
 
-    info!("✅ Blacklist word length test passed");
+    info!("Blacklist word length test passed");
 }
 
 /// Test helper to demonstrate service arguments with blacklist
@@ -326,7 +325,7 @@ fn test_blacklist_configuration() {
 fn test_service_args_with_blacklist() {
     logger::init();
 
-    info!("🔧 Testing service arguments with blacklist");
+    info!("Testing service arguments with blacklist");
 
     // This would be how you'd configure the service with blacklist
     // In a real scenario, you'd load this from a TOML config file
@@ -343,7 +342,7 @@ fn test_service_args_with_blacklist() {
         think: false,
     };
 
-    info!("✅ Service arguments configured");
+    info!("Service arguments configured");
     info!("Model file: {}", service_args.file);
     info!("Port: {}", service_args.port);
     info!("Max tokens: {:?}", service_args.max_tokens);
@@ -358,7 +357,7 @@ fn test_service_args_with_blacklist() {
 fn test_toml_blacklist_config() {
     logger::init();
 
-    info!("🔧 Testing TOML blacklist configuration");
+    info!("Testing TOML blacklist configuration");
 
     // Example TOML configuration that would be used in practice
     let toml_config = r#"
@@ -396,5 +395,5 @@ blacklist = [
     // In practice, you'd parse this with:
     // let config: ModelConfig = toml::from_str(toml_config).unwrap();
 
-    info!("✅ TOML configuration example created");
+    info!("TOML configuration example created");
 }

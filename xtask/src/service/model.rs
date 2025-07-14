@@ -138,23 +138,21 @@ impl Model {
                 let content = self.terminal.decode(tokens, &mut session_info.buf);
                 debug!("解码完成：{tokens:?} -> {think:?} | {content:?}");
 
-                // Accumulate content for blacklist detection
-                session_info.accumulated_content.push_str(&content);
-
                 // Truncate accumulated_content to save memory, keeping a suffix long enough
                 // for the longest blacklisted word.
                 let max_word_len = self.get_max_blacklist_word_length();
-                let current_len = session_info.accumulated_content.len();
-                if current_len > max_word_len {
-                    let mut truncate_pos = current_len - max_word_len;
-                    // Ensure we don't slice in the middle of a UTF-8 character.
-                    while !session_info
-                        .accumulated_content
-                        .is_char_boundary(truncate_pos)
-                    {
-                        truncate_pos += 1;
-                    }
-                    if truncate_pos < current_len {
+                if max_word_len > 0 {
+                    // Accumulate content for blacklist detection only when blacklist is not empty
+                    session_info.accumulated_content.push_str(&content);
+
+                    let current_len = session_info.accumulated_content.len();
+                    if current_len > max_word_len {
+                        let start_pos = current_len - max_word_len;
+                        // Find the first character boundary at or after `start_pos`.
+                        // This is guaranteed to succeed because `is_char_boundary(len)` is always true.
+                        let truncate_pos = (start_pos..=current_len)
+                            .find(|&i| session_info.accumulated_content.is_char_boundary(i))
+                            .unwrap();
                         session_info.accumulated_content.drain(..truncate_pos);
                     }
                 }
@@ -162,7 +160,7 @@ impl Model {
                 // Check for blacklisted content in the accumulated content
                 if self.contains_blacklisted_word(&session_info.accumulated_content) {
                     debug!(
-                        "🚨 Blacklisted content detected in session {:?}: {}",
+                        "Blacklisted content detected in session {:?}: {}",
                         session_id, session_info.accumulated_content
                     );
 

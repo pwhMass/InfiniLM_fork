@@ -364,7 +364,7 @@ fn test_blacklisted_check() {
 
             match normal_result {
                 Ok((_, _, content, _)) => {
-                    info!("✅ Normal request completed successfully");
+                    info!("Normal request completed successfully");
                     info!("Generated content length: {}", content.len());
                     assert!(
                         !content.is_empty(),
@@ -372,7 +372,7 @@ fn test_blacklisted_check() {
                     );
                 }
                 Err(e) => {
-                    warn!("❌ Normal request failed: {}", e);
+                    warn!("Normal request failed: {}", e);
                     // Don't fail the test if the service is not available
                 }
             }
@@ -387,18 +387,18 @@ fn test_blacklisted_check() {
 
             match test_result {
                 Ok((_, _, content, _)) => {
-                    info!("✅ Test request completed");
+                    info!("Test request completed");
                     info!("Generated content: {}", content);
 
                     // Check if the response indicates blacklist detection
-                    if content.contains("🚨") || content.contains(BLACKLISTED_SIGNAL) {
-                        info!("🎯 Blacklist detection triggered!");
+                    if content.contains(BLACKLISTED_SIGNAL) {
+                        info!("Blacklist detection triggered!");
                     } else {
-                        info!("ℹ️ No blacklist detection in this response");
+                        info!("No blacklist detection in this response");
                     }
                 }
                 Err(e) => {
-                    warn!("❌ Test request failed: {}", e);
+                    warn!("Test request failed: {}", e);
                     // Don't fail the test if the service is not available
                 }
             }
@@ -419,26 +419,25 @@ fn test_blacklisted_check() {
 
                 match result {
                     Ok((_, _, content, _)) => {
-                        info!("✅ Blacklist test {} completed", i + 1);
+                        info!("Blacklist test {} completed", i + 1);
                         info!("Content: {}", content);
 
                         // Check for blacklist indicators
-                        let has_blacklist_indicators = content.contains("🚨")
-                            || content.contains(BLACKLISTED_SIGNAL)
-                            || content.is_empty(); // Empty response might indicate early termination
+                        let has_blacklist_indicators =
+                            content.contains(BLACKLISTED_SIGNAL) || content.is_empty(); // Empty response might indicate early termination
 
                         if has_blacklist_indicators {
-                            info!("🎯 Blacklist detection confirmed for test {}", i + 1);
+                            info!("Blacklist detection confirmed for test {}", i + 1);
                         } else {
-                            info!("ℹ️ No blacklist detection for test {}", i + 1);
+                            info!("No blacklist detection for test {}", i + 1);
                         }
                     }
                     Err(e) => {
-                        warn!("❌ Blacklist test {} failed: {}", i + 1, e);
+                        warn!("Blacklist test {} failed: {}", i + 1, e);
                     }
                 }
             }
 
-            info!("🎉 Blacklist testing completed");
+            info!("Blacklist testing completed");
         })
 }
