@@ -52,6 +52,8 @@ impl GGufModel<'_> {
                                 get(&format!("v.blk.{iblk}.attn_qkv.weight")),
                                 Some((dt_norm, get(&format!("v.blk.{iblk}.attn_qkv.bias")))),
                             ),
+                            q_norm: None,
+                            k_norm: None,
                             rope: Some(RoPE {
                                 multimodal: true,
                                 nctx: 34, // todo: from image

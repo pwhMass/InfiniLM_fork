@@ -129,7 +129,8 @@ Options:
 path = "model-path"
 gpus = [0, 1, 2, 3]
 max-tokens = 4096
-think = true
 temperature = 0.9
 top-p = 0.6
+repetition_penalty = 1.02
+think = true
 ```
