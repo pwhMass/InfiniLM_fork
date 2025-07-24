@@ -41,7 +41,7 @@ impl<'ctx> SampleManager<'ctx> {
 
         let kv_pair_template = Tensor::from_dim_slice(KV_PAIR, []);
         let kv_pair = stream.malloc::<KVPair>(out_len);
-        for (i, (id, info)) in config.into_iter().enumerate() {
+        for (i, (id, info)) in config.iter().enumerate() {
             let logits = logits.clone().transform(|layout| layout.index(0, i));
             let SampleInfo {
                 args,

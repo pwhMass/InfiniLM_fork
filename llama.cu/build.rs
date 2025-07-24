@@ -9,7 +9,7 @@ fn main() {
     let src_dir =
         PathBuf::from(&env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("src/op/random_sample");
 
-    if let Some(maca_root) = find_maca_root() {
+    if let Some((_, maca_root)) = find_maca_root() {
         nccl.define();
 
         cuda_cc::Builder::new("random_sample", maca_root, "htgpu_llvm/bin/htcc")
