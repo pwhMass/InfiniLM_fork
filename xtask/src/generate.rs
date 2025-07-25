@@ -1,7 +1,10 @@
 ﻿use crate::{BaseArgs, macros::print_now, progress_bar};
 use llama_cu::{Message, Received, Service, Session, SessionId, TextBuf};
 use log::info;
-use std::time::{Duration, Instant};
+use std::{
+    path::Path,
+    time::{Duration, Instant},
+};
 
 #[derive(Args)]
 pub struct GenerateArgs {
@@ -24,6 +27,9 @@ impl GenerateArgs {
         let max_steps = base.max_steps();
         let sample_args = base.sample_args();
         let mut prompt = prompt.unwrap_or("Once upon a time,".into());
+        if Path::new(&prompt).is_file() {
+            prompt = std::fs::read_to_string(&prompt).unwrap();
+        }
 
         let mut service = Service::new(base.model, &gpus, !base.no_cuda_graph);
         progress_bar(&mut service);

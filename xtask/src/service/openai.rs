@@ -46,7 +46,7 @@ pub(crate) fn chat_completion_response(
 ) -> CreateChatCompletionResponse {
     let choices = vec![CreateChatCompletionResponseChoices {
         message: ChatCompletionResponseMessage {
-            content: answer.unwrap(),
+            content: answer.unwrap_or_default(),
             reasoning_content: think,
             ..Default::default()
         },
