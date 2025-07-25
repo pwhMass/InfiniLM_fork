@@ -649,7 +649,7 @@ dependencies = [
 [[package]]
 name = "flash-attn"
 version = "0.0.13"
-source = "git+https://github.com/YdrMaster/learn-flash-attn?rev=57176f5#57176f5a958409dade6d8ce63b51ce481f862de5"
+source = "git+https://github.com/YdrMaster/learn-flash-attn?rev=0beff58#0beff58cc054cc13504584d8bbe22acc5e87c665"
 dependencies = [
  "build-script-cfg",
  "cuda",

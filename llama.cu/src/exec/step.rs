@@ -168,7 +168,7 @@ fn launch_attn_typed<T: Copy>(
     module: &Module,
     stream: &Stream,
 ) {
-    const TILE_SEQ: usize = 32;
+    const TILE_SEQ: usize = 4;
     const TILE_CTX: usize = 32;
 
     let Attention { iblk, q, k, v, o } = attn;
