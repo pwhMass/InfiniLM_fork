@@ -231,18 +231,8 @@ fn launch_attn_typed<T: Copy>(
         })
         .collect::<Box<_>>();
     // 生成 mask
-    let masks = reqs
-        .iter()
-        .map(|req| {
-            let Req { pos, seq: n, .. } = req;
-            let s = pos + n;
-            let s_ceil = s.div_ceil(TILE_CTX) * TILE_CTX;
-            // 注意力掩码
-            let mask = (0..n * s_ceil)
-                .map(|i| i % s_ceil <= s - n + i / s_ceil)
-                .collect::<Box<_>>();
-            stream.from_host(&mask)
-        })
+    let masks = (0..reqs.len())
+        .map(|_| stream.malloc::<bool>(0))
         .collect::<Box<_>>();
     // 为每个请求的每个头生成 block
     let reqs_ = reqs
@@ -289,6 +279,7 @@ fn launch_attn_typed<T: Copy>(
                 o: offset_ptr(&o).cast_mut().cast(),
                 o_strides,
                 mask: mask.as_ptr().cast(),
+                is_causal_mask: true,
                 n,
                 s: pos + n,
             })
