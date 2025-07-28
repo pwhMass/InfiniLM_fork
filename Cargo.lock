@@ -455,15 +455,15 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 [[package]]
 name = "cublas"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=31c8090#31c8090dd03ae0f7171a4a6f2a01251d70167ef3"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=803d64b#803d64b9ec7d1eac9ad1fbcf9b554d41587b5c4f"
 dependencies = [
  "bindgen",
  "build-script-cfg",
- "cuda",
+ "cuda 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=803d64b)",
  "find_cuda_helper",
  "half",
- "search-corex-tools",
- "search-maca-tools",
+ "search-corex-tools 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=803d64b)",
+ "search-maca-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=803d64b)",
 ]
 
 [[package]]
@@ -476,14 +476,28 @@ dependencies = [
  "context-spore",
  "find_cuda_helper",
  "log",
- "search-corex-tools",
- "search-maca-tools",
+ "search-corex-tools 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=31c8090)",
+ "search-maca-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=31c8090)",
+]
+
+[[package]]
+name = "cuda"
+version = "0.0.0"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=803d64b#803d64b9ec7d1eac9ad1fbcf9b554d41587b5c4f"
+dependencies = [
+ "bindgen",
+ "build-script-cfg",
+ "context-spore",
+ "find_cuda_helper",
+ "log",
+ "search-corex-tools 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=803d64b)",
+ "search-maca-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=803d64b)",
 ]
 
 [[package]]
 name = "cuda-cc"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=31c8090#31c8090dd03ae0f7171a4a6f2a01251d70167ef3"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=803d64b#803d64b9ec7d1eac9ad1fbcf9b554d41587b5c4f"
 dependencies = [
  "bindgen",
 ]
@@ -652,7 +666,7 @@ version = "0.0.13"
 source = "git+https://github.com/YdrMaster/learn-flash-attn?rev=0beff58#0beff58cc054cc13504584d8bbe22acc5e87c665"
 dependencies = [
  "build-script-cfg",
- "cuda",
+ "cuda 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=31c8090)",
  "find_cuda_helper",
  "num-traits",
  "rayon",
@@ -993,7 +1007,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.0",
+ "socket2",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -1283,9 +1297,9 @@ checksum = "241eaef5fd12c88705a01fc1066c48c4b36e0dd4377dcdc7ec3942cea7a69956"
 
 [[package]]
 name = "litrs"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4ce301924b7887e9d637144fdade93f9dfff9b60981d4ac161db09720d39aa5"
+checksum = "f5e54036fe321fd421e10d732f155734c4e4afd610dd556d9a82833ab3ee0bed"
 
 [[package]]
 name = "llama-cu"
@@ -1294,7 +1308,7 @@ dependencies = [
  "build-script-cfg",
  "bytesize",
  "cublas",
- "cuda",
+ "cuda 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=803d64b)",
  "cuda-cc",
  "flash-attn",
  "ggus",
@@ -1306,9 +1320,9 @@ dependencies = [
  "nn",
  "rand",
  "regex",
- "search-corex-tools",
+ "search-corex-tools 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=803d64b)",
  "search-cuda-tools",
- "search-maca-tools",
+ "search-maca-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=803d64b)",
  "serde",
  "tokeneer",
 ]
@@ -1454,15 +1468,15 @@ dependencies = [
 [[package]]
 name = "nccl"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=31c8090#31c8090dd03ae0f7171a4a6f2a01251d70167ef3"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=803d64b#803d64b9ec7d1eac9ad1fbcf9b554d41587b5c4f"
 dependencies = [
  "bindgen",
  "build-script-cfg",
- "cuda",
+ "cuda 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=803d64b)",
  "digit-layout",
- "search-corex-tools",
+ "search-corex-tools 0.0.0 (git+https://github.com/YdrMaster/cuda-driver?rev=803d64b)",
  "search-cuda-tools",
- "search-maca-tools",
+ "search-maca-tools 0.1.0 (git+https://github.com/YdrMaster/cuda-driver?rev=803d64b)",
 ]
 
 [[package]]
@@ -1846,9 +1860,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.5.15"
+version = "0.5.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e8af0dde094006011e6a740d4879319439489813bd0bcdc7d821beaeeff48ec"
+checksum = "7251471db004e509f4e75a62cca9435365b5ec7bcdff530d612ac7c87c44a792"
 dependencies = [
  "bitflags",
 ]
@@ -1941,9 +1955,9 @@ dependencies = [
 
 [[package]]
 name = "rustc-demangle"
-version = "0.1.25"
+version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "989e6739f80c4ad5b13e0fd7fe89531180375b18520cc8c82080e4dc4035b84f"
+checksum = "56f7d92ca342cea22a06f2121d944b4fd82af56988c270852495420f961d4ace"
 
 [[package]]
 name = "rustc-hash"
@@ -1979,9 +1993,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.29"
+version = "0.23.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2491382039b29b9b11ff08b76ff6c97cf287671dbb74f0be44bda389fffe9bd1"
+checksum = "069a8df149a16b1a12dcc31497c3396a173844be3cac4bd40c9e7671fef96671"
 dependencies = [
  "once_cell",
  "rustls-pki-types",
@@ -2043,9 +2057,14 @@ version = "0.0.0"
 source = "git+https://github.com/YdrMaster/cuda-driver?rev=31c8090#31c8090dd03ae0f7171a4a6f2a01251d70167ef3"
 
 [[package]]
+name = "search-corex-tools"
+version = "0.0.0"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=803d64b#803d64b9ec7d1eac9ad1fbcf9b554d41587b5c4f"
+
+[[package]]
 name = "search-cuda-tools"
 version = "0.0.0"
-source = "git+https://github.com/YdrMaster/cuda-driver?rev=31c8090#31c8090dd03ae0f7171a4a6f2a01251d70167ef3"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=803d64b#803d64b9ec7d1eac9ad1fbcf9b554d41587b5c4f"
 dependencies = [
  "find_cuda_helper",
 ]
@@ -2054,6 +2073,11 @@ dependencies = [
 name = "search-maca-tools"
 version = "0.1.0"
 source = "git+https://github.com/YdrMaster/cuda-driver?rev=31c8090#31c8090dd03ae0f7171a4a6f2a01251d70167ef3"
+
+[[package]]
+name = "search-maca-tools"
+version = "0.1.0"
+source = "git+https://github.com/YdrMaster/cuda-driver?rev=803d64b#803d64b9ec7d1eac9ad1fbcf9b554d41587b5c4f"
 
 [[package]]
 name = "security-framework"
@@ -2184,16 +2208,6 @@ name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
-
-[[package]]
-name = "socket2"
-version = "0.5.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e22376abed350d73dd1cd119b57ffccad95b4e585a7cda43e286245ce23c0678"
-dependencies = [
- "libc",
- "windows-sys 0.52.0",
-]
 
 [[package]]
 name = "socket2"
@@ -2379,9 +2393,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.46.1"
+version = "1.47.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0cc3a2344dafbe23a245241fe8b09735b521110d30fcefbbd5feb1797ca35d17"
+checksum = "43864ed400b6043a4757a25c7a64a8efde741aed79a056a2fb348a406701bb35"
 dependencies = [
  "backtrace",
  "bytes",
@@ -2390,8 +2404,8 @@ dependencies = [
  "mio",
  "pin-project-lite",
  "slab",
- "socket2 0.5.10",
- "windows-sys 0.52.0",
+ "socket2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
